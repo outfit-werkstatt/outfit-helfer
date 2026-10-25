@@ -51,11 +51,11 @@ td:last-child{text-align:right;font-weight:600}
 <body>
 <main>
   <h1>Erkennungstest</h1>
-  <div class="version">Version 3 · 25.10.2026</div>
+  <div class="version">Version 4 · 25.10.2026</div>
   <p class="lead">Lade 5 bis 10 Fotos von Kleidung oder Schmuck hoch. Die KI läuft nur in diesem Browser, die Fotos verlassen das Gerät nicht. Bewerte danach jede Angabe mit ✓ oder ✗.</p>
 
   <div class="panel">
-    <div class="status" id="status">KI-Modell wird geladen (einmalig ca. 100–150 MB) …</div>
+    <div class="status" id="status">KI-Modell wird geladen (einmalig ca. 160 MB) …</div>
     <div class="bar"><div id="barfill"></div></div>
   </div>
 
@@ -75,80 +75,33 @@ td:last-child{text-align:right;font-weight:600}
 </main>
 
 <script type="module">
-import { AutoTokenizer, AutoProcessor, CLIPTextModelWithProjection, CLIPVisionModelWithProjection, RawImage } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
+import { AutoModel, AutoTokenizer, AutoProcessor, CLIPTextModelWithProjection, CLIPVisionModelWithProjection, RawImage } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
 
-/* ---------- Begriffe: deutsch für die Anzeige, mehrere englische Sätze für die KI ---------- */
-// Die KI vergleicht das Bild mit jedem Satz; die Treffer aller Sätze einer Gruppe werden addiert.
-// Oberkategorie → Arten. Bewusst grob: ähnliche Untertypen (z. B. Stiefeletten) stecken als
-// zusätzliche Sätze in der Art, statt eine eigene Art zu bekommen.
+/* ---------- Begriffe: deutsch für die Anzeige, englisch für die KI ---------- */
+// Oberkategorie → Arten. Bewusst grob: Leder-, Jeans- und Steppjacken sind „Jacke“,
+// das Material sagt den Rest. Pro Art wird „a photo of a …“ mit jedem englischen
+// Namen gebildet und daraus ein Durchschnitt. Getestet mit 59 Fotos: kurze Namen, nur bei leicht
+// verwechselbaren Arten (T-Shirt/Polo/Hemd) eine genauere Beschreibung dazu.
 const GROUPS = [
   ["Oberteile",[
-    ["T-Shirt",["a photo of a t-shirt","a photo of a plain short-sleeved crew neck t-shirt"]],
-    ["Poloshirt",["a photo of a polo shirt","a photo of a short-sleeved polo shirt with a collar and two buttons"]],
-    ["Langarmshirt",["a photo of a long-sleeved t-shirt","a photo of a long-sleeved jersey top"]],
-    ["Top",["a photo of a tank top","a photo of a cropped top"]],
-    ["Bluse",["a photo of a blouse","a photo of a flowy women's blouse"]],
-    ["Hemd",["a photo of a button-up shirt","a photo of a long-sleeved dress shirt with buttons all the way down"]],
-    ["Body",["a photo of a bodysuit","a photo of a women's body with snap closure"]],
-    ["Pullover",["a photo of a knitted sweater","a photo of a turtleneck sweater"]],
-    ["Sweatshirt / Hoodie",["a photo of a sweatshirt","a photo of a hoodie"]],
-    ["Strickjacke",["a photo of a cardigan","a photo of a knitted cardigan with buttons"]],
-    ["Weste",["a photo of a sleeveless vest","a photo of a knitted sweater vest"]]
+    ["T-Shirt",["t-shirt","short-sleeved t-shirt","plain crew neck t-shirt"]],["Poloshirt",["polo shirt","short-sleeved polo shirt with a collar and buttons"]],["Langarmshirt",["long-sleeved top"]],["Top",["tank top"]],
+    ["Bluse",["blouse","women's shirt"]],["Hemd",["button-up shirt","long-sleeved shirt with buttons all the way down"]],["Body",["bodysuit"]],["Pullover",["sweater","knitted sweater","jumper"]],
+    ["Sweatshirt / Hoodie",["sweatshirt","hoodie"]],["Strickjacke",["cardigan"]],["Weste",["vest","waistcoat"]]
   ]],
-  ["Jacken & Mäntel",[
-    ["Blazer",["a photo of a blazer","a photo of a tailored blazer"]],
-    ["Jacke",["a photo of a jacket","a photo of a short jacket with a zipper"]],
-    ["Lederjacke",["a photo of a leather jacket","a photo of a black biker leather jacket"]],
-    ["Jeansjacke",["a photo of a denim jacket","a photo of a blue jean jacket"]],
-    ["Steppjacke",["a photo of a puffer jacket","a photo of a quilted down jacket"]],
-    ["Mantel",["a photo of a long coat","a photo of a trench coat"]]
-  ]],
+  ["Jacken & Mäntel",[["Blazer",["blazer"]],["Jacke",["jacket"]],["Mantel",["coat"]]]],
   ["Unterteile",[
-    ["Jeans",["a photo of a pair of jeans","a photo of denim jeans with pockets"]],
-    ["Hose",["a photo of a pair of trousers","a photo of a pair of fabric pants"]],
-    ["Leggings",["a photo of a pair of leggings","a photo of tight black leggings"]],
-    ["Jogginghose",["a photo of a pair of sweatpants","a photo of jogging pants with drawstring"]],
-    ["Shorts",["a photo of a pair of shorts"]],
-    ["Rock",["a photo of a skirt","a photo of a long maxi skirt"]]
+    ["Jeans",["jeans"]],["Hose",["trousers","pants"]],["Leggings",["leggings"]],["Jogginghose",["sweatpants"]],
+    ["Shorts",["shorts"]],["Rock",["skirt"]]
   ]],
-  ["Kleider & Einteiler",[
-    ["Kleid",["a photo of a dress","a photo of a women's dress"]],
-    ["Jumpsuit",["a photo of a jumpsuit","a photo of dungarees"]]
-  ]],
-  ["Schuhe",[
-    ["Sneaker",["a photo of a pair of sneakers","a photo of high-top sneakers"]],
-    ["Stiefel",["a photo of a pair of boots","a photo of a pair of ankle boots"]],
-    ["Absatzschuhe",["a photo of a pair of high heels","a photo of a pair of pumps"]],
-    ["Flache Schuhe",["a photo of a pair of ballet flats","a photo of a pair of loafers"]],
-    ["Sandalen",["a photo of a pair of sandals","a photo of a pair of open-toe summer sandals with straps"]]
-  ]],
-  ["Taschen",[
-    ["Tasche",["a photo of a handbag","a photo of a shoulder bag"]],
-    ["Rucksack",["a photo of a backpack"]]
-  ]],
-  ["Schmuck",[
-    ["Halskette",["a photo of a necklace"]],
-    ["Ohrringe",["a photo of a pair of earrings"]],
-    ["Armband",["a photo of a bracelet"]],
-    ["Ring",["a photo of a ring"]],
-    ["Uhr",["a photo of a wristwatch"]]
-  ]],
-  ["Haar",[
-    ["Haarschmuck",["a photo of a hair clip","a photo of a hairband"]]
-  ]],
-  ["Accessoires",[
-    ["Gürtel",["a photo of a belt"]],
-    ["Schal / Tuch",["a photo of a scarf","a photo of a silk neck scarf"]],
-    ["Hut / Mütze",["a photo of a hat","a photo of a beanie"]],
-    ["Sonnenbrille",["a photo of a pair of sunglasses"]],
-    ["Handschuhe",["a photo of a pair of gloves"]],
-    ["Strumpfhose",["a photo of a pair of tights"]]
-  ]],
-  ["Bademode",[
-    ["Bikini / Badeanzug",["a photo of a bikini","a photo of a swimsuit"]]
-  ]]
+  ["Kleider & Einteiler",[["Kleid",["dress"]],["Jumpsuit",["jumpsuit"]]]],
+  ["Schuhe",[["Sneaker",["sneakers"]],["Stiefel",["boots"]],["Absatzschuhe",["high heels"]],["Flache Schuhe",["ballet flats","loafers"]],["Sandalen",["sandals"]]]],
+  ["Taschen",[["Tasche",["handbag","leather handbag"]],["Rucksack",["backpack with shoulder straps"]]]],
+  ["Schmuck",[["Halskette",["necklace"]],["Ohrringe",["earrings"]],["Armband",["bracelet"]],["Ring",["ring"]],["Uhr",["wristwatch"]]]],
+  ["Haar",[["Haarschmuck",["hair clip","hairband"]]]],
+  ["Accessoires",[["Gürtel",["belt"]],["Schal / Tuch",["scarf"]],["Hut / Mütze",["hat","beanie"]],["Sonnenbrille",["sunglasses"]],["Handschuhe",["gloves"]],["Strumpfhose",["tights"]]]],
+  ["Bademode",[["Bikini / Badeanzug",["bikini","swimsuit"]]]]
 ];
-const CATEGORIES = GROUPS.flatMap(([,arts])=>arts);
+const CATEGORIES = GROUPS.flatMap(([,arts])=>arts.map(([n,en])=>[n,en.map(e=>`a photo of a ${e}.`)]));
 const GROUP_OF = new Map(GROUPS.flatMap(([g,arts])=>arts.map(([n])=>[n,g])));
 const withGroup = name => `${GROUP_OF.get(name)} › ${name}`;
 const MATERIALS = [
@@ -201,9 +154,13 @@ function srgbToLab([r,g,b]){
 }
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
 const COLOR_LAB = COLORS.map(([n,rgb])=>[n,rgb,srgbToLab(rgb)]);
+const colorByName=n=>COLOR_LAB.find(c=>c[0]===n);
 function nameColor(lab){
+  const C=Math.hypot(lab[1],lab[2]);
   // Sehr dunkle, kaum farbige Töne sind Schwarz (Raumlicht färbt Schwarz oft leicht bläulich)
-  if(lab[0]<22 && Math.hypot(lab[1],lab[2])<20) return COLOR_LAB[0];
+  if(lab[0]<22 && C<20) return colorByName("Schwarz");
+  // Helle, fast farblose Töne: Fotos machen Weiß meist grau, darum großzügig Weiß/Creme
+  if(C<7){ if(lab[0]>=72) return colorByName(lab[2]>4?"Creme":"Weiß"); if(lab[0]>=55) return colorByName("Hellgrau"); }
   let best=null,bd=1e9;
   for(const c of COLOR_LAB){const d=dist(lab,c[2]); if(d<bd){bd=d;best=c}}
   return best;
@@ -223,11 +180,8 @@ function kmeans(pts,K,iters=12){
   return {cent,assign};
 }
 
-/* ---------- Teil vom Hintergrund trennen ----------
-   1. Randpixel in 3 Farbgruppen teilen (Boden mit Maserung hat mehrere Töne).
-   2. Vom Rand aus alles „wegfluten“, was einer Randfarbe ähnelt.
-   3. Vom Rest nur die größte zusammenhängende Fläche behalten = das Kleidungsstück. */
-function segment(canvas){
+// Verkleinertes Bild (längste Seite 96 px) als Lab-Farben
+function smallLab(canvas){
   const S=96, s=S/Math.max(canvas.width,canvas.height);
   const W=Math.max(1,Math.round(canvas.width*s)), H=Math.max(1,Math.round(canvas.height*s));
   const small=document.createElement("canvas"); small.width=W; small.height=H;
@@ -235,61 +189,40 @@ function segment(canvas){
   const d=sctx.getImageData(0,0,W,H).data;
   const px=new Array(W*H);
   for(let i=0;i<W*H;i++) px[i]=srgbToLab([d[i*4],d[i*4+1],d[i*4+2]]);
-  const R=3, borderIdx=[];
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++) if(x<R||y<R||x>=W-R||y>=H-R) borderIdx.push(y*W+x);
-  const {cent,assign}=kmeans(borderIdx.map(i=>px[i]),3);
-  // Toleranz pro Randfarbe: wie stark der Boden innerhalb dieser Gruppe schwankt
-  const tol=cent.map((c,k)=>{
-    const ds=borderIdx.filter((_,j)=>assign[j]===k).map(i=>dist(px[i],c)).sort((a,b)=>a-b);
-    return ds.length ? Math.max(9,Math.min(18,1.3*ds[Math.floor(ds.length*0.85)])) : 0;
-  });
-  const bgLike=i=>cent.some((c,k)=>tol[k]&&dist(px[i],c)<tol[k]);
-  const bg=new Uint8Array(W*H), stack=[];
-  for(const i of borderIdx) if(bgLike(i)){bg[i]=1;stack.push(i)}
-  while(stack.length){
-    const i=stack.pop(), x=i%W, y=(i/W)|0;
-    for(const [nx,ny] of [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]){
-      if(nx<0||ny<0||nx>=W||ny>=H) continue; const j=ny*W+nx;
-      if(!bg[j]&&bgLike(j)){bg[j]=1;stack.push(j)}
-    }
-  }
-  // größte zusammenhängende Vordergrund-Fläche
-  const label=new Int32Array(W*H); let best=0,bestSize=0,next=1;
-  for(let i=0;i<W*H;i++){
-    if(bg[i]||label[i]) continue;
-    let size=0; const st=[i]; label[i]=next;
-    while(st.length){const p=st.pop(); size++; const x=p%W,y=(p/W)|0;
-      for(const [nx,ny] of [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]){
-        if(nx<0||ny<0||nx>=W||ny>=H) continue; const q=ny*W+nx;
-        if(!bg[q]&&!label[q]){label[q]=next;st.push(q)}
-      }}
-    if(size>bestSize){bestSize=size;best=next} next++;
-  }
+  return {W,H,px};
+}
+
+/* ---------- Teil freistellen mit der Freistell-KI (U-2-Netp) ----------
+   Liefert eine Maske: 1 = Kleidungsstück, 0 = Hintergrund (Boden, Tür, Bett …). */
+async function segment(canvas){
+  const {W,H,px}=smallLab(canvas);
+  const img=await RawImage.fromBlob(await canvasToBlob(canvas));
+  const {pixel_values}=await segProcessor(img);
+  const out=Object.values(await segModel({[segModel.sessions.model.inputNames[0]]:pixel_values}))[0];
+  // Ausgabe auf 0…255 strecken (wie im Original-Projekt rembg), dann auf die kleine Bildgröße bringen
+  const v=out.data; let lo=Infinity, hi=-Infinity; for(const x of v){ if(x<lo)lo=x; if(x>hi)hi=x; }
+  const [, , mh, mw]=out.dims, g=new Uint8ClampedArray(mw*mh);
+  for(let i=0;i<g.length;i++) g[i]=255*(v[i]-lo)/((hi-lo)||1);
+  const m=await new RawImage(g,mw,mh,1).resize(W,H);
   let mask=new Uint8Array(W*H);
-  // Löcher füllen: alles, was nicht vom Rand aus als Hintergrund erreichbar ist, gehört zum Teil
-  for(let i=0;i<W*H;i++) mask[i]=label[i]===best?1:0;
-  const outside=new Uint8Array(W*H), st2=[];
-  for(const i of borderIdx) if(!mask[i]){outside[i]=1;st2.push(i)}
-  while(st2.length){const i=st2.pop(),x=i%W,y=(i/W)|0;
-    for(const [nx,ny] of [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]){
-      if(nx<0||ny<0||nx>=W||ny>=H) continue; const j=ny*W+nx;
-      if(!mask[j]&&!outside[j]){outside[j]=1;st2.push(j)}
-    }}
-  for(let i=0;i<W*H;i++) if(!outside[i]) mask[i]=1;
-  const share=mask.reduce((a,b)=>a+b,0)/(W*H);
-  const ok=share>=0.10 && share<=0.92;
-  if(!ok){
-    // Trennung unsicher. Dünne Teile (Ketten): alle Nicht-Hintergrund-Pixel nehmen, sonst die Bildmitte
-    const notBg=Uint8Array.from(bg,b=>b?0:1), n=notBg.reduce((a,b)=>a+b,0);
-    if(share<0.10 && n>=W*H*0.003 && n<W*H*0.03) mask=notBg;
-    else { mask=new Uint8Array(W*H); for(let y=H*0.2|0;y<H*0.8;y++)for(let x=W*0.2|0;x<W*0.8;x++) mask[y*W+x]=1; }
+  for(let i=0;i<W*H;i++) mask[i]=m.data[i*m.channels]>=128?1:0;
+  const share=mask.reduce((a,b)=>a+b,0)/(W*H), ok=share>=0.02&&share<=0.97;
+  if(!ok){ // nichts Sinnvolles gefunden: Bildmitte nehmen
+    mask=new Uint8Array(W*H);
+    for(let y=H*0.2|0;y<H*0.8;y++)for(let x=W*0.2|0;x<W*0.8;x++) mask[y*W+x]=1;
   }
-  return {W,H,px,mask,ok,share};
+  return {W,H,px,mask,ok};
 }
 
 /* ---------- Farberkennung: nur die Pixel des Teils, Randstreifen weglassen ---------- */
 function detectColors(seg){
-  const {W,H,px,mask}=seg, fg=[];
+  const {W,H,mask}=seg, fg=[];
+  // Belichtung ausgleichen: Ist der Hintergrund hell und farblos (weiße Tür, Wand), gilt er als Weiß.
+  // Die Kamera belichtet nach ihm, darum wirken helle Teile davor grau. Gemessen: Farbe 25 → 34 von 47 richtig.
+  const med=(a,k)=>a.map(p=>p[k]).sort((x,y)=>x-y)[a.length>>1];
+  const bg=seg.px.filter((_,i)=>!mask[i]); let gain=1;
+  if(seg.ok && bg.length>W*H*0.05){ const L=med(bg,0), C=Math.hypot(med(bg,1),med(bg,2)); if(L>50 && C<10) gain=Math.min(1.6,92/L); }
+  const px=gain>1?seg.px.map(p=>[Math.min(100,p[0]*gain),p[1],p[2]]):seg.px;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i=y*W+x; if(!mask[i]) continue;
     // Kante (Schatten, Mischpixel mit dem Boden) überspringen
@@ -304,7 +237,7 @@ function detectColors(seg){
   return [...byName.values()].filter(x=>x.share>=0.15).sort((a,b)=>b.share-a.share);
 }
 
-/* ---------- Bild für die KI: Teil ausschneiden, Hintergrund hellgrau ---------- */
+/* ---------- Teil ausschneiden, Hintergrund hellgrau (Vorschau und Blick für Material/Muster) ---------- */
 function clipCanvas(canvas,seg){
   const {W,H,mask}=seg;
   const m=document.createElement("canvas"); m.width=W; m.height=H;
@@ -338,10 +271,10 @@ const canvasToBlob=c=>new Promise(r=>c.toBlob(r,"image/jpeg",0.9));
 /* ---------- KI laden: Bild- und Textteil von CLIP getrennt ----------
    Die Begriffe werden einmal beim Start in Zahlen übersetzt und gemerkt;
    pro Foto muss die KI dann nur noch die Bilder ansehen. */
-const MODEL="Xenova/clip-vit-base-patch32";
+const MODEL="Xenova/clip-vit-base-patch32", SEG_MODEL="BritishWerewolf/U-2-Netp";
 const statusEl=document.getElementById("status"), bar=document.getElementById("barfill");
 const files={};
-let processor=null, visionModel=null;
+let processor=null, visionModel=null, segModel=null, segProcessor=null;
 const TEXT={}; // Feld -> {names, emb}
 const progress_callback=p=>{
   if(p.status==="progress" && p.total){ files[p.file]={loaded:p.loaded,total:p.total};
@@ -357,6 +290,13 @@ function normRows(t){ // Tensor [n,d] -> Liste normierter Vektoren
 }
 try{
   const opts={progress_callback,dtype:"q8"};
+  // Freistell-KI U-2-Netp (4,6 MB, Apache-2.0): Bild wird auf 320×320 gestreckt
+  [segModel,segProcessor]=await Promise.all([
+    AutoModel.from_pretrained(SEG_MODEL,{progress_callback,dtype:"fp32",config:{model_type:"custom"}}),
+    AutoProcessor.from_pretrained(SEG_MODEL,{progress_callback,config:{do_normalize:true,do_pad:false,do_rescale:true,do_resize:true,
+      image_mean:[0.485,0.456,0.406],image_std:[0.229,0.224,0.225],feature_extractor_type:"ImageFeatureExtractor",resample:2,
+      rescale_factor:1/255,size:{width:320,height:320}}})
+  ]);
   let tokenizer, textModel;
   [tokenizer,processor,textModel,visionModel]=await Promise.all([
     AutoTokenizer.from_pretrained(MODEL,{progress_callback}), AutoProcessor.from_pretrained(MODEL,{progress_callback}),
@@ -370,6 +310,12 @@ try{
     const {text_embeds}=await textModel(tokenizer(phrases,{padding:true,truncation:true}));
     TEXT[field]={names,emb:normRows(text_embeds)};
   }
+  // Art: alle Sätze einer Art zu EINEM Vektor mitteln (sonst hätten Arten mit mehr Sätzen einen Vorteil)
+  const {names:cn,emb:ce}=TEXT.cat, catNames=[...new Set(cn)];
+  TEXT.cat={names:catNames,emb:catNames.map(n=>{
+    const rows=ce.filter((_,i)=>cn[i]===n), avg=rows[0].map((_,j)=>rows.reduce((s,r)=>s+r[j],0));
+    const l=Math.hypot(...avg); return avg.map(x=>x/l);
+  })};
   // Alte Modelldatei aus der ersten Testversion wird nicht mehr gebraucht: Speicher freigeben
   try{ const c=await caches.open("transformers-cache"); for(const k of await c.keys()) if(k.url.endsWith("/onnx/model_quantized.onnx")) await c.delete(k); }catch{}
   bar.style.width="100%";
@@ -397,22 +343,25 @@ function rotated(c,deg){
   const x=o.getContext("2d"); x.translate(o.width/2,o.height/2); x.rotate(deg*Math.PI/180); x.drawImage(c,-c.width/2,-c.height/2);
   return o;
 }
-async function analyse(cut){
-  const imgs=await Promise.all([0,90,180,270].map(async d=>RawImage.fromBlob(await canvasToBlob(rotated(cut,d)))));
+// Getestet mit 59 Fotos: Für die Art ist das ganze Foto besser (Bügel, Tür, Boden helfen
+// der KI beim Einordnen), für Material je ein Blick aufs ganze und aufs ausgeschnittene Foto, für das Muster nur aufs ausgeschnittene.
+async function analyse(full,cut){
+  const views=[0,90,180,270].map(d=>rotated(full,d)).concat(cut?[cut]:[]);
+  const imgs=await Promise.all(views.map(async c=>RawImage.fromBlob(await canvasToBlob(c))));
   const {image_embeds}=await visionModel(await processor(imgs));
-  const vecs=normRows(image_embeds);
-  const avgMap=field=>{ const tot=new Map(); for(const v of vecs) for(const [n,s] of scoreField(v,field)) tot.set(n,(tot.get(n)||0)+s/vecs.length); return tot; };
-  const avg=field=>top3(avgMap(field));
-  // Art in zwei Stufen, jeweils gemittelt über alle Drehungen (ein einzelner Ausreißer zählt so wenig):
+  const vecs=normRows(image_embeds), fullVecs=vecs.slice(0,4);
+  const matVecs=[vecs[0],vecs[4]||vecs[2]], patVecs=[vecs[4]||vecs[0]]; // Muster nur am freigestellten Teil (sonst stören Boden, Etikett)
+  const avgMap=(field,vs)=>{ const tot=new Map(); for(const v of vs) for(const [n,s] of scoreField(v,field)) tot.set(n,(tot.get(n)||0)+s/vs.length); return tot; };
+  const avg=(field,vs)=>top3(avgMap(field,vs));
+  // Art in zwei Stufen, gemittelt über die 4 Drehungen (Teile liegen oft quer):
   // 1. Oberkategorie (Oberteile, Schuhe …) – das klappt sehr zuverlässig
   // 2. die Art innerhalb dieser Oberkategorie
-  const catAvg=avgMap("cat"), groupSum=new Map();
+  const catAvg=avgMap("cat",fullVecs), groupSum=new Map();
   for(const [n,s] of catAvg) groupSum.set(GROUP_OF.get(n),(groupSum.get(GROUP_OF.get(n))||0)+s);
   const grp=[...groupSum].sort((a,b)=>b[1]-a[1])[0][0];
   const inGroup=[...catAvg].filter(([n])=>GROUP_OF.get(n)===grp), z=inGroup.reduce((s,[,v])=>s+v,0);
   const cat=inGroup.map(([label,s])=>({label,score:s/z})).sort((a,b)=>b.score-a.score).slice(0,3);
-  // Material und Muster hängen kaum von der Drehung ab: ebenfalls Durchschnitt
-  return {cat,mat:avg("mat"),pat:avg("pat")};
+  return {cat,mat:avg("mat",matVecs),pat:avg("pat",patVecs)};
 }
 
 /* ---------- Ergebnisse & Bewertung ---------- */
@@ -454,12 +403,11 @@ document.getElementById("files").addEventListener("change",async ev=>{
       const {img,url}=await loadImage(file); card.querySelector("img").src=url;
       const t0=performance.now();
       const canvas=toCanvas(img);
-      const seg=segment(canvas);
+      const seg=await segment(canvas);
       const colors=detectColors(seg);
-      const cut=seg.ok?clipCanvas(canvas,seg):canvas; // unsichere Trennung: KI sieht das ganze Foto
-      card.querySelector("img").src=cut.toDataURL("image/jpeg",0.85); // zeigt, was die KI zu sehen bekommt
-      URL.revokeObjectURL(url);
-      const {cat,mat,pat}=await analyse(cut);
+      const cut=seg.ok?clipCanvas(canvas,seg):null;
+      if(cut){ card.querySelector("img").src=cut.toDataURL("image/jpeg",0.85); URL.revokeObjectURL(url); } // zeigt das freigestellte Teil
+      const {cat,mat,pat}=await analyse(canvas,cut);
       const secs=((performance.now()-t0)/1000).toFixed(1);
       const box=card.children[1]; box.innerHTML="";
       box.append(
