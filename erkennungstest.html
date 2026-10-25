@@ -51,11 +51,11 @@ td:last-child{text-align:right;font-weight:600}
 <body>
 <main>
   <h1>Erkennungstest</h1>
-  <div class="version">Version 4 · 25.10.2026</div>
+  <div class="version">Version 5 · 25.10.2026</div>
   <p class="lead">Lade 5 bis 10 Fotos von Kleidung oder Schmuck hoch. Die KI läuft nur in diesem Browser, die Fotos verlassen das Gerät nicht. Bewerte danach jede Angabe mit ✓ oder ✗.</p>
 
   <div class="panel">
-    <div class="status" id="status">KI-Modell wird geladen (einmalig ca. 160 MB) …</div>
+    <div class="status" id="status">KI-Modell wird geladen (einmalig ca. 210 MB) …</div>
     <div class="bar"><div id="barfill"></div></div>
   </div>
 
@@ -75,7 +75,7 @@ td:last-child{text-align:right;font-weight:600}
 </main>
 
 <script type="module">
-import { AutoModel, AutoTokenizer, AutoProcessor, CLIPTextModelWithProjection, CLIPVisionModelWithProjection, RawImage } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
+import { AutoModel, AutoTokenizer, AutoProcessor, SiglipTextModel, SiglipVisionModel, RawImage } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
 
 /* ---------- Begriffe: deutsch für die Anzeige, englisch für die KI ---------- */
 // Oberkategorie → Arten. Bewusst grob: Leder-, Jeans- und Steppjacken sind „Jacke“,
@@ -121,8 +121,10 @@ const MATERIALS = [
   ["Kunstfell / Teddy",["a garment made of faux fur or teddy fleece"]],
   ["Metall",["a piece of metal jewelry"]]
 ];
+// Rippen, Zopfmuster und Jeansstoff hielt die KI sonst für Streifen (getestet: Muster 44 → 53 von 54)
 const PATTERNS = [
-  ["Einfarbig",["a plain solid-colored garment with no pattern","a garment in a single plain color"]],
+  ["Einfarbig",["a plain solid-colored garment with no pattern","a garment in a single plain color",
+    "a plain ribbed knit garment in one color","a plain cable knit sweater in one color","a plain denim garment in one color"]],
   ["Gestreift",["a garment with stripes"]],
   ["Kariert",["a garment with a plaid check pattern"]],
   ["Geblümt",["a garment with a floral print"]],
@@ -131,71 +133,27 @@ const PATTERNS = [
   ["Aufdruck / Logo",["a garment with a large printed graphic on the front","a t-shirt with a big logo or text print"]]
 ];
 
-/* ---------- Farbnamen (sRGB) ---------- */
-// Ein Name darf mehrere Ankerfarben haben (z. B. kräftiges und gedecktes Braun).
+/* ---------- Farben ---------- */
+// Farben benennt FashionSigLIP selbst (getestet: 51 von 54 richtig, der frühere eigene Farb-Code nur 40).
+// [deutsch, englisch für die KI, Farbe für das Kästchen in der Anzeige]
 const COLORS = [
-  ["Schwarz",[22,22,22]],["Schwarz",[32,36,42]],["Anthrazit",[66,66,70]],["Grau",[128,128,128]],["Hellgrau",[190,190,192]],["Weiß",[246,246,244]],
-  ["Creme",[238,228,204]],["Beige",[214,194,164]],["Taupe",[150,135,120]],["Camel",[190,145,95]],
-  ["Braun",[110,70,42]],["Braun",[100,86,72]],["Braun",[120,95,70]],["Dunkelbraun",[68,44,30]],["Dunkelbraun",[62,50,42]],
-  ["Khaki",[160,150,102]],["Oliv",[108,108,52]],["Dunkelgrün",[30,80,52]],["Grün",[62,150,72]],["Mint",[170,220,190]],
-  ["Türkis",[60,180,180]],["Hellblau",[160,200,230]],["Hellblau",[200,214,222]],["Jeansblau",[82,110,150]],["Jeansblau",[125,150,178]],
-  ["Blau",[42,82,182]],["Dunkelblau",[30,40,80]],
-  ["Lila",[120,70,150]],["Flieder",[190,170,215]],["Rosa",[240,182,196]],["Pink",[220,60,130]],["Rot",[200,32,40]],
-  ["Bordeaux",[110,26,42]],["Koralle",[240,122,100]],["Orange",[235,130,40]],["Senfgelb",[205,165,42]],["Gelb",[245,215,62]],
-  ["Gold",[200,166,82]]
+  ["Schwarz","black",[22,22,22]],["Anthrazit","charcoal grey",[66,66,70]],["Grau","grey",[128,128,128]],["Hellgrau","light grey",[190,190,192]],
+  ["Weiß","white",[246,246,244]],["Creme","cream",[238,228,204]],["Beige","beige",[214,194,164]],["Taupe","taupe",[150,135,120]],
+  ["Camel","camel",[190,145,95]],["Braun","brown",[110,70,42]],["Dunkelbraun","dark brown",[68,44,30]],["Khaki","khaki",[160,150,102]],
+  ["Oliv","olive green",[108,108,52]],["Dunkelgrün","dark green",[30,80,52]],["Grün","green",[62,150,72]],["Mint","mint green",[170,220,190]],
+  ["Türkis","turquoise",[60,180,180]],["Hellblau","light blue",[160,200,230]],["Jeansblau","denim blue",[82,110,150]],["Blau","blue",[42,82,182]],
+  ["Dunkelblau","navy blue",[30,40,80]],["Lila","purple",[120,70,150]],["Flieder","lilac",[190,170,215]],["Rosa","pink",[240,182,196]],
+  ["Pink","hot pink",[220,60,130]],["Rot","red",[200,32,40]],["Bordeaux","burgundy",[110,26,42]],["Koralle","coral",[240,122,100]],
+  ["Orange","orange",[235,130,40]],["Senfgelb","mustard yellow",[205,165,42]],["Gelb","yellow",[245,215,62]],["Gold","gold",[200,166,82]]
 ];
-function srgbToLab([r,g,b]){
-  const f=c=>{c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)};
-  const R=f(r),G=f(g),B=f(b);
-  let X=(R*0.4124+G*0.3576+B*0.1805)/0.95047, Y=(R*0.2126+G*0.7152+B*0.0722), Z=(R*0.0193+G*0.1192+B*0.9505)/1.08883;
-  const h=t=>t>0.008856?Math.cbrt(t):(7.787*t+16/116);
-  X=h(X);Y=h(Y);Z=h(Z);
-  return [116*Y-16,500*(X-Y),200*(Y-Z)];
-}
-const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
-const COLOR_LAB = COLORS.map(([n,rgb])=>[n,rgb,srgbToLab(rgb)]);
-const colorByName=n=>COLOR_LAB.find(c=>c[0]===n);
-function nameColor(lab){
-  const C=Math.hypot(lab[1],lab[2]);
-  // Sehr dunkle, kaum farbige Töne sind Schwarz (Raumlicht färbt Schwarz oft leicht bläulich)
-  if(lab[0]<22 && C<20) return colorByName("Schwarz");
-  // Helle, fast farblose Töne: Fotos machen Weiß meist grau, darum großzügig Weiß/Creme
-  if(C<7){ if(lab[0]>=72) return colorByName(lab[2]>4?"Creme":"Weiß"); if(lab[0]>=55) return colorByName("Hellgrau"); }
-  let best=null,bd=1e9;
-  for(const c of COLOR_LAB){const d=dist(lab,c[2]); if(d<bd){bd=d;best=c}}
-  return best;
-}
-
-/* ---------- k-Means: Farben in K Gruppen einteilen ---------- */
-function kmeans(pts,K,iters=12){
-  K=Math.min(K,pts.length); let cent=[];
-  for(let k=0;k<K;k++) cent.push(pts[Math.floor((k+0.5)*pts.length/K)].slice());
-  const assign=new Array(pts.length).fill(0);
-  for(let it=0;it<iters;it++){
-    for(let i=0;i<pts.length;i++){let b=0,bd=1e9;for(let k=0;k<K;k++){const dd=dist(pts[i],cent[k]);if(dd<bd){bd=dd;b=k}}assign[i]=b}
-    const sum=cent.map(()=>[0,0,0,0]);
-    for(let i=0;i<pts.length;i++){const s=sum[assign[i]];s[0]+=pts[i][0];s[1]+=pts[i][1];s[2]+=pts[i][2];s[3]++}
-    cent=cent.map((c,k)=>sum[k][3]?[sum[k][0]/sum[k][3],sum[k][1]/sum[k][3],sum[k][2]/sum[k][3]]:c);
-  }
-  return {cent,assign};
-}
-
-// Verkleinertes Bild (längste Seite 96 px) als Lab-Farben
-function smallLab(canvas){
-  const S=96, s=S/Math.max(canvas.width,canvas.height);
-  const W=Math.max(1,Math.round(canvas.width*s)), H=Math.max(1,Math.round(canvas.height*s));
-  const small=document.createElement("canvas"); small.width=W; small.height=H;
-  const sctx=small.getContext("2d",{willReadFrequently:true}); sctx.drawImage(canvas,0,0,W,H);
-  const d=sctx.getImageData(0,0,W,H).data;
-  const px=new Array(W*H);
-  for(let i=0;i<W*H;i++) px[i]=srgbToLab([d[i*4],d[i*4+1],d[i*4+2]]);
-  return {W,H,px};
-}
+const COLOR_TEXT = COLORS.map(([n,en])=>[n,[`a ${en} garment`]]);
+const COLOR_RGB = new Map(COLORS.map(([n,,rgb])=>[n,rgb]));
 
 /* ---------- Teil freistellen mit der Freistell-KI (U-2-Netp) ----------
-   Liefert eine Maske: 1 = Kleidungsstück, 0 = Hintergrund (Boden, Tür, Bett …). */
+   Liefert eine kleine Maske (längste Seite 96 px): 1 = Kleidungsstück, 0 = Hintergrund (Boden, Tür, Bett …). */
 async function segment(canvas){
-  const {W,H,px}=smallLab(canvas);
+  const s=96/Math.max(canvas.width,canvas.height);
+  const W=Math.max(1,Math.round(canvas.width*s)), H=Math.max(1,Math.round(canvas.height*s));
   const img=await RawImage.fromBlob(await canvasToBlob(canvas));
   const {pixel_values}=await segProcessor(img);
   const out=Object.values(await segModel({[segModel.sessions.model.inputNames[0]]:pixel_values}))[0];
@@ -204,40 +162,13 @@ async function segment(canvas){
   const [, , mh, mw]=out.dims, g=new Uint8ClampedArray(mw*mh);
   for(let i=0;i<g.length;i++) g[i]=255*(v[i]-lo)/((hi-lo)||1);
   const m=await new RawImage(g,mw,mh,1).resize(W,H);
-  let mask=new Uint8Array(W*H);
+  const mask=new Uint8Array(W*H);
   for(let i=0;i<W*H;i++) mask[i]=m.data[i*m.channels]>=128?1:0;
-  const share=mask.reduce((a,b)=>a+b,0)/(W*H), ok=share>=0.02&&share<=0.97;
-  if(!ok){ // nichts Sinnvolles gefunden: Bildmitte nehmen
-    mask=new Uint8Array(W*H);
-    for(let y=H*0.2|0;y<H*0.8;y++)for(let x=W*0.2|0;x<W*0.8;x++) mask[y*W+x]=1;
-  }
-  return {W,H,px,mask,ok};
+  const share=mask.reduce((a,b)=>a+b,0)/(W*H);
+  return {W,H,mask,ok:share>=0.02&&share<=0.97}; // nicht ok: nichts Sinnvolles gefunden, KI sieht nur das ganze Foto
 }
 
-/* ---------- Farberkennung: nur die Pixel des Teils, Randstreifen weglassen ---------- */
-function detectColors(seg){
-  const {W,H,mask}=seg, fg=[];
-  // Belichtung ausgleichen: Ist der Hintergrund hell und farblos (weiße Tür, Wand), gilt er als Weiß.
-  // Die Kamera belichtet nach ihm, darum wirken helle Teile davor grau. Gemessen: Farbe 25 → 34 von 47 richtig.
-  const med=(a,k)=>a.map(p=>p[k]).sort((x,y)=>x-y)[a.length>>1];
-  const bg=seg.px.filter((_,i)=>!mask[i]); let gain=1;
-  if(seg.ok && bg.length>W*H*0.05){ const L=med(bg,0), C=Math.hypot(med(bg,1),med(bg,2)); if(L>50 && C<10) gain=Math.min(1.6,92/L); }
-  const px=gain>1?seg.px.map(p=>[Math.min(100,p[0]*gain),p[1],p[2]]):seg.px;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const i=y*W+x; if(!mask[i]) continue;
-    // Kante (Schatten, Mischpixel mit dem Boden) überspringen
-    let edge=false; for(let dy=-1;dy<=1&&!edge;dy++)for(let dx=-1;dx<=1;dx++){const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=W||ny>=H||!mask[ny*W+nx]){edge=true;break}}
-    if(!edge) fg.push(px[i]);
-  }
-  const pts=fg.length>20?fg:px.filter((_,i)=>mask[i]); // dünne Teile haben kaum „Innenpixel“
-  const {cent,assign}=kmeans(pts,4);
-  const counts=new Array(cent.length).fill(0); assign.forEach(a=>counts[a]++);
-  const byName=new Map();
-  cent.forEach((c,k)=>{ const [n,rgb]=nameColor(c); byName.set(n,{name:n,rgb:byName.get(n)?.rgb||rgb,share:(byName.get(n)?.share||0)+counts[k]/pts.length}); });
-  return [...byName.values()].filter(x=>x.share>=0.15).sort((a,b)=>b.share-a.share);
-}
-
-/* ---------- Teil ausschneiden, Hintergrund hellgrau (Vorschau und Blick für Material/Muster) ---------- */
+/* ---------- Teil ausschneiden, Hintergrund hellgrau (Vorschau und ein Blick für die KI) ---------- */
 function clipCanvas(canvas,seg){
   const {W,H,mask}=seg;
   const m=document.createElement("canvas"); m.width=W; m.height=H;
@@ -268,10 +199,11 @@ function toCanvas(img,max=448){
 }
 const canvasToBlob=c=>new Promise(r=>c.toBlob(r,"image/jpeg",0.9));
 
-/* ---------- KI laden: Bild- und Textteil von CLIP getrennt ----------
+/* ---------- KI laden: Marqo-FashionSigLIP (auf Mode trainiert, Apache-2.0), Bild- und Textteil getrennt ----------
    Die Begriffe werden einmal beim Start in Zahlen übersetzt und gemerkt;
-   pro Foto muss die KI dann nur noch die Bilder ansehen. */
-const MODEL="Xenova/clip-vit-base-patch32", SEG_MODEL="BritishWerewolf/U-2-Netp";
+   pro Foto muss die KI dann nur noch die Bilder ansehen.
+   Vergleich mit 59 Testfotos gegen das vorherige CLIP: Art 56 statt 44, Material 27 statt 24 von 29. */
+const MODEL="Marqo/marqo-fashionSigLIP", SEG_MODEL="BritishWerewolf/U-2-Netp";
 const statusEl=document.getElementById("status"), bar=document.getElementById("barfill");
 const files={};
 let processor=null, visionModel=null, segModel=null, segProcessor=null;
@@ -300,15 +232,16 @@ try{
   let tokenizer, textModel;
   [tokenizer,processor,textModel,visionModel]=await Promise.all([
     AutoTokenizer.from_pretrained(MODEL,{progress_callback}), AutoProcessor.from_pretrained(MODEL,{progress_callback}),
-    CLIPTextModelWithProjection.from_pretrained(MODEL,{...opts,model_file_name:"text_model"}),
-    CLIPVisionModelWithProjection.from_pretrained(MODEL,{...opts,model_file_name:"vision_model"})
+    SiglipTextModel.from_pretrained(MODEL,{...opts,model_file_name:"text_model"}),
+    SiglipVisionModel.from_pretrained(MODEL,{...opts,model_file_name:"vision_model"})
   ]);
   statusEl.textContent="KI lernt die Begriffe …";
-  for(const [field,list] of [["cat",CATEGORIES],["mat",MATERIALS],["pat",PATTERNS]]){
+  for(const [field,list] of [["cat",CATEGORIES],["mat",MATERIALS],["pat",PATTERNS],["col",COLOR_TEXT]]){
     const names=[], phrases=[];
     for(const [name,ps] of list) for(const p of ps){ names.push(name); phrases.push(p); }
-    const {text_embeds}=await textModel(tokenizer(phrases,{padding:true,truncation:true}));
-    TEXT[field]={names,emb:normRows(text_embeds)};
+    // SigLIP wurde mit fester Textlänge trainiert: darum padding "max_length"
+    const out=await textModel(tokenizer(phrases,{padding:"max_length",truncation:true}));
+    TEXT[field]={names,emb:normRows(out.text_embeds??out.pooler_output)};
   }
   // Art: alle Sätze einer Art zu EINEM Vektor mitteln (sonst hätten Arten mit mehr Sätzen einen Vorteil)
   const {names:cn,emb:ce}=TEXT.cat, catNames=[...new Set(cn)];
@@ -316,8 +249,8 @@ try{
     const rows=ce.filter((_,i)=>cn[i]===n), avg=rows[0].map((_,j)=>rows.reduce((s,r)=>s+r[j],0));
     const l=Math.hypot(...avg); return avg.map(x=>x/l);
   })};
-  // Alte Modelldatei aus der ersten Testversion wird nicht mehr gebraucht: Speicher freigeben
-  try{ const c=await caches.open("transformers-cache"); for(const k of await c.keys()) if(k.url.endsWith("/onnx/model_quantized.onnx")) await c.delete(k); }catch{}
+  // Modelldateien früherer Testversionen (CLIP) werden nicht mehr gebraucht: Speicher auf dem Handy freigeben
+  try{ const c=await caches.open("transformers-cache"); for(const k of await c.keys()) if(k.url.includes("clip-vit-base-patch32")) await c.delete(k); }catch{}
   bar.style.width="100%";
   statusEl.textContent="✅ KI ist bereit. Du kannst jetzt Fotos auswählen.";
   document.getElementById("uploadLabel").classList.remove("disabled");
@@ -326,7 +259,7 @@ try{
   console.error(e);
 }
 
-// Wahrscheinlichkeit pro Begriff für einen Bild-Vektor (wie CLIP: Ähnlichkeit × 100, dann Softmax)
+// Wahrscheinlichkeit pro Begriff für einen Bild-Vektor (Ähnlichkeit × 100, dann Softmax)
 function scoreField(imgVec,field){
   const {names,emb}=TEXT[field];
   const logits=emb.map(t=>{let s=0; for(let i=0;i<t.length;i++) s+=t[i]*imgVec[i]; return 100*s;});
@@ -343,14 +276,13 @@ function rotated(c,deg){
   const x=o.getContext("2d"); x.translate(o.width/2,o.height/2); x.rotate(deg*Math.PI/180); x.drawImage(c,-c.width/2,-c.height/2);
   return o;
 }
-// Getestet mit 59 Fotos: Für die Art ist das ganze Foto besser (Bügel, Tür, Boden helfen
-// der KI beim Einordnen), für Material je ein Blick aufs ganze und aufs ausgeschnittene Foto, für das Muster nur aufs ausgeschnittene.
+// Blickwinkel je Angabe, getestet mit 59 Fotos: Art auf dem ganzen Foto in 4 Drehungen (Bügel, Tür, Boden helfen
+// beim Einordnen), Material auf ganzem Foto + Ausschnitt, Muster und Farbe auf allen 5 Bildern.
 async function analyse(full,cut){
   const views=[0,90,180,270].map(d=>rotated(full,d)).concat(cut?[cut]:[]);
   const imgs=await Promise.all(views.map(async c=>RawImage.fromBlob(await canvasToBlob(c))));
-  const {image_embeds}=await visionModel(await processor(imgs));
-  const vecs=normRows(image_embeds), fullVecs=vecs.slice(0,4);
-  const matVecs=[vecs[0],vecs[4]||vecs[2]], patVecs=[vecs[4]||vecs[0]]; // Muster nur am freigestellten Teil (sonst stören Boden, Etikett)
+  const out=await visionModel(await processor(imgs));
+  const vecs=normRows(out.image_embeds??out.pooler_output), fullVecs=vecs.slice(0,4), matVecs=[vecs[0],vecs[4]||vecs[2]];
   const avgMap=(field,vs)=>{ const tot=new Map(); for(const v of vs) for(const [n,s] of scoreField(v,field)) tot.set(n,(tot.get(n)||0)+s/vs.length); return tot; };
   const avg=(field,vs)=>top3(avgMap(field,vs));
   // Art in zwei Stufen, gemittelt über die 4 Drehungen (Teile liegen oft quer):
@@ -361,7 +293,7 @@ async function analyse(full,cut){
   const grp=[...groupSum].sort((a,b)=>b[1]-a[1])[0][0];
   const inGroup=[...catAvg].filter(([n])=>GROUP_OF.get(n)===grp), z=inGroup.reduce((s,[,v])=>s+v,0);
   const cat=inGroup.map(([label,s])=>({label,score:s/z})).sort((a,b)=>b.score-a.score).slice(0,3);
-  return {cat,mat:avg("mat",matVecs),pat:avg("pat",patVecs)};
+  return {cat,mat:avg("mat",matVecs),pat:avg("pat",vecs),col:avg("col",vecs)};
 }
 
 /* ---------- Ergebnisse & Bewertung ---------- */
@@ -377,6 +309,7 @@ function judgeButtons(field){
   wrap.append(ok,bad); return wrap;
 }
 const pct=s=>Math.round(s*100)+" %";
+const swatch=n=>`<span class="sw" style="background:rgb(${COLOR_RGB.get(n).join(",")})"></span>`;
 function row(field,main,alt){
   const r=document.createElement("div"); r.className="row";
   const left=document.createElement("div");
@@ -404,17 +337,18 @@ document.getElementById("files").addEventListener("change",async ev=>{
       const t0=performance.now();
       const canvas=toCanvas(img);
       const seg=await segment(canvas);
-      const colors=detectColors(seg);
       const cut=seg.ok?clipCanvas(canvas,seg):null;
       if(cut){ card.querySelector("img").src=cut.toDataURL("image/jpeg",0.85); URL.revokeObjectURL(url); } // zeigt das freigestellte Teil
-      const {cat,mat,pat}=await analyse(canvas,cut);
+      const {cat,mat,pat,col}=await analyse(canvas,cut);
       const secs=((performance.now()-t0)/1000).toFixed(1);
+      // Mehrfarbige Teile: zweite Farbe zeigen, wenn die KI sie für ähnlich wahrscheinlich hält
+      const cols=[col[0],...col.slice(1).filter(c=>c.score>=0.2)].slice(0,2);
       const box=card.children[1]; box.innerHTML="";
       box.append(
         row("Art",`${withGroup(cat[0].label)} <span class="alt">${pct(cat[0].score)}</span>`,`sonst: ${cat.slice(1).map(c=>`${c.label} (${pct(c.score)})`).join(", ")}`),
         row("Material",`${mat[0].label} <span class="alt">${pct(mat[0].score)}</span>`,`sonst: ${mat.slice(1).map(c=>`${c.label} (${pct(c.score)})`).join(", ")}`),
         row("Muster",`${pat[0].label} <span class="alt">${pct(pat[0].score)}</span>`,`sonst: ${pat[1].label} (${pct(pat[1].score)})`),
-        row("Farbe",colors.map(c=>`<span class="sw" style="background:rgb(${c.rgb.join(",")})"></span>${c.name} ${pct(c.share)}`).join(" &nbsp;"),"")
+        row("Farbe",cols.map(c=>`${swatch(c.label)}${c.label} ${pct(c.score)}`).join(" &nbsp;"),`sonst: ${col.filter(c=>!cols.includes(c)).map(c=>`${c.label} (${pct(c.score)})`).join(", ")}`)
       );
       box.insertAdjacentHTML("beforeend",`<div class="time">Analyse: ${secs} Sekunden</div>`);
     }catch(e){
