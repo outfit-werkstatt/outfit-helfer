@@ -55,7 +55,7 @@ td:last-child{text-align:right;font-weight:600}
   <p class="lead">Lade 5 bis 10 Fotos von Kleidung oder Schmuck hoch. Die KI läuft nur in diesem Browser, die Fotos verlassen das Gerät nicht. Bewerte danach jede Angabe mit ✓ oder ✗.</p>
 
   <div class="panel">
-    <div class="status" id="status">KI-Modell wird geladen (einmalig ca. 210 MB) …</div>
+    <div class="status" id="status">KI-Modell wird geladen (einmalig ca. 100 MB) …</div>
     <div class="bar"><div id="barfill"></div></div>
   </div>
 
@@ -199,11 +199,26 @@ function toCanvas(img,max=448){
 }
 const canvasToBlob=c=>new Promise(r=>c.toBlob(r,"image/jpeg",0.9));
 
-/* ---------- KI laden: Marqo-FashionSigLIP (auf Mode trainiert, Apache-2.0), Bild- und Textteil getrennt ----------
-   Die Begriffe werden einmal beim Start in Zahlen übersetzt und gemerkt;
-   pro Foto muss die KI dann nur noch die Bilder ansehen.
-   Vergleich mit 59 Testfotos gegen das vorherige CLIP: Art 56 statt 44, Material 27 statt 24 von 29. */
+/* ---------- KI laden: Marqo-FashionSigLIP (auf Mode trainiert, Apache-2.0) ----------
+   Vergleich mit 59 Testfotos gegen das vorherige CLIP: Art 56 statt 44, Material 27 statt 24 von 29.
+   Die Begriffe sind vorab mit dem Text-Teil der KI in Zahlen übersetzt (begriffe.json, exakt gespeichert).
+   Das Handy lädt darum nur den Bild-Teil: Start in Sekunden statt Minuten, 111 MB weniger Download.
+   Nach jeder Änderung an den Begriffen oben: Seite lokal mit ?begriffe-erzeugen öffnen, das schreibt
+   begriffe.json neu. Passt die Datei nicht zu den Begriffen, meldet die Seite einen Fehler. */
 const MODEL="Marqo/marqo-fashionSigLIP", SEG_MODEL="BritishWerewolf/U-2-Netp";
+const TERMS_SRC=JSON.stringify({model:MODEL,cat:CATEGORIES,mat:MATERIALS,pat:PATTERNS,col:COLOR_TEXT});
+const MAKE_TERMS=new URLSearchParams(location.search).has("begriffe-erzeugen");
+// Vektoren exakt (Float32) als Base64 speichern und wieder lesen
+function toB64(rows){
+  const f=new Float32Array(rows.length*rows[0].length); rows.forEach((r,i)=>f.set(r,i*r.length));
+  const u=new Uint8Array(f.buffer); let s=""; for(let i=0;i<u.length;i+=8192) s+=String.fromCharCode(...u.subarray(i,i+8192));
+  return btoa(s);
+}
+function fromB64(s,dim){
+  const f=new Float32Array(Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer), rows=[];
+  for(let i=0;i<f.length;i+=dim) rows.push(f.subarray(i,i+dim));
+  return rows;
+}
 const statusEl=document.getElementById("status"), bar=document.getElementById("barfill");
 const files={};
 let processor=null, visionModel=null, segModel=null, segProcessor=null;
@@ -220,20 +235,11 @@ function normRows(t){ // Tensor [n,d] -> Liste normierter Vektoren
   for(let i=0;i<n;i++){ const v=t.data.slice(i*dim,(i+1)*dim); let s=0; for(const x of v) s+=x*x; s=Math.sqrt(s); out.push(v.map(x=>x/s)); }
   return out;
 }
-try{
-  const opts={progress_callback,dtype:"q8"};
-  // Freistell-KI U-2-Netp (4,6 MB, Apache-2.0): Bild wird auf 320×320 gestreckt
-  [segModel,segProcessor]=await Promise.all([
-    AutoModel.from_pretrained(SEG_MODEL,{progress_callback,dtype:"fp32",config:{model_type:"custom"}}),
-    AutoProcessor.from_pretrained(SEG_MODEL,{progress_callback,config:{do_normalize:true,do_pad:false,do_rescale:true,do_resize:true,
-      image_mean:[0.485,0.456,0.406],image_std:[0.229,0.224,0.225],feature_extractor_type:"ImageFeatureExtractor",resample:2,
-      rescale_factor:1/255,size:{width:320,height:320}}})
-  ]);
-  let tokenizer, textModel;
-  [tokenizer,processor,textModel,visionModel]=await Promise.all([
-    AutoTokenizer.from_pretrained(MODEL,{progress_callback}), AutoProcessor.from_pretrained(MODEL,{progress_callback}),
-    SiglipTextModel.from_pretrained(MODEL,{...opts,model_file_name:"text_model"}),
-    SiglipVisionModel.from_pretrained(MODEL,{...opts,model_file_name:"vision_model"})
+// Nur mit ?begriffe-erzeugen: Begriffe mit dem Text-Teil der KI umrechnen und als begriffe.json speichern
+async function makeTerms(opts){
+  const [tokenizer,textModel]=await Promise.all([
+    AutoTokenizer.from_pretrained(MODEL,{progress_callback}),
+    SiglipTextModel.from_pretrained(MODEL,{...opts,model_file_name:"text_model"})
   ]);
   statusEl.textContent="KI lernt die Begriffe …";
   for(const [field,list] of [["cat",CATEGORIES],["mat",MATERIALS],["pat",PATTERNS],["col",COLOR_TEXT]]){
@@ -249,8 +255,37 @@ try{
     const rows=ce.filter((_,i)=>cn[i]===n), avg=rows[0].map((_,j)=>rows.reduce((s,r)=>s+r[j],0));
     const l=Math.hypot(...avg); return avg.map(x=>x/l);
   })};
-  // Modelldateien früherer Testversionen (CLIP) werden nicht mehr gebraucht: Speicher auf dem Handy freigeben
-  try{ const c=await caches.open("transformers-cache"); for(const k of await c.keys()) if(k.url.includes("clip-vit-base-patch32")) await c.delete(k); }catch{}
+  const data={quelle:TERMS_SRC,dim:TEXT.cat.emb[0].length,felder:Object.fromEntries(
+    Object.entries(TEXT).map(([f,{names,emb}])=>[f,{names,emb:toB64(emb)}]))};
+  const json=JSON.stringify(data);
+  // Lokal (server.ps1) direkt in den Projektordner schreiben, sonst als Datei anbieten
+  const saved=location.hostname==="localhost" && (await fetch("begriffe.json",{method:"POST",body:json}).catch(()=>null))?.ok;
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([json],{type:"application/json"})); a.download="begriffe.json";
+  a.textContent=saved?"begriffe.json gespeichert ✅":"begriffe.json herunterladen"; statusEl.after(a);
+}
+try{
+  const opts={progress_callback,dtype:"q8"};
+  // Freistell-KI U-2-Netp (4,6 MB, Apache-2.0): Bild wird auf 320×320 gestreckt
+  [segModel,segProcessor]=await Promise.all([
+    AutoModel.from_pretrained(SEG_MODEL,{progress_callback,dtype:"fp32",config:{model_type:"custom"}}),
+    AutoProcessor.from_pretrained(SEG_MODEL,{progress_callback,config:{do_normalize:true,do_pad:false,do_rescale:true,do_resize:true,
+      image_mean:[0.485,0.456,0.406],image_std:[0.229,0.224,0.225],feature_extractor_type:"ImageFeatureExtractor",resample:2,
+      rescale_factor:1/255,size:{width:320,height:320}}})
+  ]);
+  [processor,visionModel]=await Promise.all([
+    AutoProcessor.from_pretrained(MODEL,{progress_callback}),
+    SiglipVisionModel.from_pretrained(MODEL,{...opts,model_file_name:"vision_model"})
+  ]);
+  if(MAKE_TERMS) await makeTerms(opts);
+  else{
+    const data=await (await fetch("begriffe.json",{cache:"no-cache"})).json();
+    if(data.quelle!==TERMS_SRC) throw new Error("begriffe.json passt nicht zu den Begriffen der Seite. Bitte mit ?begriffe-erzeugen neu erzeugen.");
+    for(const [field,{names,emb}] of Object.entries(data.felder)) TEXT[field]={names,emb:fromB64(emb,data.dim)};
+  }
+  // Nicht mehr gebrauchte Modelldateien (CLIP aus früheren Testversionen, Text-Teil von FashionSigLIP)
+  // aus dem Speicher des Handys löschen
+  if(!MAKE_TERMS) try{ const c=await caches.open("transformers-cache");
+    for(const k of await c.keys()) if(k.url.includes("clip-vit-base-patch32")||k.url.includes("/onnx/text_model")) await c.delete(k); }catch{}
   bar.style.width="100%";
   statusEl.textContent="✅ KI ist bereit. Du kannst jetzt Fotos auswählen.";
   document.getElementById("uploadLabel").classList.remove("disabled");
