@@ -19,6 +19,7 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
 h1{font-size:1.5rem;margin:0 0 4px}
+.version{display:inline-block;font-size:.75rem;color:var(--muted);background:var(--chip);border-radius:6px;padding:2px 8px;margin-bottom:10px}
 p.lead{color:var(--muted);margin:0 0 18px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
 .status{font-size:.95rem;color:var(--muted)}
@@ -50,6 +51,7 @@ td:last-child{text-align:right;font-weight:600}
 <body>
 <main>
   <h1>Erkennungstest</h1>
+  <div class="version">Version 3 · 25.10.2026</div>
   <p class="lead">Lade 5 bis 10 Fotos von Kleidung oder Schmuck hoch. Die KI läuft nur in diesem Browser, die Fotos verlassen das Gerät nicht. Bewerte danach jede Angabe mit ✓ oder ✗.</p>
 
   <div class="panel">
@@ -77,41 +79,78 @@ import { AutoTokenizer, AutoProcessor, CLIPTextModelWithProjection, CLIPVisionMo
 
 /* ---------- Begriffe: deutsch für die Anzeige, mehrere englische Sätze für die KI ---------- */
 // Die KI vergleicht das Bild mit jedem Satz; die Treffer aller Sätze einer Gruppe werden addiert.
-const CATEGORIES = [
-  ["T-Shirt",["a photo of a t-shirt","a photo of a plain short-sleeved crew neck t-shirt"]],
-  ["Poloshirt",["a photo of a polo shirt","a photo of a short-sleeved polo shirt with a collar and two buttons"]],
-  ["Langarmshirt",["a photo of a long-sleeved t-shirt","a photo of a long-sleeved jersey top"]],
-  ["Top",["a photo of a tank top","a photo of a camisole top with thin straps"]],
-  ["Bluse",["a photo of a blouse","a photo of a flowy women's blouse"]],
-  ["Hemd",["a photo of a button-up shirt","a photo of a long-sleeved dress shirt with buttons all the way down"]],
-  ["Pullover",["a photo of a knitted sweater","a photo of a wool jumper"]],
-  ["Sweatshirt / Hoodie",["a photo of a sweatshirt","a photo of a hoodie"]],
-  ["Strickjacke",["a photo of a cardigan","a photo of a knitted cardigan with buttons"]],
-  ["Blazer",["a photo of a blazer","a photo of a tailored blazer"]],
-  ["Jacke",["a photo of a jacket","a photo of a short jacket with a zipper"]],
-  ["Mantel",["a photo of a long coat","a photo of a winter coat"]],
-  ["Jeans",["a photo of a pair of jeans","a photo of denim jeans with pockets"]],
-  ["Hose",["a photo of a pair of trousers","a photo of a pair of fabric pants"]],
-  ["Shorts",["a photo of a pair of shorts"]],
-  ["Rock",["a photo of a skirt"]],
-  ["Kleid",["a photo of a dress","a photo of a women's dress"]],
-  ["Jumpsuit",["a photo of a jumpsuit"]],
-  ["Sneaker",["a photo of a pair of sneakers"]],
-  ["Stiefel",["a photo of a pair of boots"]],
-  ["Absatzschuhe",["a photo of a pair of high heels"]],
-  ["Flache Schuhe",["a photo of a pair of flat shoes","a photo of a pair of ballet flats"]],
-  ["Sandalen",["a photo of a pair of sandals"]],
-  ["Tasche",["a photo of a handbag"]],
-  ["Gürtel",["a photo of a belt"]],
-  ["Schal",["a photo of a scarf"]],
-  ["Hut / Mütze",["a photo of a hat","a photo of a beanie"]],
-  ["Ohrringe",["a photo of a pair of earrings"]],
-  ["Halskette",["a photo of a necklace"]],
-  ["Armband",["a photo of a bracelet"]],
-  ["Ring",["a photo of a ring"]],
-  ["Uhr",["a photo of a wristwatch"]],
-  ["Sonnenbrille",["a photo of a pair of sunglasses"]]
+// Oberkategorie → Arten. Bewusst grob: ähnliche Untertypen (z. B. Stiefeletten) stecken als
+// zusätzliche Sätze in der Art, statt eine eigene Art zu bekommen.
+const GROUPS = [
+  ["Oberteile",[
+    ["T-Shirt",["a photo of a t-shirt","a photo of a plain short-sleeved crew neck t-shirt"]],
+    ["Poloshirt",["a photo of a polo shirt","a photo of a short-sleeved polo shirt with a collar and two buttons"]],
+    ["Langarmshirt",["a photo of a long-sleeved t-shirt","a photo of a long-sleeved jersey top"]],
+    ["Top",["a photo of a tank top","a photo of a cropped top"]],
+    ["Bluse",["a photo of a blouse","a photo of a flowy women's blouse"]],
+    ["Hemd",["a photo of a button-up shirt","a photo of a long-sleeved dress shirt with buttons all the way down"]],
+    ["Body",["a photo of a bodysuit","a photo of a women's body with snap closure"]],
+    ["Pullover",["a photo of a knitted sweater","a photo of a turtleneck sweater"]],
+    ["Sweatshirt / Hoodie",["a photo of a sweatshirt","a photo of a hoodie"]],
+    ["Strickjacke",["a photo of a cardigan","a photo of a knitted cardigan with buttons"]],
+    ["Weste",["a photo of a sleeveless vest","a photo of a knitted sweater vest"]]
+  ]],
+  ["Jacken & Mäntel",[
+    ["Blazer",["a photo of a blazer","a photo of a tailored blazer"]],
+    ["Jacke",["a photo of a jacket","a photo of a short jacket with a zipper"]],
+    ["Lederjacke",["a photo of a leather jacket","a photo of a black biker leather jacket"]],
+    ["Jeansjacke",["a photo of a denim jacket","a photo of a blue jean jacket"]],
+    ["Steppjacke",["a photo of a puffer jacket","a photo of a quilted down jacket"]],
+    ["Mantel",["a photo of a long coat","a photo of a trench coat"]]
+  ]],
+  ["Unterteile",[
+    ["Jeans",["a photo of a pair of jeans","a photo of denim jeans with pockets"]],
+    ["Hose",["a photo of a pair of trousers","a photo of a pair of fabric pants"]],
+    ["Leggings",["a photo of a pair of leggings","a photo of tight black leggings"]],
+    ["Jogginghose",["a photo of a pair of sweatpants","a photo of jogging pants with drawstring"]],
+    ["Shorts",["a photo of a pair of shorts"]],
+    ["Rock",["a photo of a skirt","a photo of a long maxi skirt"]]
+  ]],
+  ["Kleider & Einteiler",[
+    ["Kleid",["a photo of a dress","a photo of a women's dress"]],
+    ["Jumpsuit",["a photo of a jumpsuit","a photo of dungarees"]]
+  ]],
+  ["Schuhe",[
+    ["Sneaker",["a photo of a pair of sneakers","a photo of high-top sneakers"]],
+    ["Stiefel",["a photo of a pair of boots","a photo of a pair of ankle boots"]],
+    ["Absatzschuhe",["a photo of a pair of high heels","a photo of a pair of pumps"]],
+    ["Flache Schuhe",["a photo of a pair of ballet flats","a photo of a pair of loafers"]],
+    ["Sandalen",["a photo of a pair of sandals","a photo of a pair of open-toe summer sandals with straps"]]
+  ]],
+  ["Taschen",[
+    ["Tasche",["a photo of a handbag","a photo of a shoulder bag"]],
+    ["Rucksack",["a photo of a backpack"]]
+  ]],
+  ["Schmuck",[
+    ["Halskette",["a photo of a necklace"]],
+    ["Ohrringe",["a photo of a pair of earrings"]],
+    ["Armband",["a photo of a bracelet"]],
+    ["Ring",["a photo of a ring"]],
+    ["Uhr",["a photo of a wristwatch"]]
+  ]],
+  ["Haar",[
+    ["Haarschmuck",["a photo of a hair clip","a photo of a hairband"]]
+  ]],
+  ["Accessoires",[
+    ["Gürtel",["a photo of a belt"]],
+    ["Schal / Tuch",["a photo of a scarf","a photo of a silk neck scarf"]],
+    ["Hut / Mütze",["a photo of a hat","a photo of a beanie"]],
+    ["Sonnenbrille",["a photo of a pair of sunglasses"]],
+    ["Handschuhe",["a photo of a pair of gloves"]],
+    ["Strumpfhose",["a photo of a pair of tights"]]
+  ]],
+  ["Bademode",[
+    ["Bikini / Badeanzug",["a photo of a bikini","a photo of a swimsuit"]]
+  ]]
 ];
+const CATEGORIES = GROUPS.flatMap(([,arts])=>arts);
+const GROUP_OF = new Map(GROUPS.flatMap(([g,arts])=>arts.map(([n])=>[n,g])));
+const withGroup = name => `${GROUP_OF.get(name)} › ${name}`;
 const MATERIALS = [
   ["Baumwolle",["a garment made of cotton","a garment made of soft cotton jersey, like a t-shirt"]],
   ["Denim / Jeansstoff",["a garment made of denim"]],
@@ -362,10 +401,17 @@ async function analyse(cut){
   const imgs=await Promise.all([0,90,180,270].map(async d=>RawImage.fromBlob(await canvasToBlob(rotated(cut,d)))));
   const {image_embeds}=await visionModel(await processor(imgs));
   const vecs=normRows(image_embeds);
-  // Art: die Drehung, bei der die KI am sichersten ist
-  let cat=null, best=-1;
-  for(const v of vecs){ const r=top3(scoreField(v,"cat")); if(r[0].score>best){best=r[0].score;cat=r} }  // Material und Muster hängen kaum von der Drehung ab: Durchschnitt aller Drehungen
-  const avg=field=>{ const tot=new Map(); for(const v of vecs) for(const [n,s] of scoreField(v,field)) tot.set(n,(tot.get(n)||0)+s/vecs.length); return top3(tot); };
+  const avgMap=field=>{ const tot=new Map(); for(const v of vecs) for(const [n,s] of scoreField(v,field)) tot.set(n,(tot.get(n)||0)+s/vecs.length); return tot; };
+  const avg=field=>top3(avgMap(field));
+  // Art in zwei Stufen, jeweils gemittelt über alle Drehungen (ein einzelner Ausreißer zählt so wenig):
+  // 1. Oberkategorie (Oberteile, Schuhe …) – das klappt sehr zuverlässig
+  // 2. die Art innerhalb dieser Oberkategorie
+  const catAvg=avgMap("cat"), groupSum=new Map();
+  for(const [n,s] of catAvg) groupSum.set(GROUP_OF.get(n),(groupSum.get(GROUP_OF.get(n))||0)+s);
+  const grp=[...groupSum].sort((a,b)=>b[1]-a[1])[0][0];
+  const inGroup=[...catAvg].filter(([n])=>GROUP_OF.get(n)===grp), z=inGroup.reduce((s,[,v])=>s+v,0);
+  const cat=inGroup.map(([label,s])=>({label,score:s/z})).sort((a,b)=>b.score-a.score).slice(0,3);
+  // Material und Muster hängen kaum von der Drehung ab: ebenfalls Durchschnitt
   return {cat,mat:avg("mat"),pat:avg("pat")};
 }
 
@@ -417,7 +463,7 @@ document.getElementById("files").addEventListener("change",async ev=>{
       const secs=((performance.now()-t0)/1000).toFixed(1);
       const box=card.children[1]; box.innerHTML="";
       box.append(
-        row("Art",`${cat[0].label} <span class="alt">${pct(cat[0].score)}</span>`,`sonst: ${cat.slice(1).map(c=>`${c.label} (${pct(c.score)})`).join(", ")}`),
+        row("Art",`${withGroup(cat[0].label)} <span class="alt">${pct(cat[0].score)}</span>`,`sonst: ${cat.slice(1).map(c=>`${c.label} (${pct(c.score)})`).join(", ")}`),
         row("Material",`${mat[0].label} <span class="alt">${pct(mat[0].score)}</span>`,`sonst: ${mat.slice(1).map(c=>`${c.label} (${pct(c.score)})`).join(", ")}`),
         row("Muster",`${pat[0].label} <span class="alt">${pct(pat[0].score)}</span>`,`sonst: ${pat[1].label} (${pct(pat[1].score)})`),
         row("Farbe",colors.map(c=>`<span class="sw" style="background:rgb(${c.rgb.join(",")})"></span>${c.name} ${pct(c.share)}`).join(" &nbsp;"),"")
