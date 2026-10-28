@@ -44,7 +44,14 @@ label.upload input{display:none}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:.92rem;cursor:pointer;min-height:36px}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
-.chips select{border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:.92rem;min-height:36px;max-width:100%}
+/* Eingabefelder mindestens 16px groß, sonst zoomt das iPhone beim Antippen in die Seite */
+.chips select{border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:1rem;min-height:36px;max-width:100%}
+.chip.eigen{border-style:dashed}
+.eigen-edit{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:10px}
+.eigen-edit input,.eigen-edit select{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin:6px 0}
+.eigen-edit .gehoert{display:block;font-size:.85rem;color:var(--muted)}
+.eigen-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.eigen-row span{overflow-wrap:anywhere}
 .sw{display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px}
 .actions{display:flex;gap:8px;margin-top:12px}
 .btn{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}

@@ -54,6 +54,16 @@ export async function getPhoto(nr) {
   const buf = await request((await db()).transaction("fotos").objectStore("fotos").get(nr));
   return buf ? toBlob(buf) : null;
 }
+// Selbst eingetippte Einträge („Andere …“), pro Merkmal eine Liste: { Art: [{ wert, gruppe }], Farbe: [{ wert }], … }
+// Liegen am selben Ort wie die Teile und kommen später mit in die Sicherung.
+export async function getCustom() {
+  return (await request((await db()).transaction("meta").objectStore("meta").get("eigeneWerte"))) || {};
+}
+export async function setCustom(custom) {
+  const tx = (await db()).transaction("meta", "readwrite");
+  tx.objectStore("meta").put(custom, "eigeneWerte");
+  await done(tx);
+}
 // Browser bitten, die Daten nicht beim Aufräumen zu löschen (Safari entscheidet selbst, ob er zustimmt)
 export async function askPersist() {
   try { return navigator.storage?.persist ? await navigator.storage.persist() : false; } catch { return false; }
