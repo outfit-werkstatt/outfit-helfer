@@ -192,6 +192,17 @@ async function makeTerms(opts){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([json],{type:"application/json"})); a.download="begriffe.json";
   a.textContent=saved?"begriffe.json gespeichert ✅":"begriffe.json herunterladen"; statusEl.after(a);
 }
+// Test-Schalter ?gpu=1: KI auf dem Grafikchip rechnen lassen (WebGPU). Klappt das nicht, automatisch
+// zurück zum normalen Weg über den Prozessor (WASM).
+const WANT_GPU=new URLSearchParams(location.search).get("gpu")==="1";
+let device="wasm";
+async function loadVision(dev){
+  const m=await SiglipVisionModel.from_pretrained(MODEL,{progress_callback,dtype:"q8",device:dev,model_file_name:"vision_model"});
+  // Probelauf mit einem kleinen grauen Bild: Fehler auf dem Grafikchip zeigen sich oft erst beim Rechnen
+  const c=document.createElement("canvas"); c.width=c.height=64; c.getContext("2d").fillStyle="#888"; c.getContext("2d").fillRect(0,0,64,64);
+  await m(await processor(await RawImage.fromBlob(await canvasToBlob(c))));
+  return m;
+}
 try{
   const opts={progress_callback,dtype:"q8"};
   // Freistell-KI U-2-Netp (4,6 MB, Apache-2.0): Bild wird auf 320×320 gestreckt
@@ -201,10 +212,14 @@ try{
       image_mean:[0.485,0.456,0.406],image_std:[0.229,0.224,0.225],feature_extractor_type:"ImageFeatureExtractor",resample:2,
       rescale_factor:1/255,size:{width:320,height:320}}})
   ]);
-  [processor,visionModel]=await Promise.all([
-    AutoProcessor.from_pretrained(MODEL,{progress_callback}),
-    SiglipVisionModel.from_pretrained(MODEL,{...opts,model_file_name:"vision_model"})
-  ]);
+  processor=await AutoProcessor.from_pretrained(MODEL,{progress_callback});
+  if(WANT_GPU){
+    try{
+      if(!navigator.gpu || !(await navigator.gpu.requestAdapter())) throw new Error("WebGPU gibt es in diesem Browser nicht");
+      visionModel=await loadVision("webgpu"); device="webgpu";
+    }catch(e){ console.warn("WebGPU geht nicht, nehme WASM:",e); device="wasm (WebGPU ging nicht: "+e.message+")"; }
+  }
+  if(!visionModel) visionModel=await loadVision("wasm");
   if(MAKE_TERMS) await makeTerms(opts);
   else{
     const data=await (await fetch("begriffe.json",{cache:"no-cache"})).json();
@@ -216,7 +231,7 @@ try{
   if(!MAKE_TERMS) try{ const c=await caches.open("transformers-cache");
     for(const k of await c.keys()) if(k.url.includes("clip-vit-base-patch32")||k.url.includes("/onnx/text_model")) await c.delete(k); }catch{}
   bar.style.width="100%";
-  statusEl.textContent="✅ KI ist bereit. Du kannst jetzt Fotos auswählen.";
+  statusEl.textContent="✅ KI ist bereit. Du kannst jetzt Fotos auswählen."+(WANT_GPU?` Rechenweg: ${device}`:"");
   document.getElementById("uploadLabel").classList.remove("disabled");
 }catch(e){
   statusEl.textContent="❌ KI konnte nicht geladen werden: "+e.message;
