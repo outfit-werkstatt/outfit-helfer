@@ -148,19 +148,45 @@ $("files").addEventListener("change", ev => {
   // Fotos nacheinander erkennen (spart Speicher auf dem Handy); fertige Karten kann man schon speichern
   for (const f of list) queue = queue.then(() => addPhoto(f));
 });
-try {
-  const msg = await loadAI((share, mb, total) => {
-    $("barfill").style.width = (100 * share).toFixed(0) + "%";
-    $("status").textContent = `KI wird geladen … ${mb.toFixed(0)} von ${total.toFixed(0)} MB`;
-  });
-  $("barfill").style.width = "100%";
-  if (msg) { $("status").textContent = msg; }
-  else {
-    $("status").textContent = "✅ KI ist bereit.";
-    $("uploadLabel").classList.remove("disabled");
-    setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
+async function startAI() {
+  $("kiPanel").hidden = false;
+  try {
+    const msg = await loadAI((share, mb, total) => {
+      $("barfill").style.width = (100 * share).toFixed(0) + "%";
+      $("status").textContent = `KI wird geladen … ${mb.toFixed(0)} von ${total.toFixed(0)} MB`;
+    });
+    $("barfill").style.width = "100%";
+    if (msg) { $("status").textContent = msg; }
+    else {
+      $("status").textContent = "✅ KI ist bereit.";
+      $("uploadLabel").classList.remove("disabled");
+      setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
+    }
+  } catch (e) {
+    $("status").textContent = "❌ KI konnte nicht geladen werden: " + e.message;
+    console.error(e);
   }
-} catch (e) {
-  $("status").textContent = "❌ KI konnte nicht geladen werden: " + e.message;
-  console.error(e);
 }
+
+/* ---------- Home-Bildschirm ----------
+   Im normalen Safari darf das iPhone die Daten nach 7 Tagen ohne Nutzung löschen, als App auf dem Home-Bildschirm nicht.
+   Die App dort hat ihren eigenen Speicher. Darum: im Browser auf dem Handy zuerst den Hinweis zeigen und die KI
+   (ca. 100 MB) erst laden, wenn sie sich bewusst für den Browser entscheidet. Am PC kein Hinweis. */
+const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const mobile = ios || matchMedia("(pointer: coarse)").matches;
+// Nur eine Bequemlichkeit für dieses Gerät; fehlt der Speicher, kommt der Hinweis eben wieder
+const remember = { get: () => { try { return localStorage.getItem("imBrowserOk") === "1"; } catch { return false; } },
+  set: () => { try { localStorage.setItem("imBrowserOk", "1"); } catch {} } };
+askPersist();
+if (mobile && !standalone) {
+  $(ios ? "schritteIos" : "schritteAndere").hidden = false;
+  $("warnMehr").onclick = () => { $("homeHinweis").hidden = !$("homeHinweis").hidden; };
+  const browserOk = () => { $("homeHinweis").hidden = true; $("warnzeile").hidden = false; };
+  $("imBrowser").onclick = browserOk;
+  if (remember.get()) { browserOk(); startAI(); }
+  else {
+    $("homeHinweis").hidden = false; $("kiPanel").hidden = true;
+    $("imBrowser").onclick = () => { remember.set(); browserOk(); $("imBrowser").onclick = browserOk; startAI(); };
+  }
+} else startAI();

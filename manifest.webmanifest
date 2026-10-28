@@ -1,0 +1,11 @@
+{
+  "name": "Outfit-Helfer",
+  "short_name": "Outfit-Helfer",
+  "description": "Digitaler Kleiderschrank mit Outfit-Vorschlägen. Alles bleibt auf deinem Gerät.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3ee",
+  "theme_color": "#f6f3ee"
+}
