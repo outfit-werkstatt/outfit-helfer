@@ -2,7 +2,7 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js hochzählen (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, GROUPS, GROUP_OF, COLORS, MATERIALS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=2";
+import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, GROUPS, GROUP_OF, COLORS, MATERIALS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=3";
 import { addItem, allItems, askPersist, nrText, getCustom, setCustom } from "./speicher.js?v=2";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)

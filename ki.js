@@ -174,7 +174,8 @@ export async function loadAI(onProgress) {
   };
   try { await loadModels(progress_callback); }
   catch (e) { const err = e instanceof Error ? e : new Error(String(e)); err.dateien = [...pending]; throw err; }
-  if (new URLSearchParams(location.search).has("begriffe-erzeugen")) return makeTerms(progress_callback);
+  // Nur am PC (localhost): sonst könnte ein fremder Link mit ?begriffe-erzeugen den Start der App stören
+  if (location.hostname === "localhost" && new URLSearchParams(location.search).has("begriffe-erzeugen")) return makeTerms(progress_callback);
   let data;
   try { data = await (await fetch("app-begriffe.json", { cache: "no-cache" })).json(); }
   catch (e) { const err = e instanceof Error ? e : new Error(String(e)); err.dateien = ["app-begriffe.json"]; throw err; }
