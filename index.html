@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Hausregel für den Browser: Code, Modelle und Daten nur von dieser Seite selbst laden, nichts an andere Server
+     schicken (connect-src 'self'), kein Code direkt in der Seite. 'wasm-unsafe-eval' braucht der KI-Rechenkern. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Mein Kleiderschrank</title>
+<!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
+<link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+<main>
+  <h1>Mein Kleiderschrank</h1>
+  <div class="version">Version 0.1 (Etappe 1a) · 28.10.2026</div>
+
+  <div class="panel" id="kiPanel">
+    <div class="status" id="status">KI wird geladen (beim ersten Mal ca. 100 MB) …</div>
+    <div class="bar"><div id="barfill"></div></div>
+  </div>
+
+  <div class="panel">
+    <label class="upload disabled" id="uploadLabel">📷 Kleidung hinzufügen
+      <input type="file" id="files" accept="image/*" multiple>
+    </label>
+    <div class="hint">Ein Teil pro Foto, glatt hingelegt oder auf dem Bügel, auf einem Untergrund, der sich vom Teil abhebt. Die Fotos bleiben auf diesem Gerät.</div>
+  </div>
+
+  <section id="pruefen"></section>
+
+  <h2 id="schrankTitel">Gespeichert</h2>
+  <div class="grid" id="schrank"></div>
+  <p class="hint" id="leer">Noch nichts gespeichert.</p>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>

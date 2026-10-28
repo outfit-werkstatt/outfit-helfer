@@ -1,0 +1,54 @@
+/* Schlichtes Layout. Farben, Abstände und Schrift nur hier oben als Variablen, das Design kommt ganz am Ende. */
+:root{
+  --bg:#f6f3ee; --card:#ffffff; --ink:#22201c; --muted:#6f6a62; --line:#e4ded4;
+  --accent:#8a4b3a; --accent-ink:#ffffff; --chip:#f1ece4; --radius:14px; --gap:12px;
+  --font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1917; --card:#24221f; --ink:#f0ece6; --muted:#a59f95; --line:#38352f;
+    --accent:#d99a84; --accent-ink:#1a1917; --chip:#2f2c28;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:var(--font)}
+main{max-width:760px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.5rem;margin:0 0 4px}
+h2{font-size:1.15rem;margin:24px 0 10px}
+.version{display:inline-block;font-size:.75rem;color:var(--muted);background:var(--chip);border-radius:6px;padding:2px 8px;margin-bottom:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.status{font-size:.95rem;color:var(--muted)}
+.bar{height:6px;background:var(--chip);border-radius:3px;overflow:hidden;margin-top:8px}
+.bar>div{height:100%;width:0;background:var(--accent);transition:width .2s}
+label.upload{display:block;text-align:center;padding:18px;border:2px dashed var(--line);border-radius:12px;cursor:pointer;font-weight:600}
+label.upload.disabled{opacity:.45;pointer-events:none}
+label.upload input{display:none}
+.hint{font-size:.85rem;color:var(--muted);margin-top:8px}
+
+/* Prüfen-Karte */
+.check{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:var(--gap)}
+.check .top{display:flex;gap:12px;align-items:center;margin-bottom:6px}
+.check .top img{width:96px;height:96px;object-fit:cover;border-radius:10px;background:var(--chip);flex-shrink:0}
+.check .titel{font-weight:600}
+.field{padding:10px 0;border-top:1px solid var(--line)}
+.field .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px}
+.field .note{font-size:.8rem;color:var(--muted);margin:-2px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:.92rem;cursor:pointer;min-height:36px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.chips select{border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:.92rem;min-height:36px;max-width:100%}
+.sw{display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px}
+.actions{display:flex;gap:8px;margin-top:12px}
+.btn{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);flex:1}
+.btn:disabled{opacity:.5}
+.wait{color:var(--muted);font-size:.95rem}
+
+/* Kleiderschrank */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--gap)}
+.teil{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.teil .bild{position:relative;aspect-ratio:1;background:var(--chip)}
+.teil img{width:100%;height:100%;object-fit:cover;display:block}
+.plakette{position:absolute;left:8px;top:8px;background:#22201c;color:#fff;font-weight:700;font-size:.9rem;border-radius:8px;padding:2px 8px;letter-spacing:.03em}
+.teil .text{padding:8px 10px;font-size:.88rem}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#22201c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}
