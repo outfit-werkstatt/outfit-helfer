@@ -1,6 +1,8 @@
 // Speicher auf dem Gerät (IndexedDB). Nichts verlässt das Handy.
-// teile: ein Eintrag pro Kleidungsstück, Schlüssel = feste Nummer (1, 2, 3 …)
+// teile: Angaben + kleine Vorschau, Schlüssel = feste Nummer (1, 2, 3 …). Bleibt klein, damit die Übersicht schnell lädt.
+// fotos: das große Foto (ca. 1200 px) getrennt davon, wird nur bei Bedarf geladen (Bild-Paket, Sicherung).
 // meta:  "naechsteNr" = nächste freie Nummer. Wird nie zurückgezählt, auch nicht nach dem Löschen.
+// Bilder liegen als ArrayBuffer statt als Blob: ältere Safari-Versionen hatten Fehler mit Blobs in IndexedDB.
 const DB_NAME = "outfit-helfer", DB_VERSION = 1;
 let dbPromise = null;
 function db() {
@@ -9,6 +11,7 @@ function db() {
     req.onupgradeneeded = () => {
       const d = req.result;
       if (!d.objectStoreNames.contains("teile")) d.createObjectStore("teile", { keyPath: "nr" });
+      if (!d.objectStoreNames.contains("fotos")) d.createObjectStore("fotos");
       if (!d.objectStoreNames.contains("meta")) d.createObjectStore("meta");
     };
     req.onsuccess = () => res(req.result);
@@ -16,24 +19,40 @@ function db() {
   });
   return dbPromise;
 }
-const done = tx => new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error("Speichern abgebrochen")); });
+// Fehler einer einzelnen Anfrage stehen in e.target.error, tx.error ist in dem Moment oft noch leer
+const done = tx => new Promise((res, rej) => {
+  const fail = e => rej(e?.target?.error || tx.error || new Error("Speichern abgebrochen"));
+  tx.oncomplete = () => res(); tx.onerror = fail; tx.onabort = fail;
+});
+const request = req => new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
+const toBlob = buf => new Blob([buf], { type: "image/jpeg" });
 
-// Neues Teil speichern: Nummer vergeben und Teil in EINEM Schritt schreiben, damit keine Nummer doppelt vorkommt
-export async function addItem(item) {
-  const tx = (await db()).transaction(["teile", "meta"], "readwrite");
+// Neues Teil speichern: Nummer vergeben, Angaben und Foto in EINEM Schritt schreiben.
+// Klappt etwas nicht, wird nichts gespeichert und die Nummer nicht verbraucht.
+export async function addItem({ foto, vorschau, ...angaben }) {
+  // Erst umwandeln, dann schreiben: während einer Transaktion darf nicht auf anderes gewartet werden
+  const [fotoBuf, vorschauBuf] = await Promise.all([foto.arrayBuffer(), vorschau.arrayBuffer()]);
+  const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
   const meta = tx.objectStore("meta");
   let nr;
   meta.get("naechsteNr").onsuccess = e => {
     nr = e.target.result || 1;
     meta.put(nr + 1, "naechsteNr");
-    tx.objectStore("teile").add({ ...item, nr, erstellt: new Date().toISOString() });
+    tx.objectStore("teile").add({ ...angaben, vorschau: vorschauBuf, nr, erstellt: new Date().toISOString() });
+    tx.objectStore("fotos").add(fotoBuf, nr);
   };
   await done(tx);
   return nr;
 }
+// Alle Teile mit Vorschau (als Blob), ohne die großen Fotos
 export async function allItems() {
-  const req = (await db()).transaction("teile").objectStore("teile").getAll();
-  return new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
+  const items = await request((await db()).transaction("teile").objectStore("teile").getAll());
+  return items.map(t => ({ ...t, vorschau: toBlob(t.vorschau) }));
+}
+// Großes Foto eines Teils (als Blob) oder null
+export async function getPhoto(nr) {
+  const buf = await request((await db()).transaction("fotos").objectStore("fotos").get(nr));
+  return buf ? toBlob(buf) : null;
 }
 // Browser bitten, die Daten nicht beim Aufräumen zu löschen (Safari entscheidet selbst, ob er zustimmt)
 export async function askPersist() {

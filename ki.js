@@ -90,18 +90,22 @@ export const IS_GARMENT = g => !["Schuhe", "Taschen", "Schmuck", "Haar"].include
 
 /* ---------- Bilder ---------- */
 const canvasToBlob = (c, q = 0.9) => new Promise(r => c.toBlob(r, "image/jpeg", q));
+// Die Bild-Adresse (img.src) erst nach dem letzten Zeichnen freigeben: URL.revokeObjectURL(img.src)
 export function loadImage(file) {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file), img = new Image();
-    img.onload = () => { res(img); URL.revokeObjectURL(url); };
+    img.onload = () => res(img);
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Bild konnte nicht gelesen werden (HEIC? Dann als JPG speichern)")); };
     img.src = url;
   });
 }
-export function toCanvas(img, max) {
+// fein = sorgfältig verkleinern (für gespeicherte Fotos). Die KI bekommt bewusst die einfache Verkleinerung,
+// damit sie genau so rechnet wie bei den Messungen.
+export function toCanvas(img, max, fein = false) {
   const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, s = Math.min(1, max / Math.max(w, h));
   const c = document.createElement("canvas"); c.width = Math.round(w * s); c.height = Math.round(h * s);
-  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); return c;
+  const ctx = c.getContext("2d"); if (fein) ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, c.width, c.height); return c;
 }
 export { canvasToBlob };
 function rotated(c, deg) {

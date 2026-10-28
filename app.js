@@ -1,6 +1,8 @@
 // Etappe 1a: Kleidung hinzufügen → KI erkennt → mit einem Tippen korrigieren → mit fester Nummer speichern.
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML.
-import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=1";
+// ?v= bei jeder Änderung von ki.js/speicher.js hochzählen (und in index.html den von app.js/app.css),
+// sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
+import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, GROUPS, GROUP_OF, COLORS, MATERIALS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=1";
 import { addItem, allItems, askPersist, nrText } from "./speicher.js?v=1";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
@@ -58,10 +60,13 @@ async function addPhoto(file) {
   $("pruefen").append(card);
   try {
     const img = await loadImage(file);
-    const r = await recognize(img);
-    // Gespeichert wird das Foto verkleinert (ca. 1200 px) und eine kleine Vorschau (freigestellt, wenn das geklappt hat)
-    const foto = await canvasToBlob(toCanvas(img, 1200), 0.85);
-    const vorschau = await canvasToBlob(toCanvas(r.cut || img, 400), 0.85);
+    let r, foto, vorschau;
+    try {
+      r = await recognize(img);
+      // Gespeichert wird das Foto verkleinert (ca. 1200 px) und eine kleine Vorschau (freigestellt, wenn das geklappt hat)
+      foto = await canvasToBlob(toCanvas(img, 1200, true), 0.85);
+      vorschau = await canvasToBlob(toCanvas(r.cut || img, 400, true), 0.85);
+    } finally { URL.revokeObjectURL(img.src); }
     const vorschauUrl = URL.createObjectURL(vorschau);
 
     const top = (list, n) => list.slice(0, n).map(c => c.label);
@@ -97,9 +102,9 @@ async function addPhoto(file) {
         });
         URL.revokeObjectURL(vorschauUrl); card.remove();
         toast(`Gespeichert als Nr. ${nrText(nr)}`);
-        if (nr === 1) askPersist();
+        askPersist();
         showCloset();
-      } catch (e) { save.disabled = false; toast("Speichern hat nicht geklappt: " + e.message); console.error(e); }
+      } catch (e) { save.disabled = false; toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
     };
     drop.onclick = () => { URL.revokeObjectURL(vorschauUrl); card.remove(); };
 
