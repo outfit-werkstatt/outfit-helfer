@@ -2,7 +2,7 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML.
 // ?v= bei jeder Änderung von ki.js/speicher.js hochzählen (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, GROUPS, GROUP_OF, COLORS, MATERIALS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=1";
+import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, GROUPS, GROUP_OF, COLORS, MATERIALS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=2";
 import { addItem, allItems, askPersist, nrText } from "./speicher.js?v=1";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
@@ -148,13 +148,21 @@ $("files").addEventListener("change", ev => {
   // Fotos nacheinander erkennen (spart Speicher auf dem Handy); fertige Karten kann man schon speichern
   for (const f of list) queue = queue.then(() => addPhoto(f));
 });
+// Häufigster Fehler beim ersten Start: der Download (ca. 100 MB) reißt ab, z. B. weil die App kurz verlassen,
+// der Bildschirm gesperrt wurde oder das WLAN weg war. Dann einmal von selbst neu versuchen, sobald die App
+// wieder im Vordergrund ist, sonst per Knopf. Schon fertig geladene Dateien bleiben im Speicher.
+let aiState = "aus", aiTries = 0; // aus | lädt | bereit
 async function startAI() {
-  $("kiPanel").hidden = false;
+  if (aiState !== "aus") return;
+  aiState = "lädt"; aiTries++;
+  $("kiPanel").hidden = false; $("kiHilfe").hidden = true; $("kiRetry").hidden = true; $("kiLaden").hidden = false;
+  $("barfill").style.width = "0"; $("status").textContent = "KI wird geladen …";
   try {
     const msg = await loadAI((share, mb, total) => {
       $("barfill").style.width = (100 * share).toFixed(0) + "%";
       $("status").textContent = `KI wird geladen … ${mb.toFixed(0)} von ${total.toFixed(0)} MB`;
     });
+    aiState = "bereit"; $("kiLaden").hidden = true;
     $("barfill").style.width = "100%";
     if (msg) { $("status").textContent = msg; }
     else {
@@ -163,10 +171,19 @@ async function startAI() {
       setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
     }
   } catch (e) {
-    $("status").textContent = "❌ KI konnte nicht geladen werden: " + e.message;
+    aiState = "aus"; $("kiLaden").hidden = true;
+    const wo = e.dateien?.length ? ` (bei ${e.dateien.join(", ")})` : "";
+    $("status").textContent = `❌ Die KI konnte nicht geladen werden${wo}: ${e?.message || e}`;
+    $("kiHilfe").hidden = false; $("kiRetry").hidden = false;
     console.error(e);
+    if (aiTries === 1) retryWhenVisible();
   }
 }
+function retryWhenVisible() {
+  const onVisible = () => { if (document.visibilityState !== "visible") return; document.removeEventListener("visibilitychange", onVisible); setTimeout(startAI, 1500); };
+  document.addEventListener("visibilitychange", onVisible); onVisible();
+}
+$("kiRetry").onclick = () => startAI();
 
 /* ---------- Home-Bildschirm ----------
    Im normalen Safari darf das iPhone die Daten nach 7 Tagen ohne Nutzung löschen, als App auf dem Home-Bildschirm nicht.

@@ -20,7 +20,7 @@
 <body>
 <main>
   <h1>Mein Kleiderschrank</h1>
-  <div class="version">Version 0.1 (Etappe 1a) · 28.10.2026</div>
+  <div class="version">Version 0.2 (Etappe 1a) · 28.10.2026</div>
 
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
@@ -47,6 +47,9 @@
   <div class="panel" id="kiPanel">
     <div class="status" id="status">KI wird geladen (beim ersten Mal ca. 100 MB) …</div>
     <div class="bar"><div id="barfill"></div></div>
+    <div class="hint" id="kiLaden">Bitte die App geöffnet lassen und den Bildschirm nicht sperren, bis die KI fertig ist. Beim ersten Mal lädt sie ca. 100 MB, am besten im WLAN.</div>
+    <div class="hint" id="kiHilfe" hidden>Meist wurde der Download unterbrochen (App kurz verlassen, Bildschirm gesperrt oder WLAN weg). Schon Geladenes bleibt gespeichert. Tippe auf „Nochmal versuchen“ und lass die App offen, bis die KI fertig ist.</div>
+    <div class="actions"><button type="button" class="btn" id="kiRetry" hidden>Nochmal versuchen</button></div>
   </div>
 
   <div class="panel">
@@ -63,6 +66,6 @@
   <p class="hint" id="leer">Noch nichts gespeichert.</p>
 </main>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>

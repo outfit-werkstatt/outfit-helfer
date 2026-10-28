@@ -159,16 +159,33 @@ async function makeTerms(progress_callback) {
   return ok ? "app-begriffe.json gespeichert ✅" : "app-begriffe.json konnte nicht gespeichert werden (nur lokal mit server.ps1)";
 }
 // onProgress(Anteil 0…1, geladene MB, gesamte MB). Gibt bei ?begriffe-erzeugen eine Meldung zurück.
+// Darf nach einem Fehler erneut aufgerufen werden: fertig geladene Dateien liegen im Browser-Speicher und kommen von dort.
+// Bei einem Fehler steht in fehler.dateien, welche Dateien noch nicht fertig waren („Load failed“ allein sagt das nicht).
 export async function loadAI(onProgress) {
-  const files = {};
+  const files = {}, pending = new Set();
   const progress_callback = p => {
+    if (p.status === "initiate") pending.add(p.file);
+    if (p.status === "done") pending.delete(p.file);
     if (p.status === "progress" && p.total) {
       files[p.file] = { loaded: p.loaded, total: p.total };
       const L = Object.values(files).reduce((a, f) => a + f.loaded, 0), T = Object.values(files).reduce((a, f) => a + f.total, 0);
       onProgress(L / T, L / 1e6, T / 1e6);
     }
   };
-  [segModel, segProcessor, processor, visionModel] = await Promise.all([
+  try { await loadModels(progress_callback); }
+  catch (e) { const err = e instanceof Error ? e : new Error(String(e)); err.dateien = [...pending]; throw err; }
+  if (new URLSearchParams(location.search).has("begriffe-erzeugen")) return makeTerms(progress_callback);
+  let data;
+  try { data = await (await fetch("app-begriffe.json", { cache: "no-cache" })).json(); }
+  catch (e) { const err = e instanceof Error ? e : new Error(String(e)); err.dateien = ["app-begriffe.json"]; throw err; }
+  if (data.quelle !== TERMS_SRC) throw new Error("app-begriffe.json passt nicht zu den Begriffen. Bitte mit ?begriffe-erzeugen neu erzeugen.");
+  for (const [field, { names, emb }] of Object.entries(data.felder)) TEXT[field] = { names, emb: fromB64(emb, data.dim) };
+  return null;
+}
+async function loadModels(progress_callback) {
+  // Erst alles fertig laden, dann übernehmen. Scheitert eine Datei, die schon geladenen Modelle wieder freigeben,
+  // damit ein neuer Versuch den Speicher des Handys nicht doppelt belegt.
+  const results = await Promise.allSettled([
     AutoModel.from_pretrained(SEG_MODEL, { progress_callback, dtype: "fp32", config: { model_type: "custom" } }),
     AutoProcessor.from_pretrained(SEG_MODEL, { progress_callback, config: { do_normalize: true, do_pad: false, do_rescale: true, do_resize: true,
       image_mean: [0.485, 0.456, 0.406], image_std: [0.229, 0.224, 0.225], feature_extractor_type: "ImageFeatureExtractor", resample: 2,
@@ -176,11 +193,12 @@ export async function loadAI(onProgress) {
     AutoProcessor.from_pretrained(MODEL, { progress_callback }),
     SiglipVisionModel.from_pretrained(MODEL, { progress_callback, dtype: "q8", model_file_name: "vision_model" })
   ]);
-  if (new URLSearchParams(location.search).has("begriffe-erzeugen")) return makeTerms(progress_callback);
-  const data = await (await fetch("app-begriffe.json", { cache: "no-cache" })).json();
-  if (data.quelle !== TERMS_SRC) throw new Error("app-begriffe.json passt nicht zu den Begriffen. Bitte mit ?begriffe-erzeugen neu erzeugen.");
-  for (const [field, { names, emb }] of Object.entries(data.felder)) TEXT[field] = { names, emb: fromB64(emb, data.dim) };
-  return null;
+  const failed = results.find(r => r.status === "rejected");
+  if (failed) {
+    for (const r of results) if (r.status === "fulfilled") try { await r.value?.dispose?.(); } catch {}
+    throw failed.reason;
+  }
+  [segModel, segProcessor, processor, visionModel] = results.map(r => r.value);
 }
 
 /* ---------- Freistellen (U-2-Netp) ---------- */
