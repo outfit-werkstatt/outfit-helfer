@@ -6,7 +6,8 @@ import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angaben
 import { allItems, getItem, getPhoto, updateItem, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, nrText } from "./speicher.js?v=3";
 import { GROUPS } from "./ki.js?v=3";
 
-const ALLE = "alle", HAUPT = "Mein Kleiderschrank", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
+// Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
+const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
 const GROUP_ORDER = GROUPS.map(([g]) => g);
 const sichtbar = items => items.filter(t => !t.geloescht);
 const restTage = t => Math.max(0, KORB_TAGE - Math.floor((Date.now() - Date.parse(t.geloescht)) / TAG));
@@ -65,12 +66,14 @@ function renderStart(items, folders) {
     toast(`Ordner „${name}“ angelegt`);
     go({ v: "liste", id: f.id });
   });
-  $("kacheln").replaceChildren(
+  const nicht = da.filter(t => t.nichtAnziehen);
+  fill($("kacheln"),
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
+    nicht.length ? kachel(NICHT_NAME, nicht, () => go({ v: "liste", id: NICHT })) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
-  $("korbLink").textContent = korb ? `🗑 Papierkorb (${anzahl(korb)})` : "🗑 Papierkorb (leer)";
+  fill($("korbLink"), el("span", { "aria-hidden": "true" }, "🗑"), el("span", { class: "u" }, korb ? `Papierkorb (${anzahl(korb)})` : "Papierkorb (leer)"));
   $("korbLink").onclick = () => go({ v: "korb" });
 }
 // Name für neuen oder umbenannten Ordner eingeben (max. 30 Zeichen, nicht doppelt)
@@ -81,7 +84,7 @@ function nameEditor(box, start, folders, onOk, selfId = null) {
   ok.onclick = async () => {
     const name = clean(input.value), lower = name.toLowerCase();
     if (!name) { msg.textContent = "Bitte einen Namen eintippen."; return; }
-    if ([HAUPT, "Papierkorb"].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
+    if ([HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
       msg.textContent = "Diesen Namen gibt es schon."; return;
     }
     ok.disabled = true;
@@ -130,9 +133,9 @@ function filterChips(list, f, onChange) {
 }
 function renderListe(items, folders, id) {
   const ordner = id === ALLE ? null : folders.find(f => f.id === id);
-  if (id !== ALLE && !ordner) { auswahl = null; return back(); }
+  if (id !== ALLE && id !== NICHT && !ordner) { auswahl = null; return back(); }
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr);
-  const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : da;
+  const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : id === NICHT ? da.filter(t => t.nichtAnziehen) : da;
   const f = filters.get(id) || { gruppe: null, farbe: null };
   const basis = auswahl ? da : drin; // beim Auswählen alle Teile zeigen
   const gefiltert = basis.filter(t => (!f.gruppe || (t.gruppe || "Sonstiges") === f.gruppe) && (!f.farbe || t.farben?.includes(f.farbe)));
@@ -164,9 +167,13 @@ function renderListe(items, folders, id) {
     aktionen = el("div", { class: "actions wrap" }, waehlen, umbenennen, loeschen);
   }
   const leer = basis.length ? (gefiltert.length ? null : "Mit diesem Filter gibt es hier nichts.")
-    : ordner ? "Noch keine Teile in diesem Ordner. Tippe auf „Teile auswählen“." : "Noch nichts gespeichert. Füge auf der Startseite Kleidung hinzu.";
-  fill($("ansicht"), 
-    kopf(ordner ? ordner.name : HAUPT, auswahl ? null : (ordner ? anzahl(drin.length) : `Alle ${anzahl(drin.length)}`)),
+    : ordner ? "Noch keine Teile in diesem Ordner. Tippe auf „Teile auswählen“."
+    : id === NICHT ? "Keine Teile mehr markiert." : "Noch nichts gespeichert. Füge auf der Startseite Kleidung hinzu.";
+  const unter = auswahl ? null : ordner ? anzahl(drin.length)
+    : id === NICHT ? `${anzahl(drin.length)}, ${drin.length === 1 ? "das nie in Outfit-Vorschläge kommt" : "die nie in Outfit-Vorschläge kommen"}. Zum Zurückholen: Teil antippen und „Ziehe ich nicht an“ ausschalten.`
+    : `Alle ${anzahl(drin.length)}`;
+  fill($("ansicht"),
+    kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter),
     aktionen, editor,
     basis.length ? filterChips(basis, f, nf => { filters.set(id, nf); neuZeichnen(); }) : null,
     el("div", { class: "grid" }, ...gefiltert.map(t => auswahl
@@ -202,6 +209,13 @@ async function renderTeil(items, folders, nr) {
           catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); refresh(); }
         } }).el)
     : field("Ordner", `Liegt in „${HAUPT}“. Eigene Ordner (z. B. „Sommer“) legst du auf der Startseite mit „+ Neuer Ordner“ an.`, null);
+  // „Ziehe ich nicht an“ mit einem Tippen an/aus, ohne „Angaben ändern“
+  const nichtFeld = field("Vorschläge", "Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.", choice({
+    options: [NICHT_NAME], selected: t.nichtAnziehen ? [NICHT_NAME] : [],
+    onChange: async sel => {
+      try { await updateItem(nr, { nichtAnziehen: sel.length > 0 }); toast(sel.length ? "Kommt nicht mehr in Vorschläge" : "Kommt wieder in Vorschläge"); refresh(); }
+      catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); refresh(); }
+    } }).el);
 
   const aendern = el("button", { type: "button", class: "btn" }, "Angaben ändern");
   aendern.onclick = () => {
@@ -226,7 +240,7 @@ async function renderTeil(items, folders, nr) {
   const aktionen = el("div", { class: "actions" }, t.geloescht ? null : aendern, korb);
   fill($("ansicht"), 
     kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (noch ${restTage(t)} Tage)` : null),
-    bild, inhalt, t.geloescht ? null : el("div", { class: "panel" }, ordnerFeld), aktionen);
+    bild, inhalt, t.geloescht ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld), aktionen);
 }
 
 /* ---------- Papierkorb ---------- */
