@@ -130,4 +130,12 @@ details.panel.mehr{padding-top:12px}
 .suche{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:4px 0 8px;-webkit-appearance:none;appearance:none}
 .korb-teil{display:flex;flex-direction:column;gap:6px}
 .btn.klein{min-height:40px;padding:8px 10px;font-size:.9rem}
+/* Sicherung: Karte auf der Startseite (hervorgehoben, wenn lange nicht gesichert), Datei-Knopf */
+.sicherung-karte .titel{font-weight:600}
+.warnung{border-color:var(--accent);background:var(--chip)}
+label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
+/* „Vielleicht doppelt“ in der Prüfen-Karte */
+.doppelt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--accent);border-radius:10px;padding:10px;margin:6px 0 10px;background:var(--chip);font-size:.92rem}
+.doppelt img{width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--card)}
+.doppelt .btn{margin-top:8px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#22201c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}

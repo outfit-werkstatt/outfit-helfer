@@ -2,9 +2,9 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, cleanText, names, FARB_NAMEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=5";
-import { setStil } from "./speicher.js?v=5";
-import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=3";
+import { el, fill, toast, choice, field, cleanText, names, FARB_NAMEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=6";
+import { setStil } from "./speicher.js?v=6";
+import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=4";
 
 // Abschnitte mit Fragen. Bei jeder Frage beliebig viele Knöpfe (nichts angetippt = egal) und „Andere …“ zum Eintippen.
 // Wo es dasselbe Merkmal auch am Teil gibt, stehen hier dieselben Wörter und dieselbe Liste für eigene Einträge (liste),

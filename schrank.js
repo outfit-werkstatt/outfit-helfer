@@ -2,10 +2,11 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=5";
-import { allItems, getItem, getPhoto, updateItem, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, nrText } from "./speicher.js?v=5";
-import { renderStil, stilKurz } from "./stil.js?v=4";
-import { GROUPS } from "./ki.js?v=3";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=6";
+import { allItems, getItem, getPhoto, updateItem, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=6";
+import { renderStil, stilKurz } from "./stil.js?v=5";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=1";
+import { GROUPS } from "./ki.js?v=4";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
 const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
@@ -42,16 +43,16 @@ async function show(y) {
 // Dieselbe Ansicht neu zeichnen, ohne zu springen
 async function neuZeichnen() { const y = scrollY; await render(); scrollTo(0, y); }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
-export async function refresh() { if (current.v !== "stil" && !bearbeitet) await neuZeichnen(); }
+export async function refresh() { if (current.v !== "stil" && current.v !== "sicherung" && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
 async function render() {
   const nr = ++zeichnung, s = current;
   await customReady;
-  const [items, folders, stil, foto] = await Promise.all([
+  const [items, folders, stil, letzte, foto] = await Promise.all([
     s.v === "teil" ? getItem(s.nr).then(t => t ? [t] : []) : allItems(),
-    getFolders(), getStil(), s.v === "teil" ? getPhoto(s.nr) : null]);
+    getFolders(), getStil(), getMeta("letzteSicherung"), s.v === "teil" ? getPhoto(s.nr) : null]);
   if (nr !== zeichnung) return;
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
   // Auswahl-Felder der vorigen Ansicht abmelden (sie hören sonst weiter auf neue eigene Einträge)
@@ -60,7 +61,8 @@ async function render() {
   if (s.v === "teil") return renderTeil(items, folders, s.nr, foto);
   if (s.v === "korb") return renderKorb(items);
   if (s.v === "stil") return renderStil(box, kopf("Mein Stil"), stil);
-  renderStart(items, folders, stil);
+  if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, neuZeichnen);
+  renderStart(items, folders, stil, letzte);
 }
 const kopf = (titel, unter) => el("div", { class: "kopf" },
   el("button", { type: "button", class: "zurueck", onclick: back }, "‹ Zurück"),
@@ -74,7 +76,7 @@ function kachel(name, list, onclick) {
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
     el("span", { class: "name" }, name), el("span", { class: "anzahl" }, anzahl(list.length)));
 }
-function renderStart(items, folders, stil) {
+function renderStart(items, folders, stil, letzte) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
   // „Mein Stil“: Kurzfassung (höchstens 3 Angaben, alles Weitere steht in „Mein Stil“) oder Bitte, es einmal einzustellen
   const kurz = stilKurz(stil);
@@ -85,6 +87,7 @@ function renderStart(items, folders, stil) {
     el("div", { class: "titel" }, "✨ Mein Stil"),
     el("div", { class: "hint" }, zeigen.length ? zeigen.join(" · ") : "Noch nicht eingestellt. Sag einmal, was du gern trägst und was lieber nicht – die Vorschläge halten sich daran."),
     el("div", { class: "actions" }, stilKnopf)));
+  fill($("zipKarte"), zipKarte(items, letzte, stil, () => go({ v: "sicherung" })));
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };

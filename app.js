@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=3";
-import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=5";
-import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=5";
-import { refresh, initSchrank } from "./schrank.js?v=8";
+import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=4";
+import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=6";
+import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross } from "./ui.js?v=6";
+import { refresh, initSchrank } from "./schrank.js?v=9";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -17,9 +17,11 @@ const karten = new Map(); // fertig erkannte Karten → { bereit(), speichern() 
 function updateProgress() {
   const open = $("pruefen").querySelectorAll(".check").length;
   // „Alle speichern“ lohnt sich ab 2 Karten, die gespeichert werden können (Art gewählt, nicht schon beim Speichern)
-  const bereit = [...karten.values()].filter(k => k.bereit()).length;
+  const bereit = [...karten.values()].filter(k => k.bereit()).length, doppelt = [...karten.values()].filter(k => k.doppelt()).length;
   $("alleBox").hidden = bereit < 2;
   $("alleSpeichern").textContent = finished < total ? `Die ${bereit} fertigen speichern` : `Alle ${bereit} speichern`;
+  $("alleDoppelt").hidden = !doppelt;
+  $("alleDoppelt").textContent = `${doppelt === 1 ? "1 Foto" : doppelt + " Fotos"} mit „Vielleicht doppelt“ ${doppelt === 1 ? "wird" : "werden"} ausgelassen – bitte einzeln ansehen.`;
   if (total && finished >= total && !open) total = finished = 0;
   $("fortschritt").hidden = !total;
   if (!total) return;
@@ -29,11 +31,36 @@ function updateProgress() {
     : `Alle ${total} ${total === 1 ? "Foto" : "Fotos"} erkannt. Noch ${open} zum Prüfen und Speichern.`;
 }
 
+/* ---------- Doppelte Fotos ----------
+   Zwei Prüfungen: genau dieselbe Datei (Fingerabdruck SHA-256 der Original-Datei, sicher) oder ein sehr ähnliches Foto
+   (Bild-Vektor der KI, Ähnlichkeit ab GRENZE). Verglichen wird mit allen gespeicherten Teilen (auch im Papierkorb) und mit
+   den Karten, die schon offen sind. Die App entscheidet nie selbst, sie weist nur darauf hin. */
+// Gemessen 29.10.2026 (47 Fotos): verschiedene Teile höchstens 0,959 (zwei schwarze Schlaghosen), dasselbe Foto neu gespeichert,
+// zugeschnitten oder leicht verändert mindestens 0,970. Ein NEUES Foto vom selben Teil lässt sich davon nicht sicher unterscheiden.
+const GRENZE = 0.965;
+const offene = new Map(); // Karte → { vektor, hash, titel(), url }
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+async function fingerabdruck(file) {
+  try { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join(""); }
+  catch { return null; }
+}
+async function findeDoppelt(vektor, hash) {
+  let best = null;
+  const pruefe = (v, h, quelle) => {
+    const gleich = !!hash && h === hash, sim = gleich ? 1 : v?.length === vektor.length ? dot(v, vektor) : 0;
+    if ((gleich || sim >= GRENZE) && (!best || sim > best.sim)) best = { ...quelle, gleich, sim };
+  };
+  for (const t of await allItems()) pruefe(t.vektor, t.hash, { teil: t });
+  for (const x of offene.values()) pruefe(x.vektor, x.hash, { karte: x });
+  return best;
+}
+
 /* ---------- Prüfen-Karte für ein Foto ---------- */
 async function addPhoto(file, card) {
   card.replaceChildren(el("div", { class: "wait" }, "wird erkannt …"));
   await customReady;
   try {
+    const hash = await fingerabdruck(file);
     const img = await loadImage(file);
     let r, foto, vorschau;
     try {
@@ -43,6 +70,7 @@ async function addPhoto(file, card) {
       vorschau = await canvasToBlob(toCanvas(r.cut || img, 400, true), 0.85);
     } finally { URL.revokeObjectURL(img.src); }
     const vorschauUrl = URL.createObjectURL(vorschau);
+    const doppelt = await findeDoppelt(r.vektor, hash);
 
     const top = (list, n) => list.slice(0, n).map(c => c.label);
     const form = angabenFelder({
@@ -82,9 +110,26 @@ async function addPhoto(file, card) {
       save.disabled = !art || speichert;
       updateProgress();
     }
+    // „Vielleicht doppelt“: Hinweis mit dem Foto des anderen Teils. „Alle speichern“ lässt die Karte aus,
+    // bis sie verworfen oder mit „Ist ein anderes Teil“ bestätigt wird.
+    let doppeltOffen = !!doppelt, doppeltUrl = null, doppeltBox = null;
+    if (doppelt) {
+      doppeltUrl = doppelt.teil ? URL.createObjectURL(doppelt.teil.vorschau) : null;
+      const wer = doppelt.teil ? `Nr. ${nrText(doppelt.teil.nr)} – ${beschreibung(doppelt.teil)}${doppelt.teil.geloescht ? " (liegt im Papierkorb)" : ""}`
+        : `„${doppelt.karte.titel()}“ weiter oben`;
+      const text = doppelt.gleich ? (doppelt.teil ? `Dieses Foto ist schon gespeichert: ${wer}.` : `Dieses Foto ist zweimal ausgewählt, siehe ${wer}.`)
+        : `Sieht aus wie ${wer}. Ist es dasselbe Teil?`;
+      const behalten = el("button", { type: "button", class: "btn klein" }, "Ist ein anderes Teil – behalten");
+      behalten.onclick = () => { doppeltOffen = false; doppeltBox.remove(); updateProgress(); };
+      doppeltBox = el("div", { class: "doppelt" }, el("img", { src: doppeltUrl || doppelt.karte.url, alt: "" }),
+        el("div", {}, el("strong", {}, "⚠️ Vielleicht doppelt"), el("div", {}, text),
+          el("div", { class: "note" }, "Wenn ja: unten „Verwerfen“."), behalten));
+    }
+    offene.set(card, { vektor: r.vektor, hash, titel: () => titel.textContent, url: vorschauUrl });
     const removeCard = () => {
-      karten.delete(card); document.removeEventListener("ordner-geaendert", onOrdner);
-      URL.revokeObjectURL(vorschauUrl); form.dispose(); card.remove(); updateProgress();
+      karten.delete(card); offene.delete(card); document.removeEventListener("ordner-geaendert", onOrdner);
+      URL.revokeObjectURL(vorschauUrl); if (doppeltUrl) URL.revokeObjectURL(doppeltUrl);
+      form.dispose(); card.remove(); updateProgress();
     };
     // Speichert die Karte so, wie sie gerade angetippt ist; gibt die neue Nummer zurück (bei Fehler bleibt die Karte stehen)
     async function speichern() {
@@ -94,6 +139,8 @@ async function addPhoto(file, card) {
         const nr = await addItem({
           foto, vorschau, ...form.get(),
           ordner: gewaehlteOrdner().filter(id => da.has(id)),
+          // Für die Doppel-Prüfung bei späteren Fotos
+          hash, vektor: r.vektor,
           // Was die KI ursprünglich meinte, damit wir später sehen, wie oft korrigiert wurde
           ki: { art: r.art[0].label, farbe: r.farbe[0].label, muster: r.muster[0].label, material: r.material[0].label, aermel: r.aermel[0].label, schnitt: r.schnitt[0].label }
         });
@@ -106,19 +153,21 @@ async function addPhoto(file, card) {
       catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
     };
     drop.onclick = () => { if (confirm("Dieses Foto verwerfen?\n\nEs wird nicht gespeichert.")) removeCard(); };
-    karten.set(card, { bereit: () => !speichert && !!form.get().art, speichern });
+    karten.set(card, { bereit: () => !speichert && !!form.get().art && !doppeltOffen, doppelt: () => doppeltOffen, speichern });
 
     // Vorschau antippen → ganzes Foto groß (nicht das ausgeschnittene, damit man Details sieht)
     const lupe = el("button", { type: "button", class: "lupe", "aria-label": "Foto groß anzeigen" }, el("img", { src: vorschauUrl, alt: "" }), el("span", {}, "🔍"));
     lupe.onclick = () => { const u = URL.createObjectURL(foto); zeigeGross(u, "", () => URL.revokeObjectURL(u)); };
     fill(card,
       el("div", { class: "top" }, lupe, titel),
+      doppeltBox,
       ...form.elements,
       ordnerBox,
       el("div", { class: "actions" }, drop, save)
     );
     update();
   } catch (e) {
+    karten.delete(card); offene.delete(card);
     card.replaceChildren(el("div", { class: "wait" }, `❌ ${file.name}: ${e?.message || e}`),
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => { card.remove(); updateProgress(); } }, "Entfernen")));
     console.error(e);

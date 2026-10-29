@@ -58,10 +58,11 @@ export async function getItem(nr) {
   return t ? { ...t, vorschau: toBlob(t.vorschau) } : null;
 }
 // Angaben von Teilen ändern: [{ nr, ...geänderte Felder }], alles in EINEM Schritt. Vorschau und Nummer bleiben.
+// „geaendert“ = Zeitpunkt, damit die App sagen kann, was seit der letzten Sicherung anders ist.
 export async function updateItems(changes) {
-  const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile");
+  const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile"), jetzt = new Date().toISOString();
   for (const { nr, ...felder } of changes) {
-    teile.get(nr).onsuccess = e => { if (e.target.result) teile.put({ ...e.target.result, ...felder }); };
+    teile.get(nr).onsuccess = e => { if (e.target.result) teile.put({ ...e.target.result, ...felder, geaendert: jetzt }); };
   }
   await done(tx);
 }
@@ -117,7 +118,7 @@ export async function setFolderItems(id, nrs) {
     for (const t of e.target.result) {
       if (t.geloescht) continue;
       const drin = !!t.ordner?.includes(id), soll = nrs.has(t.nr);
-      if (drin !== soll) teile.put({ ...t, ordner: soll ? [...(t.ordner || []), id] : t.ordner.filter(o => o !== id) });
+      if (drin !== soll) teile.put({ ...t, ordner: soll ? [...(t.ordner || []), id] : t.ordner.filter(o => o !== id), geaendert: new Date().toISOString() });
     }
   };
   await done(tx);
@@ -135,6 +136,27 @@ export async function getCustom() {
 export async function setCustom(custom) {
   const tx = (await db()).transaction("meta", "readwrite");
   tx.objectStore("meta").put(custom, "eigeneWerte");
+  await done(tx);
+}
+// Einzelne Einträge in meta, z. B. "naechsteNr", "letzteSicherung" = { zeit, nrs } (was in der letzten ZIP war)
+export async function getMeta(key) {
+  return request((await db()).transaction("meta").objectStore("meta").get(key));
+}
+export async function setMeta(key, value) {
+  const tx = (await db()).transaction("meta", "readwrite");
+  tx.objectStore("meta").put(value, key);
+  await done(tx);
+}
+// „Sicherung laden“: alles durch den Stand der Sicherung ersetzen, in EINEM Schritt.
+// Klappt etwas nicht, bleibt der bisherige Stand komplett erhalten.
+// teile: fertige Einträge (mit vorschau als ArrayBuffer), fotos: Map nr → ArrayBuffer, meta: { Schlüssel: Wert }
+export async function replaceAll({ teile, fotos, meta }) {
+  const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
+  const T = tx.objectStore("teile"), F = tx.objectStore("fotos"), M = tx.objectStore("meta");
+  T.clear(); F.clear(); M.clear();
+  for (const t of teile) T.put(t);
+  for (const [nr, buf] of fotos) F.put(buf, nr);
+  for (const [k, v] of Object.entries(meta)) if (v != null) M.put(v, k);
   await done(tx);
 }
 // Browser bitten, die Daten nicht beim Aufräumen zu löschen (Safari entscheidet selbst, ob er zustimmt)

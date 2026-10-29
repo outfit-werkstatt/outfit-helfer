@@ -258,8 +258,10 @@ export async function recognize(img) {
   for (const [n, s] of catAvg) groupSum.set(GROUP_OF.get(n), (groupSum.get(GROUP_OF.get(n)) || 0) + s);
   const grp = ranked(groupSum)[0].label;
   const inGroup = ranked(catAvg).filter(c => GROUP_OF.get(c.label) === grp), rest = ranked(catAvg).filter(c => GROUP_OF.get(c.label) !== grp);
+  // Bild-Vektor = Mittel aller Blickwinkel (Länge 1), um später doppelte Fotos zu finden (Ähnlichkeit = Skalarprodukt)
+  const mean = vecs[0].map((_, j) => vecs.reduce((s, v) => s + v[j], 0)), len = Math.hypot(...mean);
   return {
-    cut,
+    cut, vektor: Float32Array.from(mean, x => x / len),
     art: [...inGroup, ...rest],
     material: ranked(avgMap("mat", matVecs)),
     muster: ranked(avgMap("pat", vecs)),
