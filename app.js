@@ -5,8 +5,8 @@
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=4";
 import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=7";
-import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross } from "./ui.js?v=7";
-import { refresh, initSchrank } from "./schrank.js?v=10";
+import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=8";
+import { refresh, initSchrank } from "./schrank.js?v=11";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -26,9 +26,9 @@ function updateProgress() {
   $("fortschritt").hidden = !total;
   if (!total) return;
   $("fortschrittBar").style.width = (100 * finished / total).toFixed(0) + "%";
-  $("fortschrittText").textContent = finished < total
-    ? `Fotos erkannt: ${finished} von ${total} …`
-    : `Alle ${total} ${total === 1 ? "Foto" : "Fotos"} erkannt. Noch ${open} zum Prüfen und Speichern.`;
+  $("fortschrittText").textContent = finished < total ? `Fotos erkannt: ${finished} von ${total} …`
+    : total === 1 ? "Foto erkannt. Bitte prüfen und speichern."
+    : `Alle ${total} Fotos erkannt. Noch ${open} zum Prüfen und Speichern.`;
 }
 
 /* ---------- Doppelte Fotos ----------
@@ -44,15 +44,19 @@ async function fingerabdruck(file) {
   try { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join(""); }
   catch { return null; }
 }
+// Liefert den Treffer (oder null) und für die Testanzeige das ähnlichste Teil überhaupt und wie viele Teile Prüfdaten haben
 async function findeDoppelt(vektor, hash) {
-  let best = null;
+  let best = null, naechster = null;
   const pruefe = (v, h, quelle) => {
+    if (!v && !h) return; // Teile von vor Version 0.7 haben keine Prüfdaten
     const gleich = !!hash && h === hash, sim = gleich ? 1 : v?.length === vektor.length ? dot(v, vektor) : 0;
+    if (!naechster || sim > naechster.sim) naechster = { ...quelle, gleich, sim };
     if ((gleich || sim >= GRENZE) && (!best || sim > best.sim)) best = { ...quelle, gleich, sim };
   };
-  for (const t of await allItems()) pruefe(t.vektor, t.hash, { teil: t });
+  const teile = await allItems();
+  for (const t of teile) pruefe(t.vektor, t.hash, { teil: t });
   for (const x of offene.values()) pruefe(x.vektor, x.hash, { karte: x });
-  return best;
+  return { treffer: best, naechster, mitDaten: teile.filter(t => t.vektor || t.hash).length, alle: teile.length };
 }
 
 /* ---------- Prüfen-Karte für ein Foto ---------- */
@@ -70,7 +74,11 @@ async function addPhoto(file, card) {
       vorschau = await canvasToBlob(toCanvas(r.cut || img, 400, true), 0.85);
     } finally { URL.revokeObjectURL(img.src); }
     const vorschauUrl = URL.createObjectURL(vorschau);
-    const doppelt = await findeDoppelt(r.vektor, hash);
+    const pruefung = await findeDoppelt(r.vektor, hash), doppelt = pruefung.treffer;
+    // Testanzeige: Messwerte der Doppel-Prüfung, um die Grenze an echten Handy-Fotos zu prüfen
+    const n = pruefung.naechster, testZeile = testAnzeige() ? el("div", { class: "note" }, `Test: ${pruefung.mitDaten} von ${pruefung.alle} gespeicherten Teilen haben Prüfdaten. ` +
+      (n ? `Ähnlichstes: ${n.teil ? "Nr. " + nrText(n.teil.nr) : "offene Karte"}, ${n.sim.toFixed(3).replace(".", ",")} (Grenze ${String(GRENZE).replace(".", ",")}), Fingerabdruck ${n.gleich ? "gleich" : "anders"}${hash ? "" : " (keiner berechnet)"}.`
+        : "Nichts zum Vergleichen.")) : null;
 
     const top = (list, n) => list.slice(0, n).map(c => c.label);
     const form = angabenFelder({
@@ -160,7 +168,7 @@ async function addPhoto(file, card) {
     lupe.onclick = () => { const u = URL.createObjectURL(foto); zeigeGross(u, "", () => URL.revokeObjectURL(u)); };
     fill(card,
       el("div", { class: "top" }, lupe, titel),
-      doppeltBox,
+      doppeltBox, testZeile,
       ...form.elements,
       ordnerBox,
       el("div", { class: "actions" }, drop, save)
@@ -191,6 +199,14 @@ $("alleSpeichern").onclick = async () => {
   toast(fehler ? `${ok}${ok ? ". " : ""}${fehler === 1 ? "1 Teil hat" : fehler + " Teile haben"} nicht geklappt – bitte einzeln speichern.` : ok);
   if (nrs.length) nachSpeichern();
   updateProgress();
+};
+// Testanzeige an/aus: 5× innerhalb von 3 Sekunden auf die Versionsnummer tippen
+let taps = [];
+$("version").onclick = () => {
+  const jetzt = Date.now(); taps = [...taps.filter(t => jetzt - t < 3000), jetzt];
+  if (taps.length < 5) return;
+  taps = []; const an = !testAnzeige(); setTestAnzeige(an);
+  toast(an ? "Testanzeige an" : "Testanzeige aus"); refresh();
 };
 // Noch nicht gespeicherte Karten: beim Schließen oder Neuladen nachfragen (am PC; Safari auf dem iPhone fragt meist nicht)
 addEventListener("beforeunload", e => { if ($("pruefen").querySelector(".check")) { e.preventDefault(); e.returnValue = ""; } });

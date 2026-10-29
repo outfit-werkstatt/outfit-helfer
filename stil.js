@@ -2,7 +2,7 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, cleanText, names, FARB_NAMEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=7";
+import { el, fill, toast, choice, field, cleanText, names, FARB_NAMEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=8";
 import { setStil } from "./speicher.js?v=7";
 import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=4";
 

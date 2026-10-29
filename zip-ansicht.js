@@ -7,8 +7,8 @@
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=7";
-import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=7";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=6";
+import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=8";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=7";
 import { GROUPS, GROUP_OF, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=4";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;

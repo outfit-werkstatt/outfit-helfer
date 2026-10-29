@@ -2,10 +2,10 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=7";
-import { allItems, getItem, getPhoto, updateItem, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=7";
-import { renderStil, stilKurz } from "./stil.js?v=6";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=2";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=8";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=7";
+import { renderStil, stilKurz } from "./stil.js?v=7";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=3";
 import { GROUPS } from "./ki.js?v=4";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -21,6 +21,7 @@ const ordnerMelden = () => document.dispatchEvent(new Event("ordner-geaendert"))
 /* ---------- Ansichten und „Zurück“ ---------- */
 let current = { v: "start", d: 0 }, urls = [];
 let bearbeitet = false; // „Angaben ändern“ ist offen: dann nicht von außen neu zeichnen, sonst wären die Änderungen weg
+let mehrfach = null;    // „Auswählen“ (Ordner-Ansicht, Papierkorb): Set der angetippten Nummern, sonst null
 const url = blob => { const u = URL.createObjectURL(blob); urls.push(u); return u; };
 export function go(state) {
   history.replaceState({ ...current, y: scrollY }, "");
@@ -35,7 +36,7 @@ function back() {
 addEventListener("popstate", e => { current = e.state || { v: "start", d: 0 }; show(current.y || 0); });
 history.scrollRestoration = "manual"; // die Stelle merken wir uns selbst (y im Verlauf)
 async function show(y) {
-  auswahl = null; bearbeitet = false; // „Teile auswählen“ und „Angaben ändern“ enden, sobald man die Ansicht wechselt
+  auswahl = null; bearbeitet = false; mehrfach = null; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
   $("ansichtStart").hidden = current.v !== "start"; $("ansicht").hidden = current.v === "start";
   try { await render(); } catch (e) { toast("Anzeigen hat nicht geklappt: " + (e?.message || e)); console.error(e); }
   scrollTo(0, y);
@@ -65,8 +66,9 @@ async function render() {
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
   renderStart(items, folders, stil, letzte, sonst);
 }
-const kopf = (titel, unter) => el("div", { class: "kopf" },
-  el("button", { type: "button", class: "zurueck", onclick: back }, "‹ Zurück"),
+// rechts: Knopf oben rechts (z. B. „Auswählen“)
+const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
+  el("div", { class: "kopf-zeile" }, el("button", { type: "button", class: "zurueck", onclick: back }, "‹ Zurück"), rechts),
   el("h2", {}, titel), unter ? el("div", { class: "hint" }, unter) : null);
 const anzahl = n => `${n} ${n === 1 ? "Teil" : "Teile"}`;
 
@@ -139,6 +141,38 @@ function teilKachel(t, { markiert = null, onclick, extra = null }) {
   if (markiert !== null) b.setAttribute("aria-pressed", markiert);
   return b;
 }
+// Kachel im Auswahl-Modus an- oder abhaken, ohne die Ansicht neu zu zeichnen
+function haken(b, an) { b.classList.toggle("markiert", an); b.setAttribute("aria-pressed", an); b.querySelector(".haken").textContent = an ? "✓" : ""; }
+// Leiste unten im Auswahl-Modus: Anzahl, „Alle auswählen“ und Knöpfe, die für alle angetippten Teile gelten.
+// kacheln() = die gerade sichtbaren Kacheln (Suche/Filter), aktionen = [{ text, los(nrs) }]
+function auswahlLeiste(kacheln, aktionen) {
+  const zahl = el("span", {}), alle = el("button", { type: "button", class: "link" });
+  const extra = el("div", { class: "leiste-extra" }); extra.hidden = true; // z. B. „In welchen Ordner?“
+  const knoepfe = aktionen.map(a => {
+    const b = el("button", { type: "button", class: "btn klein" }, a.text);
+    b.onclick = async () => {
+      if (!mehrfach?.size) return;
+      try { await a.los([...mehrfach]); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+    };
+    return b;
+  });
+  const alleDrin = () => { const s = kacheln(); return s.length > 0 && s.every(k => mehrfach.has(Number(k.dataset.nr))); };
+  const update = () => {
+    const n = mehrfach.size;
+    zahl.textContent = n ? `${anzahl(n)} ausgewählt` : "Tippe die Teile an";
+    knoepfe.forEach(b => { b.disabled = !n; });
+    alle.textContent = alleDrin() ? "Keine auswählen" : "Alle auswählen";
+  };
+  alle.onclick = () => {
+    const an = !alleDrin();
+    for (const k of kacheln()) { const nr = Number(k.dataset.nr); an ? mehrfach.add(nr) : mehrfach.delete(nr); haken(k, an); }
+    update();
+  };
+  update();
+  return { el: el("div", { class: "leiste" }, el("div", { class: "leiste-kopf" }, zahl, alle), extra, el("div", { class: "actions wrap" }, ...knoepfe)), update, extra };
+}
+// Nach einer Aktion: Auswahl beenden, Meldung zeigen, neu zeichnen
+const fertigMit = text => { mehrfach = null; toast(text); neuZeichnen(); };
 function filterChips(list, f, onChange) {
   // Nur Gruppen und Farben anzeigen, die es hier gibt, mit Anzahl. Ein Tippen auf den gewählten Knopf hebt ihn auf.
   const count = (arr, key) => arr.reduce((m, t) => { for (const k of [].concat(key(t) ?? [])) m.set(k, (m.get(k) || 0) + 1); return m; }, new Map());
@@ -192,7 +226,7 @@ function renderListe(items, folders, id) {
     aktionen = el("div", {}, el("div", { class: "hint" }, `Tippe die Teile an, die in „${ordner.name}“ sein sollen. In „${HAUPT}“ bleiben sie immer.`),
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => { auswahl = null; neuZeichnen(); } }, "Abbrechen"), fertig));
   } else if (ordner) {
-    const waehlen = el("button", { type: "button", class: "btn primary", onclick: () => { auswahl = new Set(drin.map(t => t.nr)); neuZeichnen(); } }, "Teile auswählen");
+    const waehlen = el("button", { type: "button", class: "btn primary", onclick: () => { auswahl = new Set(drin.map(t => t.nr)); neuZeichnen(); } }, "Teile hinzufügen / entfernen");
     const umbenennen = el("button", { type: "button", class: "btn" }, "Umbenennen");
     umbenennen.onclick = () => nameEditor(editor, ordner.name, folders, async name => {
       await setFolders(folders.map(x => x.id === id ? { ...x, name } : x)); ordnerMelden(); toast("Umbenannt"); neuZeichnen();
@@ -206,19 +240,64 @@ function renderListe(items, folders, id) {
     aktionen = el("div", { class: "actions wrap" }, waehlen, umbenennen, loeschen);
   }
   const leer = basis.length ? (gefiltert.length ? null : "Mit diesem Filter gibt es hier nichts.")
-    : ordner ? "Noch keine Teile in diesem Ordner. Tippe auf „Teile auswählen“."
+    : ordner ? "Noch keine Teile in diesem Ordner. Tippe auf „Teile hinzufügen / entfernen“."
     : id === NICHT ? "Keine Teile mehr markiert." : "Noch nichts gespeichert. Füge auf der Startseite Kleidung hinzu.";
   const unter = auswahl ? null : ordner ? anzahl(drin.length)
     : id === NICHT ? `${anzahl(drin.length)}, ${drin.length === 1 ? "das nie in Outfit-Vorschläge kommt" : "die nie in Outfit-Vorschläge kommen"}. Zum Zurückholen: Teil antippen und „Ziehe ich nicht an“ ausschalten.`
     : `Alle ${anzahl(drin.length)}`;
 
+  // „Auswählen“ oben rechts: mehrere Teile antippen und gemeinsam verschieben, in einen Ordner legen, 🚫 markieren oder löschen
+  const waehlenKnopf = !auswahl && basis.length ? el("button", { type: "button", class: "kopf-knopf" }, mehrfach ? "Fertig" : "Auswählen") : null;
+  if (waehlenKnopf) waehlenKnopf.onclick = () => { mehrfach = mehrfach ? null : new Set(); neuZeichnen(); };
+  if (mehrfach) aktionen = null;
+  let leiste = null;
+
   const teilVon = new Map(gefiltert.map(t => [t.nr, t]));
   const grid = el("div", { class: "grid" }, ...gefiltert.map(t => {
     const k = auswahl
       ? teilKachel(t, { markiert: auswahl.has(t.nr), onclick: () => { auswahl.has(t.nr) ? auswahl.delete(t.nr) : auswahl.add(t.nr); neuZeichnen(); } })
+      : mehrfach
+      ? teilKachel(t, { markiert: mehrfach.has(t.nr), onclick: () => { mehrfach.has(t.nr) ? mehrfach.delete(t.nr) : mehrfach.add(t.nr); haken(k, mehrfach.has(t.nr)); leiste.update(); } })
       : teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }) });
     k.dataset.nr = t.nr; return k;
   }));
+  if (mehrfach) {
+    const alleTeile = new Map(da.map(t => [t.nr, t])), ordnerVon = nr => alleTeile.get(nr)?.ordner || [];
+    // Ordner zum Verschieben/Hinzufügen erscheint in der Leiste
+    const ordnerWahl = (frage, los) => {
+      const ziele = folders.filter(f => f.id !== id);
+      if (!ziele.length) return toast("Lege zuerst auf der Startseite einen Ordner an („+ Neuer Ordner“).");
+      fill(leiste.extra, el("div", { class: "note" }, frage),
+        el("div", { class: "chips" }, ...ziele.map(f => el("button", { type: "button", class: "chip", onclick: () => los(f).catch(e => toast("Hat nicht geklappt: " + (e?.message || e))) }, f.name)),
+          el("button", { type: "button", class: "chip", onclick: () => { leiste.extra.hidden = true; } }, "Abbrechen")));
+      leiste.extra.hidden = false;
+    };
+    const n = nrs => anzahl(nrs.length);
+    leiste = auswahlLeiste(() => [...grid.children].filter(k => !k.hidden), [
+      ordner && { text: "Verschieben nach …", los: async nrs => ordnerWahl(`${n(nrs)} aus „${ordner.name}“ verschieben nach:`, async f => {
+        await updateItems(nrs.map(nr => ({ nr, ordner: [...new Set([...ordnerVon(nr).filter(o => o !== id), f.id])] })));
+        fertigMit(`${n(nrs)} nach „${f.name}“ verschoben`);
+      }) },
+      { text: ordner ? "Auch in Ordner …" : "In Ordner …", los: async nrs => ordnerWahl(`${n(nrs)} zusätzlich in diesen Ordner legen:`, async f => {
+        await updateItems(nrs.map(nr => ({ nr, ordner: [...new Set([...ordnerVon(nr), f.id])] })));
+        fertigMit(`${n(nrs)} jetzt auch in „${f.name}“`);
+      }) },
+      ordner && { text: "Aus Ordner nehmen", los: async nrs => {
+        await updateItems(nrs.map(nr => ({ nr, ordner: ordnerVon(nr).filter(o => o !== id) })));
+        fertigMit(`${n(nrs)} aus „${ordner.name}“ genommen (${nrs.length === 1 ? "bleibt" : "bleiben"} in „${HAUPT}“)`);
+      } },
+      { text: id === NICHT ? "Wieder vorschlagen" : "🚫 Nicht anziehen", los: async nrs => {
+        await updateItems(nrs.map(nr => ({ nr, nichtAnziehen: id !== NICHT })));
+        fertigMit(id === NICHT ? `${n(nrs)} ${nrs.length === 1 ? "kommt" : "kommen"} wieder in Vorschläge` : `${n(nrs)} als „Ziehe ich nicht an“ markiert`);
+      } },
+      { text: "Löschen", los: async nrs => {
+        if (!confirm(`${n(nrs)} löschen?\n\n${nrs.length === 1 ? "Es kommt" : "Sie kommen"} in den Papierkorb, ${nrs.length === 1 ? "bleibt" : "bleiben"} dort ${KORB_TAGE} Tage und ${nrs.length === 1 ? "lässt" : "lassen"} sich wiederherstellen.`)) return;
+        const jetzt = new Date().toISOString();
+        await updateItems(nrs.map(nr => ({ nr, geloescht: jetzt })));
+        fertigMit(`${n(nrs)} im Papierkorb`);
+      } }
+    ].filter(Boolean));
+  }
   // Beim Tippen in die Suche nur Kacheln ein- und ausblenden (neu zeichnen würde die Tastatur schließen)
   const suche = el("input", { type: "search", class: "suche", value: f.suche, placeholder: "Suchen: Nr. oder Wort, z. B. 012 oder Jeans", "aria-label": "Suchen", autocomplete: "off", enterKeyHint: "search" });
   const keinTreffer = el("p", { class: "hint" }, "Nichts gefunden.");
@@ -227,17 +306,19 @@ function renderListe(items, folders, id) {
     let n = 0;
     for (const k of grid.children) { const ok = passtSuche(teilVon.get(Number(k.dataset.nr)), f.suche); k.hidden = !ok; if (ok) n++; }
     keinTreffer.hidden = n > 0 || !gefiltert.length;
+    leiste?.update(); // „Alle auswählen“ gilt für die gerade sichtbaren Teile
   };
   suche.oninput = suchen;
   suche.onkeydown = e => { if (e.key === "Enter") suche.blur(); };
   suchen();
   fill($("ansicht"),
-    kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter),
+    kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter, waehlenKnopf),
     aktionen, editor,
     basis.length ? suche : null,
     basis.length ? filterChips(basis, f, nf => { filters.set(id, nf); neuZeichnen(); }) : null,
     grid, keinTreffer,
-    leer ? el("p", { class: "hint" }, leer) : null);
+    leer ? el("p", { class: "hint" }, leer) : null,
+    leiste?.el);
 }
 
 /* ---------- Teil-Ansicht ---------- */
@@ -254,7 +335,9 @@ function renderTeil(items, folders, nr, foto) {
     ...zeile("Ärmel", t.aermel), ...zeile("Hosenschnitt", t.schnitt),
     ...zeile("Weite", t.weite), ...zeile("Länge", t.laenge), ...zeile("Bund", t.bund),
     ...zeile("Stil", t.stil?.join(", ")), ...zeile("Saison", t.saison?.join(", ")), ...zeile("Notiz", t.notiz),
-    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null), ...zeile("Hinzugefügt", datum(t.erstellt)));
+    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null), ...zeile("Hinzugefügt", datum(t.erstellt)),
+    // Testanzeige: hat das Teil Prüfdaten für die Doppel-Prüfung? (Teile von vor Version 0.7 nicht)
+    ...(testAnzeige() ? zeile("Test", `${t.vektor ? "Bild-Vektor ✓" : "kein Bild-Vektor"}, ${t.hash ? "Fingerabdruck ✓" : "kein Fingerabdruck"}`) : []));
   const inhalt = el("div", { class: "panel" }, angaben);
 
   // Ordner: Änderungen werden sofort gespeichert
@@ -313,18 +396,38 @@ function renderKorb(items) {
     if (!confirm(`${anzahl(weg.length)} endgültig löschen?\n\nDas kann man nicht rückgängig machen. Die Nummern werden nicht neu vergeben.`)) return;
     try { await purgeItems(weg.map(t => t.nr)); toast("Papierkorb geleert"); neuZeichnen(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
   };
+  // „Auswählen“: mehrere auf einmal wiederherstellen oder endgültig löschen
+  const waehlenKnopf = weg.length ? el("button", { type: "button", class: "kopf-knopf" }, mehrfach ? "Fertig" : "Auswählen") : null;
+  if (waehlenKnopf) waehlenKnopf.onclick = () => { mehrfach = mehrfach ? null : new Set(); neuZeichnen(); };
+  let leiste = null;
+  const kacheln = weg.map(t => {
+    const rest = el("span", { class: "rest" }, nochTage(t));
+    if (mehrfach) {
+      const k = teilKachel(t, { markiert: mehrfach.has(t.nr), extra: rest,
+        onclick: () => { mehrfach.has(t.nr) ? mehrfach.delete(t.nr) : mehrfach.add(t.nr); haken(k, mehrfach.has(t.nr)); leiste.update(); } });
+      k.dataset.nr = t.nr; return k;
+    }
+    const zurueck = el("button", { type: "button", class: "btn klein" }, "Wiederherstellen");
+    zurueck.onclick = async ev => {
+      ev.stopPropagation();
+      try { await restoreItem(t.nr); toast(`Nr. ${nrText(t.nr)} ist wieder da`); neuZeichnen(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+    };
+    return el("div", { class: "korb-teil" }, teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }), extra: rest }), zurueck);
+  });
+  if (mehrfach) leiste = auswahlLeiste(() => kacheln, [
+    { text: "Wiederherstellen", los: async nrs => {
+      await updateItems(nrs.map(nr => ({ nr, geloescht: null })));
+      fertigMit(`${anzahl(nrs.length)} wiederhergestellt`);
+    } },
+    { text: "Endgültig löschen", los: async nrs => {
+      if (!confirm(`${anzahl(nrs.length)} endgültig löschen?\n\nDas kann man nicht rückgängig machen. Die Nummern werden nicht neu vergeben.`)) return;
+      await purgeItems(nrs);
+      fertigMit(`${anzahl(nrs.length)} endgültig gelöscht`);
+    } }]);
   fill($("ansicht"),
-    kopf("Papierkorb", `Gelöschte Teile bleiben ${KORB_TAGE} Tage hier und behalten ihre Nummer. Danach werden sie endgültig gelöscht.`),
-    el("div", { class: "grid" }, ...weg.map(t => {
-      const zurueck = el("button", { type: "button", class: "btn klein" }, "Wiederherstellen");
-      zurueck.onclick = async ev => {
-        ev.stopPropagation();
-        try { await restoreItem(t.nr); toast(`Nr. ${nrText(t.nr)} ist wieder da`); neuZeichnen(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
-      };
-      return el("div", { class: "korb-teil" },
-        teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }), extra: el("span", { class: "rest" }, nochTage(t)) }), zurueck);
-    })),
-    weg.length ? el("div", { class: "actions" }, leeren) : el("p", { class: "hint" }, "Der Papierkorb ist leer."));
+    kopf("Papierkorb", `Gelöschte Teile bleiben ${KORB_TAGE} Tage hier und behalten ihre Nummer. Danach werden sie endgültig gelöscht.`, waehlenKnopf),
+    el("div", { class: "grid" }, ...kacheln),
+    mehrfach ? leiste.el : weg.length ? el("div", { class: "actions" }, leeren) : el("p", { class: "hint" }, "Der Papierkorb ist leer."));
 }
 
 /* ---------- Start ---------- */

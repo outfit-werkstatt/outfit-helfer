@@ -36,6 +36,9 @@ export const clean = s => s.replace(/\s+/g, " ").trim();
 // Wie clean, aber Zeilenumbrüche bleiben (höchstens eine Leerzeile) – für Notizen und „Sonst noch etwas?“
 export const cleanText = s => s.split("\n").map(clean).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 export const names = list => list.map(([n]) => n);
+// Testanzeige (5× auf die Versionsnummer tippen): zeigt Messwerte der Doppel-Prüfung. Nur für dieses Gerät gemerkt.
+export const testAnzeige = () => { try { return localStorage.getItem("testAnzeige") === "1"; } catch { return false; } };
+export const setTestAnzeige = an => { try { an ? localStorage.setItem("testAnzeige", "1") : localStorage.removeItem("testAnzeige"); } catch {} };
 // Kurzbeschreibung eines Teils: „Bluse, braun / terrakotta“
 export const beschreibung = t => `${t.art}${t.farben?.length ? ", " + t.farben.join(" / ").toLowerCase() : ""}`;
 

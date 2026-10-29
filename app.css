@@ -112,6 +112,14 @@ details.panel.mehr{padding-top:12px}
 
 /* Ordner, Teil, Papierkorb */
 .kopf{margin-bottom:12px}
+.kopf-zeile{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.kopf-knopf{background:none;border:0;padding:8px 0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+/* „Auswählen“: Leiste unten, bleibt beim Scrollen am unteren Rand */
+.leiste{position:sticky;bottom:0;z-index:5;margin-top:var(--gap);background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(0,0,0,.18)}
+.leiste-kopf{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600}
+.leiste .actions{margin-top:8px}
+.leiste-extra{margin-top:8px}
 .kopf h2{margin:8px 0 2px;overflow-wrap:anywhere}
 .zurueck{background:none;border:0;padding:8px 0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
 .actions.wrap{flex-wrap:wrap}
