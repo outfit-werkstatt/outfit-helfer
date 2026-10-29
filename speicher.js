@@ -96,9 +96,11 @@ export async function setStil(stil) {
 export async function getFolders() {
   return (await request((await db()).transaction("meta").objectStore("meta").get("ordner"))) || [];
 }
+// „sonstGeaendert“ = wann zuletzt Ordner oder eigene Knöpfe geändert wurden (für „Seit deiner letzten Sicherung …“)
+const merken = meta => meta.put(new Date().toISOString(), "sonstGeaendert");
 export async function setFolders(folders) {
   const tx = (await db()).transaction("meta", "readwrite");
-  tx.objectStore("meta").put(folders, "ordner");
+  tx.objectStore("meta").put(folders, "ordner"); merken(tx.objectStore("meta"));
   await done(tx);
 }
 // Ordner löschen: nur der Ordner verschwindet, die Teile bleiben (auch im Papierkorb wird er bei ihnen ausgetragen)
@@ -108,6 +110,7 @@ export async function deleteFolder(id) {
     for (const t of e.target.result) if (t.ordner?.includes(id)) teile.put({ ...t, ordner: t.ordner.filter(o => o !== id) });
   };
   meta.get("ordner").onsuccess = e => meta.put((e.target.result || []).filter(f => f.id !== id), "ordner");
+  merken(meta);
   await done(tx);
 }
 // Welche Teile in einem Ordner liegen (Auswahl „Teile auswählen“): nrs = alle Nummern, die drin sein sollen.
@@ -135,10 +138,10 @@ export async function getCustom() {
 }
 export async function setCustom(custom) {
   const tx = (await db()).transaction("meta", "readwrite");
-  tx.objectStore("meta").put(custom, "eigeneWerte");
+  tx.objectStore("meta").put(custom, "eigeneWerte"); merken(tx.objectStore("meta"));
   await done(tx);
 }
-// Einzelne Einträge in meta, z. B. "naechsteNr", "letzteSicherung" = { zeit, nrs } (was in der letzten ZIP war)
+// Einzelne Einträge in meta, z. B. "naechsteNr", "letzteSicherung" = { zeit, nrs } (was in der letzten ZIP war), "sonstGeaendert"
 export async function getMeta(key) {
   return request((await db()).transaction("meta").objectStore("meta").get(key));
 }

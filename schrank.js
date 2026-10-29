@@ -2,10 +2,10 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=6";
-import { allItems, getItem, getPhoto, updateItem, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=6";
-import { renderStil, stilKurz } from "./stil.js?v=5";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=1";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=7";
+import { allItems, getItem, getPhoto, updateItem, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=7";
+import { renderStil, stilKurz } from "./stil.js?v=6";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=2";
 import { GROUPS } from "./ki.js?v=4";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -53,6 +53,7 @@ async function render() {
   const [items, folders, stil, letzte, foto] = await Promise.all([
     s.v === "teil" ? getItem(s.nr).then(t => t ? [t] : []) : allItems(),
     getFolders(), getStil(), getMeta("letzteSicherung"), s.v === "teil" ? getPhoto(s.nr) : null]);
+  const sonst = await getMeta("sonstGeaendert");
   if (nr !== zeichnung) return;
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
   // Auswahl-Felder der vorigen Ansicht abmelden (sie hören sonst weiter auf neue eigene Einträge)
@@ -61,8 +62,8 @@ async function render() {
   if (s.v === "teil") return renderTeil(items, folders, s.nr, foto);
   if (s.v === "korb") return renderKorb(items);
   if (s.v === "stil") return renderStil(box, kopf("Mein Stil"), stil);
-  if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, neuZeichnen);
-  renderStart(items, folders, stil, letzte);
+  if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
+  renderStart(items, folders, stil, letzte, sonst);
 }
 const kopf = (titel, unter) => el("div", { class: "kopf" },
   el("button", { type: "button", class: "zurueck", onclick: back }, "‹ Zurück"),
@@ -76,7 +77,7 @@ function kachel(name, list, onclick) {
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
     el("span", { class: "name" }, name), el("span", { class: "anzahl" }, anzahl(list.length)));
 }
-function renderStart(items, folders, stil, letzte) {
+function renderStart(items, folders, stil, letzte, sonst) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
   // „Mein Stil“: Kurzfassung (höchstens 3 Angaben, alles Weitere steht in „Mein Stil“) oder Bitte, es einmal einzustellen
   const kurz = stilKurz(stil);
@@ -87,7 +88,7 @@ function renderStart(items, folders, stil, letzte) {
     el("div", { class: "titel" }, "✨ Mein Stil"),
     el("div", { class: "hint" }, zeigen.length ? zeigen.join(" · ") : "Noch nicht eingestellt. Sag einmal, was du gern trägst und was lieber nicht – die Vorschläge halten sich daran."),
     el("div", { class: "actions" }, stilKnopf)));
-  fill($("zipKarte"), zipKarte(items, letzte, stil, () => go({ v: "sicherung" })));
+  fill($("zipKarte"), zipKarte(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };

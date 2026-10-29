@@ -134,6 +134,11 @@ details.panel.mehr{padding-top:12px}
 .sicherung-karte .titel{font-weight:600}
 .warnung{border-color:var(--accent);background:var(--chip)}
 label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
+.hint ul{margin:6px 0;padding-left:20px}
+.hint li{margin:4px 0}
+/* „Sicherung wird geladen“: deckt alles ab, damit währenddessen nichts gespeichert wird, was danach überschrieben wäre */
+.sperre{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
+.sperre .panel{max-width:420px;width:100%;margin:0}
 /* „Vielleicht doppelt“ in der Prüfen-Karte */
 .doppelt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--accent);border-radius:10px;padding:10px;margin:6px 0 10px;background:var(--chip);font-size:.92rem}
 .doppelt img{width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--card)}
