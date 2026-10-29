@@ -4,17 +4,22 @@
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=3";
-import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=4";
-import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=4";
-import { refresh, initSchrank } from "./schrank.js?v=7";
+import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=5";
+import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=5";
+import { refresh, initSchrank } from "./schrank.js?v=8";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
 
-/* ---------- Fortschritt „Fotos erkannt: 3 von 10“ ---------- */
+/* ---------- Fortschritt „Fotos erkannt: 3 von 10“ und „Alle speichern“ ---------- */
 let total = 0, finished = 0;
+const karten = new Map(); // fertig erkannte Karten → { bereit(), speichern() }
 function updateProgress() {
   const open = $("pruefen").querySelectorAll(".check").length;
+  // „Alle speichern“ lohnt sich ab 2 Karten, die gespeichert werden können (Art gewählt, nicht schon beim Speichern)
+  const bereit = [...karten.values()].filter(k => k.bereit()).length;
+  $("alleBox").hidden = bereit < 2;
+  $("alleSpeichern").textContent = finished < total ? `Die ${bereit} fertigen speichern` : `Alle ${bereit} speichern`;
   if (total && finished >= total && !open) total = finished = 0;
   $("fortschritt").hidden = !total;
   if (!total) return;
@@ -52,35 +57,56 @@ async function addPhoto(file, card) {
       // Weitere Merkmale ohne KI-Vorwahl; nur die Saison wird nach Art und Material vorgeschlagen
       saisonAuto: true
     }, () => update());
-    // Eigene Ordner gleich mit auswählen (freiwillig); in „Mein Kleiderschrank“ ist jedes Teil sowieso
-    const folders = await getFolders();
-    const ordner = folders.length ? choice({ options: folders.map(f => f.name), max: 0 }) : null;
+    // Eigene Ordner gleich mit auswählen (freiwillig); in „Mein Kleiderschrank“ ist jedes Teil sowieso.
+    // Werden Ordner angelegt, umbenannt oder gelöscht, während die Karte offen ist, baut sich die Auswahl neu auf (Gewähltes bleibt).
+    let folders = [], ordner = null;
+    const ordnerBox = el("div");
+    const gewaehlteOrdner = () => ordner ? folders.filter(f => ordner.get().includes(f.name)).map(f => f.id) : [];
+    async function baueOrdner() {
+      const vorher = gewaehlteOrdner();
+      folders = await getFolders();
+      ordner = folders.length ? choice({ options: folders.map(f => f.name), selected: folders.filter(f => vorher.includes(f.id)).map(f => f.name), max: 0 }) : null;
+      fill(ordnerBox, ordner ? field("Ordner", "freiwillig – in „Mein Kleiderschrank“ ist es sowieso", ordner.el) : null);
+    }
+    await baueOrdner();
+    const onOrdner = () => baueOrdner().catch(e => console.error(e));
+    document.addEventListener("ordner-geaendert", onOrdner);
     const titel = el("div", { class: "titel" });
 
+    let speichert = false;
+    const save = el("button", { type: "button", class: "btn primary" }, "Speichern");
+    const drop = el("button", { type: "button", class: "btn" }, "Verwerfen");
     function update() {
       const { art, farben } = form.get();
       titel.textContent = art ? `${art}${farben.length ? ", " + farben.join(" / ").toLowerCase() : ""}` : "Bitte Art wählen";
-      save.disabled = !art;
+      save.disabled = !art || speichert;
+      updateProgress();
     }
-    const removeCard = () => { URL.revokeObjectURL(vorschauUrl); form.dispose(); card.remove(); updateProgress(); };
-    const save = el("button", { type: "button", class: "btn primary" }, "Speichern");
-    const drop = el("button", { type: "button", class: "btn" }, "Verwerfen");
-    save.onclick = async () => {
-      save.disabled = true;
+    const removeCard = () => {
+      karten.delete(card); document.removeEventListener("ordner-geaendert", onOrdner);
+      URL.revokeObjectURL(vorschauUrl); form.dispose(); card.remove(); updateProgress();
+    };
+    // Speichert die Karte so, wie sie gerade angetippt ist; gibt die neue Nummer zurück (bei Fehler bleibt die Karte stehen)
+    async function speichern() {
+      speichert = true; update();
       try {
+        const da = new Set((await getFolders()).map(f => f.id)); // nur Ordner, die es jetzt noch gibt
         const nr = await addItem({
           foto, vorschau, ...form.get(),
-          ordner: ordner ? folders.filter(f => ordner.get().includes(f.name)).map(f => f.id) : [],
+          ordner: gewaehlteOrdner().filter(id => da.has(id)),
           // Was die KI ursprünglich meinte, damit wir später sehen, wie oft korrigiert wurde
           ki: { art: r.art[0].label, farbe: r.farbe[0].label, muster: r.muster[0].label, material: r.material[0].label, aermel: r.aermel[0].label, schnitt: r.schnitt[0].label }
         });
         removeCard();
-        toast(`Gespeichert als Nr. ${nrText(nr)}`);
-        askPersist();
-        refresh();
-      } catch (e) { save.disabled = false; toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+        return nr;
+      } catch (e) { speichert = false; update(); throw e; }
+    }
+    save.onclick = async () => {
+      try { const nr = await speichern(); toast(`Gespeichert als Nr. ${nrText(nr)}`); nachSpeichern(); }
+      catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
     };
-    drop.onclick = removeCard;
+    drop.onclick = () => { if (confirm("Dieses Foto verwerfen?\n\nEs wird nicht gespeichert.")) removeCard(); };
+    karten.set(card, { bereit: () => !speichert && !!form.get().art, speichern });
 
     // Vorschau antippen → ganzes Foto groß (nicht das ausgeschnittene, damit man Details sieht)
     const lupe = el("button", { type: "button", class: "lupe", "aria-label": "Foto groß anzeigen" }, el("img", { src: vorschauUrl, alt: "" }), el("span", {}, "🔍"));
@@ -88,7 +114,7 @@ async function addPhoto(file, card) {
     fill(card,
       el("div", { class: "top" }, lupe, titel),
       ...form.elements,
-      ordner ? field("Ordner", "freiwillig – in „Mein Kleiderschrank“ ist es sowieso", ordner.el) : null,
+      ordnerBox,
       el("div", { class: "actions" }, drop, save)
     );
     update();
@@ -100,6 +126,25 @@ async function addPhoto(file, card) {
     finished++; updateProgress();
   }
 }
+
+const nachSpeichern = () => { askPersist(); refresh(); };
+// Alle fertig erkannten Karten nacheinander speichern (in der Reihenfolge der Fotos, so steigen die Nummern wie angezeigt)
+$("alleSpeichern").onclick = async () => {
+  const b = $("alleSpeichern"); b.disabled = true;
+  const nrs = []; let fehler = 0;
+  for (const k of [...karten.values()]) {
+    if (!k.bereit()) continue;
+    try { nrs.push(await k.speichern()); } catch (e) { fehler++; console.error(e); }
+  }
+  b.disabled = false;
+  const ok = nrs.length === 1 ? `Gespeichert als Nr. ${nrText(nrs[0])}`
+    : nrs.length ? `${nrs.length} Teile gespeichert (Nr. ${nrText(Math.min(...nrs))} bis ${nrText(Math.max(...nrs))})` : "";
+  toast(fehler ? `${ok}${ok ? ". " : ""}${fehler === 1 ? "1 Teil hat" : fehler + " Teile haben"} nicht geklappt – bitte einzeln speichern.` : ok);
+  if (nrs.length) nachSpeichern();
+  updateProgress();
+};
+// Noch nicht gespeicherte Karten: beim Schließen oder Neuladen nachfragen (am PC; Safari auf dem iPhone fragt meist nicht)
+addEventListener("beforeunload", e => { if ($("pruefen").querySelector(".check")) { e.preventDefault(); e.returnValue = ""; } });
 
 /* ---------- Start ---------- */
 initSchrank().catch(e => { $("kacheln").replaceChildren(el("p", { class: "hint" }, "Speicher konnte nicht geöffnet werden: " + (e?.message || e))); });

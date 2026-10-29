@@ -66,6 +66,12 @@ export async function updateItems(changes) {
   await done(tx);
 }
 export const updateItem = (nr, felder) => updateItems([{ nr, ...felder }]);
+// Alle Teile in EINEM Schritt durchgehen: fn(teil) gibt das geänderte Teil zurück oder null (dann bleibt es, wie es ist)
+export async function updateAll(fn) {
+  const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile");
+  teile.getAll().onsuccess = e => { for (const t of e.target.result) { const neu = fn(t); if (neu) teile.put(neu); } };
+  await done(tx);
+}
 // Papierkorb: Teil bleibt mit Nummer, Angaben und Ordnern gespeichert und kann zurückgeholt werden
 export const trashItem = nr => updateItem(nr, { geloescht: new Date().toISOString() });
 export const restoreItem = nr => updateItem(nr, { geloescht: null });
@@ -103,11 +109,13 @@ export async function deleteFolder(id) {
   meta.get("ordner").onsuccess = e => meta.put((e.target.result || []).filter(f => f.id !== id), "ordner");
   await done(tx);
 }
-// Welche Teile in einem Ordner liegen (Auswahl „Teile auswählen“): nrs = alle Nummern, die drin sein sollen
+// Welche Teile in einem Ordner liegen (Auswahl „Teile auswählen“): nrs = alle Nummern, die drin sein sollen.
+// Teile im Papierkorb bleiben, wie sie sind: Sie stehen nicht zur Auswahl und kommen beim Wiederherstellen mit ihren Ordnern zurück.
 export async function setFolderItems(id, nrs) {
   const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile");
   teile.getAll().onsuccess = e => {
     for (const t of e.target.result) {
+      if (t.geloescht) continue;
       const drin = !!t.ordner?.includes(id), soll = nrs.has(t.nr);
       if (drin !== soll) teile.put({ ...t, ordner: soll ? [...(t.ordner || []), id] : t.ordner.filter(o => o !== id) });
     }

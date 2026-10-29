@@ -2,10 +2,13 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
 import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=3";
-import { getCustom, setCustom } from "./speicher.js?v=4";
+import { getCustom, setCustom } from "./speicher.js?v=5";
 
 export const $ = id => document.getElementById(id);
-const COLOR_RGB = new Map(COLORS.map(([n, , rgb]) => [n, rgb]));
+// Farben: die der KI plus Silber und Roségold (für Schmuck; die KI kennt sie nicht und wählt sie nie vor)
+export const FARBEN = [...COLORS.map(([n, , rgb]) => [n, rgb]), ["Silber", [196, 198, 204]], ["Roségold", [214, 158, 140]]];
+export const FARB_NAMEN = FARBEN.map(([n]) => n);
+const COLOR_RGB = new Map(FARBEN);
 export function el(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) if (k === "class") e.className = v; else if (k in e) e[k] = v; else e.setAttribute(k, v);
@@ -30,6 +33,8 @@ export function zeigeGross(url, alt = "", onClose = () => {}) {
 }
 export const swatch = name => COLOR_RGB.has(name) ? el("span", { class: "sw", style: `background:rgb(${COLOR_RGB.get(name).join(",")})` }) : null;
 export const clean = s => s.replace(/\s+/g, " ").trim();
+// Wie clean, aber Zeilenumbrüche bleiben (höchstens eine Leerzeile) – für Notizen und „Sonst noch etwas?“
+export const cleanText = s => s.split("\n").map(clean).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 export const names = list => list.map(([n]) => n);
 // Kurzbeschreibung eines Teils: „Bluse, braun / terrakotta“
 export const beschreibung = t => `${t.art}${t.farben?.length ? ", " + t.farben.join(" / ").toLowerCase() : ""}`;
@@ -39,35 +44,60 @@ export const beschreibung = t => `${t.art}${t.farben?.length ? ", " + t.farben.j
    in allen offenen Karten und beim nächsten Mal wieder. Löschen entfernt nur den Knopf; Teile, die den Wert
    schon haben, behalten ihn. Bei eigenen Arten wird gefragt, wozu sie gehören (für spätere Outfit-Regeln). */
 let custom = {};
-export const customReady = getCustom().then(c => { custom = c; }).catch(e => console.error(e));
+// Seit 0.6.3 teilen sich „Mein Stil“ und die Teil-Merkmale diese Listen (gleiche Wörter) → alte eigene Einträge umziehen
+const LISTEN_UMZUG = { "Stil: Welcher Stil passt zu dir?": "Stil", "Stil: Oberteile": "Weite", "Stil: Bund": "Bund",
+  "Stil: Rock- und Kleidlänge": "Länge Rock/Kleid", "Stil: Muster": "Muster" };
+async function ladeEigene() {
+  const c = await getCustom(); custom = c;
+  const alt = Object.keys(LISTEN_UMZUG).filter(k => c[k]);
+  if (!alt.length) return;
+  const next = { ...c };
+  for (const k of alt) {
+    const ziel = LISTEN_UMZUG[k], da = new Set((next[ziel] || []).map(x => x.wert.toLowerCase()));
+    next[ziel] = [...(next[ziel] || []), ...next[k].filter(x => !da.has(x.wert.toLowerCase()))];
+    delete next[k];
+  }
+  custom = next; await setCustom(next);
+}
+export const customReady = ladeEigene().catch(e => console.error(e));
 const customValues = f => (custom[f] || []).map(c => c.wert);
 export const groupOf = a => GROUP_OF.get(a) ?? (custom.Art || []).find(c => c.wert === a)?.gruppe ?? null;
 const widgets = new Set(); // offene Auswahl-Felder mit eigenen Einträgen
-async function addCustom(f, wert, gruppe) {
-  const next = { ...custom, [f]: [...(custom[f] || []), gruppe ? { wert, gruppe } : { wert }] };
-  await setCustom(next); custom = next;
+// Änderungen nacheinander ausführen, damit sich zwei Karten nicht gegenseitig überschreiben
+let kette = Promise.resolve();
+const nacheinander = fn => (kette = kette.then(fn, fn));
+const addCustom = (f, wert, gruppe) => nacheinander(async () => {
+  if (!customValues(f).some(v => v.toLowerCase() === wert.toLowerCase())) {
+    const next = { ...custom, [f]: [...(custom[f] || []), gruppe ? { wert, gruppe } : { wert }] };
+    await setCustom(next); custom = next;
+  }
   for (const w of widgets) if (w.field === f) w.addOption(wert);
-}
-async function removeCustom(f, wert) {
+});
+const removeCustom = (f, wert) => nacheinander(async () => {
   const next = { ...custom, [f]: (custom[f] || []).filter(c => c.wert !== wert) };
   await setCustom(next); custom = next;
   for (const w of widgets) if (w.field === f) w.removeOption(wert);
-}
+});
 const EXAMPLE = { Art: "z. B. Kimono", Farbe: "z. B. Petrol", Muster: "z. B. Paisley", Material: "z. B. Viskose",
-  Weite: "z. B. tailliert", "Länge oben": "z. B. hüftlang", "Länge Rock/Kleid": "z. B. bodenlang", Bund: "z. B. mit Gummizug", Stil: "z. B. romantisch" };
+  Weite: "z. B. tailliert", "Länge oben": "z. B. hüftlang", "Länge Rock/Kleid": "z. B. bodenlang", Bund: "z. B. mit Gummizug", Stil: "z. B. Y2K" };
 
 /* ---------- Auswahl-Knöpfe ----------
    options: sichtbare Knöpfe (in dieser Reihenfolge), more: weitere Werte im Auswahlfeld „Andere …“ ([Gruppe, [Werte]] oder [Werte]),
    selected: vorgewählte Werte, max: wie viele gleichzeitig (1 = nur einer, 0 = beliebig viele), onChange: wird nach jeder Änderung gerufen,
-   field: Name des Merkmals, wenn man eigene Einträge eintippen darf, groupDefault: Vorschlag „Gehört zu“ bei eigener Art */
-export function choice({ field = null, options, more = [], selected = [], max = 1, withSwatch = false, onChange = () => {}, groupDefault = null }) {
+   field: Name des Merkmals, wenn man eigene Einträge eintippen darf, groupDefault: Vorschlag „Gehört zu“ bei eigener Art,
+   beispiel: Platzhalter beim Eintippen, allein: Werte, die nur allein gewählt sein können (z. B. „ganzjährig“) */
+export function choice({ field = null, options, more = [], selected = [], max = 1, withSwatch = false, onChange = () => {}, groupDefault = null, beispiel = null, allein = [] }) {
   const sel = new Set(selected), wrap = el("div", { class: "chips" }), buttons = new Map();
   const editor = el("div", { class: "eigen-edit" }); editor.hidden = true;
   let picker = null; // Auswahlfeld „Andere …“
   const render = () => { for (const [v, b] of buttons) b.setAttribute("aria-pressed", sel.has(v)); };
   function toggle(value) {
     if (sel.has(value)) sel.delete(value);
-    else { if (max === 1) sel.clear(); else if (max && sel.size >= max) sel.delete([...sel][0]); sel.add(value); }
+    else {
+      if (max === 1 || allein.includes(value)) sel.clear();
+      else { allein.forEach(a => sel.delete(a)); if (max && sel.size >= max) sel.delete([...sel][0]); }
+      sel.add(value);
+    }
     render(); onChange([...sel]);
   }
   function addButton(value, eigen = false) {
@@ -79,7 +109,7 @@ export function choice({ field = null, options, more = [], selected = [], max = 
   const close = () => { editor.hidden = true; editor.replaceChildren(); };
   const known = () => [...buttons.keys(), ...more.flatMap(m => Array.isArray(m) ? m[1] : [m])];
   function openNew() {
-    const input = el("input", { type: "text", maxLength: 30, placeholder: EXAMPLE[field] || "", "aria-label": "Eigener Eintrag", autocomplete: "off" });
+    const input = el("input", { type: "text", maxLength: 30, placeholder: beispiel || EXAMPLE[field] || "", "aria-label": "Eigener Eintrag", autocomplete: "off" });
     const grp = field === "Art" ? el("select", { "aria-label": "Gehört zu" }, ...GROUPS.map(([g]) => el("option", { value: g }, g))) : null;
     if (grp) grp.value = groupDefault?.() || GROUPS[0][0];
     const msg = el("div", { class: "note" });
@@ -158,17 +188,28 @@ export const field = (label, note, body) => el("div", { class: "field" }, el("di
    opt: { art, farbe, muster, material: { options, selected, note? }, aermel, schnitt, weite, laenge, bund, stil, saison: { selected },
           notiz, nichtAnziehen, saisonAuto (Saison folgt Art/Material, bis man sie selbst antippt), mehrOffen } */
 const ALL_ARTS = GROUPS.map(([g, arts]) => [g, arts.map(([n]) => n)]);
+// Gleiche Wörter wie in „Mein Stil“ (stil.js), damit die Vorschläge später Vorlieben und Teile direkt vergleichen können
+export const STILRICHTUNGEN = ["lässig", "schick-lässig", "sportlich", "klassisch", "elegant", "Business", "minimalistisch", "romantisch", "Boho", "Streetwear", "Vintage", "rockig", "Preppy"];
+// „mit Bündchen“ (z. B. Jogger) kennt die KI nicht, sie wählt es nie vor
+export const HOSENSCHNITTE = [...names(LEGS), "mit Bündchen"];
 // Weitere Merkmale (Etappe 1c). Die KI wählt hier nichts vor: Weite und Länge waren in der Messung unzuverlässig,
 // Stil ist Geschmack. Gezeigt wird jedes Merkmal nur, wo es passt.
 // feld = Name der Liste für selbst eingetippte Einträge (null = nicht erlaubt)
 export const MERKMALE = {
-  weite: { label: "Weite", feld: "Weite", werte: ["eng", "normal", "locker", "oversize"], passt: (a, g) => ["Oberteile", "Jacken & Mäntel", "Kleider & Einteiler"].includes(g) },
+  weite: { label: "Weite", feld: "Weite", werte: ["figurnah", "normal", "locker", "oversize"], passt: (a, g) => ["Oberteile", "Jacken & Mäntel", "Kleider & Einteiler"].includes(g) },
   laengeOben: { label: "Länge", feld: "Länge oben", werte: ["bauchfrei", "kurz", "normal", "lang"], passt: (a, g) => ["Oberteile", "Jacken & Mäntel"].includes(g) },
   laengeUnten: { label: "Länge", feld: "Länge Rock/Kleid", werte: ["mini", "knielang", "midi", "maxi", "knöchellang"], passt: (a, g) => a === "Rock" || g === "Kleider & Einteiler" },
-  bund: { label: "Bund", feld: "Bund", werte: ["hohe Taille", "normal", "tief"], passt: (a, g) => g === "Unterteile" },
-  stil: { label: "Stil", feld: "Stil", werte: ["lässig", "schick-lässig", "elegant", "sportlich"], passt: () => true, max: 2 },
-  saison: { label: "Saison", feld: null, werte: ["Sommer", "Übergang", "Winter", "ganzjährig"], passt: () => true, max: 0 }
+  bund: { label: "Bund", feld: "Bund", werte: ["hohe Taille", "normale Höhe", "tief sitzend"], passt: (a, g) => g === "Unterteile" },
+  stil: { label: "Stil", feld: "Stil", werte: STILRICHTUNGEN, passt: () => true, max: 2 },
+  saison: { label: "Saison", feld: null, werte: ["Sommer", "Übergang", "Winter", "ganzjährig"], passt: () => true, max: 0, allein: ["ganzjährig"] }
 };
+// Wörter von vor 0.6.3 auf die gemeinsamen umstellen (läuft beim Start über alle Teile, ändert nur, was nötig ist)
+const ALTE_WOERTER = { weite: { eng: "figurnah" }, bund: { normal: "normale Höhe", tief: "tief sitzend" } };
+export function teilAngleichen(t) {
+  let neu = null;
+  for (const [k, alt] of Object.entries(ALTE_WOERTER)) if (t[k] && alt[t[k]]) (neu ??= { ...t })[k] = alt[t[k]];
+  return neu;
+}
 // Saison-Vorschlag nach einfachen Regeln aus Art und Material (sie kann ihn jederzeit ändern)
 const WARM = ["Strick / Wolle", "Kunstfell / Teddy", "Tweed", "Samt", "Cord", "Wildleder"], LEICHT = ["Leinen", "Chiffon", "Seide / Satin", "Spitze"];
 export function saisonVorschlag(a, g, material) {
@@ -182,17 +223,17 @@ export function saisonVorschlag(a, g, material) {
 export const NICHT_ANZIEHEN = "🚫 Ziehe ich nicht an";
 export function angabenFelder(opt, onChange = () => {}) {
   const art = choice({ field: "Art", options: opt.art.options, more: ALL_ARTS, selected: opt.art.selected, onChange: () => update(), groupDefault: () => groupOf(art.get()[0]) });
-  const farbe = choice({ field: "Farbe", options: opt.farbe.options, more: names(COLORS), selected: opt.farbe.selected, max: 2, withSwatch: true, onChange: () => update() });
+  const farbe = choice({ field: "Farbe", options: opt.farbe.options, more: FARB_NAMEN, selected: opt.farbe.selected, max: 2, withSwatch: true, onChange: () => update() });
   const muster = choice({ field: "Muster", options: opt.muster.options, selected: opt.muster.selected });
   const material = choice({ field: "Material", options: opt.material.options, more: names(MATERIALS).filter(n => !opt.material.options.includes(n)), selected: opt.material.selected, onChange: () => update() });
   // Ärmel und Hosenschnitt: feste Reihenfolge, nur wo sie passen
   const aermel = choice({ options: names(SLEEVES), selected: opt.aermel.selected });
-  const schnitt = choice({ options: names(LEGS), selected: opt.schnitt.selected });
+  const schnitt = choice({ options: HOSENSCHNITTE, selected: opt.schnitt.selected });
   const fArmel = field("Ärmel", null, aermel.el), fSchnitt = field("Hosenschnitt", null, schnitt.el);
   // Weitere Merkmale: eigene Einträge erlaubt (außer Saison), eingeklappt unter „Mehr Angaben“
   let saisonAuto = !!opt.saisonAuto;
   const extra = Object.fromEntries(Object.entries(MERKMALE).map(([k, m]) => {
-    const w = choice({ field: m.feld, options: m.werte, selected: opt[k]?.selected || [], max: m.max ?? 1,
+    const w = choice({ field: m.feld, options: m.werte, selected: opt[k]?.selected || [], max: m.max ?? 1, allein: m.allein,
       onChange: k === "saison" ? () => { saisonAuto = false; } : () => {} });
     return [k, { w, f: field(m.label, k === "saison" ? "Vorschlag nach Art und Material – antippen zum Ändern" : null, w.el), m }];
   }));
@@ -218,7 +259,7 @@ export function angabenFelder(opt, onChange = () => {}) {
       return { art: a, gruppe: groupOf(a), farben: farbe.get(), muster: muster.get()[0] || null, material: material.get()[0] || null,
         aermel: fArmel.hidden ? null : aermel.get()[0] || null, schnitt: fSchnitt.hidden ? null : schnitt.get()[0] || null,
         weite: wert("weite"), laenge: wert("laengeOben") ?? wert("laengeUnten"), bund: wert("bund"),
-        stil: extra.stil.w.get(), saison: extra.saison.w.get(), notiz: clean(notiz.value) || null, nichtAnziehen: nicht.get().length > 0 };
+        stil: extra.stil.w.get(), saison: extra.saison.w.get(), notiz: cleanText(notiz.value) || null, nichtAnziehen: nicht.get().length > 0 };
     },
     dispose: () => [art, farbe, muster, material, ...Object.values(extra).map(x => x.w)].forEach(w => w.dispose())
   };

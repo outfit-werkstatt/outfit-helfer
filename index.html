@@ -15,14 +15,14 @@
 <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=8">
+<link rel="stylesheet" href="app.css?v=9">
 </head>
 <body>
 <main>
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
   <div id="ansichtStart">
   <h1>Outfit-Helfer</h1>
-  <div class="version">Version 0.6.2 (Etappe 1f) · 29.10.2026</div>
+  <div class="version">Version 0.6.3 (Durchsicht) · 29.10.2026</div>
 
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
@@ -64,6 +64,10 @@
   <div class="panel" id="fortschritt" hidden>
     <div class="status" id="fortschrittText"></div>
     <div class="bar"><div id="fortschrittBar"></div></div>
+    <div id="alleBox" hidden>
+      <div class="actions"><button type="button" class="btn primary" id="alleSpeichern">Alle speichern</button></div>
+      <div class="hint">Speichert jede Karte so, wie sie gerade angetippt ist. Ändern geht auch später noch.</div>
+    </div>
   </div>
 
   <section id="pruefen"></section>
@@ -78,6 +82,6 @@
   <section id="ansicht" hidden></section>
 </main>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=10"></script>
+<script type="module" src="app.js?v=11"></script>
 </body>
 </html>
