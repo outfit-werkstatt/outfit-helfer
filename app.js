@@ -5,8 +5,8 @@
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=3";
 import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=3";
-import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=2";
-import { refresh, initSchrank } from "./schrank.js?v=2";
+import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=3";
+import { refresh, initSchrank } from "./schrank.js?v=3";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -48,7 +48,9 @@ async function addPhoto(file, card) {
       // Material: KI wählt nichts vor (zu unsicher), wahrscheinlichste zuerst
       material: { options: top(r.material, 5), selected: [], note: "Bitte selbst antippen – die KI ist hier unsicher. Das Wahrscheinlichste steht vorn." },
       // Ärmel und Hosenschnitt: gemessen zuverlässig → vorwählen
-      aermel: { selected: [r.aermel[0].label] }, schnitt: { selected: [r.schnitt[0].label] }
+      aermel: { selected: [r.aermel[0].label] }, schnitt: { selected: [r.schnitt[0].label] },
+      // Weitere Merkmale ohne KI-Vorwahl; nur die Saison wird nach Art und Material vorgeschlagen
+      saisonAuto: true
     }, () => update());
     // Eigene Ordner gleich mit auswählen (freiwillig); in „Mein Kleiderschrank“ ist jedes Teil sowieso
     const folders = await getFolders();

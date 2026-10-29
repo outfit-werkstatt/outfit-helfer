@@ -2,7 +2,7 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross } from "./ui.js?v=2";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross } from "./ui.js?v=3";
 import { allItems, getItem, getPhoto, updateItem, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, nrText } from "./speicher.js?v=3";
 import { GROUPS } from "./ki.js?v=3";
 
@@ -99,7 +99,8 @@ let auswahl = null;        // „Teile auswählen“: Set der Nummern, die im Or
 function teilKachel(t, { markiert = null, onclick, extra = null }) {
   const b = el("button", { type: "button", class: "teil" + (markiert ? " markiert" : "") },
     el("span", { class: "bild" }, el("img", { src: url(t.vorschau), alt: beschreibung(t), loading: "lazy" }),
-      el("span", { class: "plakette" }, nrText(t.nr)), markiert !== null ? el("span", { class: "haken" }, markiert ? "✓" : "") : null),
+      el("span", { class: "plakette" }, nrText(t.nr)), markiert !== null ? el("span", { class: "haken" }, markiert ? "✓" : "") : null,
+      t.nichtAnziehen ? el("span", { class: "nicht", title: "Ziehe ich nicht an" }, "🚫") : null),
     el("span", { class: "text" }, `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), extra);
   b.onclick = onclick;
   if (markiert !== null) b.setAttribute("aria-pressed", markiert);
@@ -186,7 +187,10 @@ async function renderTeil(items, folders, nr) {
   const angaben = el("dl", { class: "angaben" },
     ...zeile("Art", t.gruppe ? `${t.gruppe} › ${t.art}` : t.art), ...zeile("Farbe", (t.farben || []).join(" / ")),
     ...zeile("Muster", t.muster), ...zeile("Material", t.material || "noch nicht gewählt"),
-    ...zeile("Ärmel", t.aermel), ...zeile("Hosenschnitt", t.schnitt), ...zeile("Hinzugefügt", datum(t.erstellt)));
+    ...zeile("Ärmel", t.aermel), ...zeile("Hosenschnitt", t.schnitt),
+    ...zeile("Weite", t.weite), ...zeile("Länge", t.laenge), ...zeile("Bund", t.bund),
+    ...zeile("Stil", t.stil?.join(", ")), ...zeile("Saison", t.saison?.join(", ")), ...zeile("Notiz", t.notiz),
+    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null), ...zeile("Hinzugefügt", datum(t.erstellt)));
   const inhalt = el("div", { class: "panel" }, angaben);
 
   // Ordner: Änderungen werden sofort gespeichert

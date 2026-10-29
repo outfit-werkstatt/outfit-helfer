@@ -53,7 +53,8 @@ async function removeCustom(f, wert) {
   await setCustom(next); custom = next;
   for (const w of widgets) if (w.field === f) w.removeOption(wert);
 }
-const EXAMPLE = { Art: "z. B. Kimono", Farbe: "z. B. Petrol", Muster: "z. B. Paisley", Material: "z. B. Viskose" };
+const EXAMPLE = { Art: "z. B. Kimono", Farbe: "z. B. Petrol", Muster: "z. B. Paisley", Material: "z. B. Viskose",
+  Weite: "z. B. tailliert", "Länge oben": "z. B. hüftlang", "Länge Rock/Kleid": "z. B. bodenlang", Bund: "z. B. mit Gummizug", Stil: "z. B. romantisch" };
 
 /* ---------- Auswahl-Knöpfe ----------
    options: sichtbare Knöpfe (in dieser Reihenfolge), more: weitere Werte im Auswahlfeld „Andere …“ ([Gruppe, [Werte]] oder [Werte]),
@@ -140,6 +141,8 @@ export function choice({ field = null, options, more = [], selected = [], max = 
   render();
   const w = {
     field, el: el("div", {}, wrap, editor), get: () => [...sel],
+    set: values => { sel.clear(); values.forEach(v => { addButton(v); sel.add(v); }); render(); }, // ohne onChange
+
     addOption: v => addButton(v, true),
     // Knopf nur entfernen, wenn er hier gerade nicht ausgewählt ist
     removeOption: v => { const b = buttons.get(v); if (b?.classList.contains("eigen") && !sel.has(v)) { b.remove(); buttons.delete(v); } },
@@ -152,29 +155,72 @@ export const field = (label, note, body) => el("div", { class: "field" }, el("di
 
 /* ---------- Angaben eines Teils als Auswahl-Felder ----------
    Beim Hinzufügen mit den Vorschlägen der KI, beim Ändern mit den gespeicherten Werten.
-   opt: { art, farbe, muster, material: { options, selected, note? }, aermel, schnitt: { selected } } */
+   opt: { art, farbe, muster, material: { options, selected, note? }, aermel, schnitt, weite, laenge, bund, stil, saison: { selected },
+          notiz, nichtAnziehen, saisonAuto (Saison folgt Art/Material, bis man sie selbst antippt), mehrOffen } */
 const ALL_ARTS = GROUPS.map(([g, arts]) => [g, arts.map(([n]) => n)]);
+// Weitere Merkmale (Etappe 1c). Die KI wählt hier nichts vor: Weite und Länge waren in der Messung unzuverlässig,
+// Stil ist Geschmack. Gezeigt wird jedes Merkmal nur, wo es passt.
+// feld = Name der Liste für selbst eingetippte Einträge (null = nicht erlaubt)
+export const MERKMALE = {
+  weite: { label: "Weite", feld: "Weite", werte: ["eng", "normal", "locker", "oversize"], passt: (a, g) => ["Oberteile", "Jacken & Mäntel", "Kleider & Einteiler"].includes(g) },
+  laengeOben: { label: "Länge", feld: "Länge oben", werte: ["bauchfrei", "kurz", "normal", "lang"], passt: (a, g) => ["Oberteile", "Jacken & Mäntel"].includes(g) },
+  laengeUnten: { label: "Länge", feld: "Länge Rock/Kleid", werte: ["mini", "knielang", "midi", "maxi", "knöchellang"], passt: (a, g) => a === "Rock" || g === "Kleider & Einteiler" },
+  bund: { label: "Bund", feld: "Bund", werte: ["hohe Taille", "normal", "tief"], passt: (a, g) => g === "Unterteile" },
+  stil: { label: "Stil", feld: "Stil", werte: ["lässig", "schick-lässig", "elegant", "sportlich"], passt: () => true, max: 2 },
+  saison: { label: "Saison", feld: null, werte: ["Sommer", "Übergang", "Winter", "ganzjährig"], passt: () => true, max: 0 }
+};
+// Saison-Vorschlag nach einfachen Regeln aus Art und Material (sie kann ihn jederzeit ändern)
+const WARM = ["Strick / Wolle", "Kunstfell / Teddy", "Tweed", "Samt", "Cord", "Wildleder"], LEICHT = ["Leinen", "Chiffon", "Seide / Satin", "Spitze"];
+export function saisonVorschlag(a, g, material) {
+  if (["Shorts", "Top", "Sandalen"].includes(a) || g === "Bademode") return ["Sommer"];
+  if (["Mantel", "Stiefel", "Handschuhe"].includes(a)) return ["Übergang", "Winter"];
+  if (WARM.includes(material) || ["Pullover", "Strickjacke"].includes(a)) return ["Übergang", "Winter"];
+  if (LEICHT.includes(material)) return ["Sommer"];
+  if (a === "Jacke") return ["Übergang"];
+  return ["ganzjährig"];
+}
+export const NICHT_ANZIEHEN = "🚫 Ziehe ich nicht an";
 export function angabenFelder(opt, onChange = () => {}) {
   const art = choice({ field: "Art", options: opt.art.options, more: ALL_ARTS, selected: opt.art.selected, onChange: () => update(), groupDefault: () => groupOf(art.get()[0]) });
   const farbe = choice({ field: "Farbe", options: opt.farbe.options, more: names(COLORS), selected: opt.farbe.selected, max: 2, withSwatch: true, onChange: () => update() });
   const muster = choice({ field: "Muster", options: opt.muster.options, selected: opt.muster.selected });
-  const material = choice({ field: "Material", options: opt.material.options, more: names(MATERIALS).filter(n => !opt.material.options.includes(n)), selected: opt.material.selected });
+  const material = choice({ field: "Material", options: opt.material.options, more: names(MATERIALS).filter(n => !opt.material.options.includes(n)), selected: opt.material.selected, onChange: () => update() });
   // Ärmel und Hosenschnitt: feste Reihenfolge, nur wo sie passen
   const aermel = choice({ options: names(SLEEVES), selected: opt.aermel.selected });
   const schnitt = choice({ options: names(LEGS), selected: opt.schnitt.selected });
   const fArmel = field("Ärmel", null, aermel.el), fSchnitt = field("Hosenschnitt", null, schnitt.el);
-  const visible = () => { const a = art.get()[0]; fArmel.hidden = !HAS_SLEEVES.has(groupOf(a)); fSchnitt.hidden = !HAS_LEGS.has(a); };
+  // Weitere Merkmale: eigene Einträge erlaubt (außer Saison), eingeklappt unter „Mehr Angaben“
+  let saisonAuto = !!opt.saisonAuto;
+  const extra = Object.fromEntries(Object.entries(MERKMALE).map(([k, m]) => {
+    const w = choice({ field: m.feld, options: m.werte, selected: opt[k]?.selected || [], max: m.max ?? 1,
+      onChange: k === "saison" ? () => { saisonAuto = false; } : () => {} });
+    return [k, { w, f: field(m.label, k === "saison" ? "Vorschlag nach Art und Material – antippen zum Ändern" : null, w.el), m }];
+  }));
+  const notiz = el("textarea", { class: "notiz", maxLength: 200, rows: 2, placeholder: "z. B. sitzt eng, nur mit Gürtel, fällt klein aus", value: opt.notiz || "", "aria-label": "Notiz" });
+  const nicht = choice({ options: [NICHT_ANZIEHEN], selected: opt.nichtAnziehen ? [NICHT_ANZIEHEN] : [] });
+  const mehr = el("details", { class: "mehr", open: !!opt.mehrOffen }, el("summary", {}, "Mehr Angaben (freiwillig): Passform, Länge, Stil, Saison, Notiz"),
+    ...Object.values(extra).map(x => x.f), field("Notiz", null, notiz),
+    field("Vorschläge", "Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.", nicht.el));
+  const visible = () => {
+    const a = art.get()[0], g = groupOf(a);
+    fArmel.hidden = !HAS_SLEEVES.has(g); fSchnitt.hidden = !HAS_LEGS.has(a);
+    for (const x of Object.values(extra)) x.f.hidden = !a || !x.m.passt(a, g);
+    if (saisonAuto && a) extra.saison.w.set(saisonVorschlag(a, g, material.get()[0]));
+  };
   const update = () => { visible(); onChange(); };
   visible();
+  const wert = k => extra[k].f.hidden ? null : extra[k].w.get()[0] || null;
   return {
     elements: [field("Art", null, art.el), field("Farbe", "bis zu 2", farbe.el), field("Muster", null, muster.el),
-      field("Material", opt.material.note || null, material.el), fArmel, fSchnitt],
+      field("Material", opt.material.note || null, material.el), fArmel, fSchnitt, mehr],
     get: () => {
       const a = art.get()[0];
       return { art: a, gruppe: groupOf(a), farben: farbe.get(), muster: muster.get()[0] || null, material: material.get()[0] || null,
-        aermel: fArmel.hidden ? null : aermel.get()[0] || null, schnitt: fSchnitt.hidden ? null : schnitt.get()[0] || null };
+        aermel: fArmel.hidden ? null : aermel.get()[0] || null, schnitt: fSchnitt.hidden ? null : schnitt.get()[0] || null,
+        weite: wert("weite"), laenge: wert("laengeOben") ?? wert("laengeUnten"), bund: wert("bund"),
+        stil: extra.stil.w.get(), saison: extra.saison.w.get(), notiz: clean(notiz.value) || null, nichtAnziehen: nicht.get().length > 0 };
     },
-    dispose: () => [art, farbe, muster, material].forEach(w => w.dispose())
+    dispose: () => [art, farbe, muster, material, ...Object.values(extra).map(x => x.w)].forEach(w => w.dispose())
   };
 }
 // Für „Angaben ändern“: die gespeicherten Werte vorwählen, ähnliche Arten derselben Gruppe als Knöpfe anbieten
@@ -186,6 +232,14 @@ export function angabenVon(t) {
     muster: { options: names(PATTERNS), selected: t.muster ? [t.muster] : [] },
     material: { options: t.material ? [t.material] : [], selected: t.material ? [t.material] : [] },
     aermel: { selected: t.aermel ? [t.aermel] : [] },
-    schnitt: { selected: t.schnitt ? [t.schnitt] : [] }
+    schnitt: { selected: t.schnitt ? [t.schnitt] : [] },
+    weite: { selected: t.weite ? [t.weite] : [] }, bund: { selected: t.bund ? [t.bund] : [] },
+    // Länge steht in einem Feld; sie gehört zu Oberteil- oder Rock/Kleid-Länge, je nach Art
+    laengeOben: { selected: t.laenge && MERKMALE.laengeOben.passt(t.art, t.gruppe) ? [t.laenge] : [] },
+    laengeUnten: { selected: t.laenge && !MERKMALE.laengeOben.passt(t.art, t.gruppe) ? [t.laenge] : [] },
+    stil: { selected: t.stil || [] },
+    // Teile von vor Version 0.5 haben noch keine Saison → Vorschlag nach Regel
+    saison: { selected: t.saison || [] }, saisonAuto: !t.saison?.length,
+    notiz: t.notiz || "", nichtAnziehen: !!t.nichtAnziehen, mehrOffen: true
   };
 }
