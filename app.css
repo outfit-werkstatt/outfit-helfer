@@ -61,9 +61,48 @@ label.upload input{display:none}
 
 /* Kleiderschrank */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--gap)}
-.teil{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-.teil .bild{position:relative;aspect-ratio:1;background:var(--chip)}
+button.teil,button.kachel{font:inherit;color:inherit;text-align:left;padding:0;cursor:pointer;width:100%}
+.teil{display:block;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.teil .bild{display:block;position:relative;aspect-ratio:1;background:var(--chip)}
 .teil img{width:100%;height:100%;object-fit:cover;display:block}
 .plakette{position:absolute;left:8px;top:8px;background:#22201c;color:#fff;font-weight:700;font-size:.9rem;border-radius:8px;padding:2px 8px;letter-spacing:.03em}
-.teil .text{padding:8px 10px;font-size:.88rem}
+.teil .text{display:block;padding:8px 10px;font-size:.88rem}
+.teil .rest{display:block;padding:0 10px 8px;font-size:.8rem;color:var(--muted)}
+/* „Teile auswählen“: angetippte Teile mit Haken */
+.teil .haken{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.25);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+.teil.markiert{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.teil.markiert .haken{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+/* Startseite: Ordner-Kacheln */
+.kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--gap)}
+.kachel{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.kachel .mosaik{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;aspect-ratio:1;background:var(--chip);gap:2px;overflow:hidden}
+.kachel .mosaik.eins{grid-template-columns:1fr;grid-template-rows:1fr}
+.kachel .mosaik img{width:100%;height:100%;min-height:0;object-fit:cover;display:block}
+.kachel .name{padding:8px 10px 0;font-weight:600;overflow-wrap:anywhere}
+.kachel .anzahl{padding:0 10px 8px;font-size:.85rem;color:var(--muted)}
+.kachel.neu{border-style:dashed;background:transparent;justify-content:center;align-items:center;min-height:150px}
+.kachel.neu .plus{font-size:2rem;line-height:1;color:var(--muted)}
+.kachel.neu .name{padding:4px 10px 0}
+#ordnerEditor{margin-top:var(--gap)}
+.link.korb{display:block;margin:18px 0 0}
+
+/* Ordner, Teil, Papierkorb */
+.kopf{margin-bottom:12px}
+.kopf h2{margin:8px 0 2px;overflow-wrap:anywhere}
+.zurueck{background:none;border:0;padding:8px 0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.actions.wrap{flex-wrap:wrap}
+.actions.wrap .btn{flex:1 1 auto}
+.filter{margin:8px 0 12px}
+/* Filter in EINER Zeile zum Wischen, damit sie bei vielen Farben nicht die halbe Seite füllen */
+.filter .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px 2px}
+.filter .chips::-webkit-scrollbar{display:none}
+.filter .chip{flex-shrink:0;white-space:nowrap}
+.filter .field:first-child{border-top:0}
+.gross{display:block;width:100%;max-height:60vh;object-fit:contain;background:var(--chip);border-radius:var(--radius);margin-bottom:var(--gap)}
+.angaben{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
+.angaben dt{color:var(--muted);font-size:.85rem;padding-top:2px}
+.angaben dd{margin:0;overflow-wrap:anywhere}
+.korb-teil{display:flex;flex-direction:column;gap:6px}
+.btn.klein{min-height:40px;padding:8px 10px;font-size:.9rem}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#22201c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}
