@@ -2,7 +2,7 @@
 // teile: Angaben + kleine Vorschau, Schlüssel = feste Nummer (1, 2, 3 …). Bleibt klein, damit die Übersicht schnell lädt.
 // fotos: das große Foto (ca. 1200 px) getrennt davon, wird nur bei Bedarf geladen (Bild-Paket, Sicherung).
 // meta:  "naechsteNr" = nächste freie Nummer. Wird nie zurückgezählt, auch nicht nach dem Löschen.
-//        "eigeneWerte" = selbst eingetippte Einträge, "ordner" = eigene Ordner [{ id, name }].
+//        "eigeneWerte" = selbst eingetippte Einträge, "ordner" = eigene Ordner [{ id, name }], "meinStil" = Vorlieben.
 // Am Teil: ordner = [ids] (ein Teil kann in mehreren Ordnern sein, „Mein Kleiderschrank“ = alle Teile, kein Eintrag),
 //          geloescht = Zeitpunkt, wenn es im Papierkorb liegt (sonst fehlt das Feld oder ist null).
 // Bilder liegen als ArrayBuffer statt als Blob: ältere Safari-Versionen hatten Fehler mit Blobs in IndexedDB.
@@ -74,6 +74,15 @@ export async function purgeItems(nrs) {
   if (!nrs.length) return;
   const tx = (await db()).transaction(["teile", "fotos"], "readwrite");
   for (const nr of nrs) { tx.objectStore("teile").delete(nr); tx.objectStore("fotos").delete(nr); }
+  await done(tx);
+}
+// „Mein Stil“: was sie gern trägt (sehr persönlich, bleibt nur auf dem Gerät und in ihrer eigenen Sicherung)
+export async function getStil() {
+  return (await request((await db()).transaction("meta").objectStore("meta").get("meinStil"))) || {};
+}
+export async function setStil(stil) {
+  const tx = (await db()).transaction("meta", "readwrite");
+  tx.objectStore("meta").put(stil, "meinStil");
   await done(tx);
 }
 // Eigene Ordner [{ id, name }]

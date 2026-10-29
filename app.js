@@ -4,9 +4,9 @@
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=3";
-import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=3";
-import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=3";
-import { refresh, initSchrank } from "./schrank.js?v=4";
+import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=4";
+import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=4";
+import { refresh, initSchrank } from "./schrank.js?v=5";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }

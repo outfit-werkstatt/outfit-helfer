@@ -99,6 +99,9 @@ button.teil,button.kachel{font:inherit;color:inherit;text-align:left;padding:0;c
 .kachel.neu .plus{font-size:2rem;line-height:1;color:var(--muted)}
 .kachel.neu .name{padding:4px 10px 0}
 #ordnerEditor{margin-top:var(--gap)}
+.stil-karte .titel{font-weight:600}
+.stil-karte .hint{overflow-wrap:anywhere}
+details.panel.mehr{padding-top:12px}
 /* Papierkorb: Unterstrich nur unter dem Text, nicht unter dem Symbol und dem Abstand */
 .link.korb{display:inline-flex;align-items:center;gap:8px;margin:18px 0 0;min-height:44px;text-decoration:none}
 .link.korb .u{text-decoration:underline;text-underline-offset:3px}

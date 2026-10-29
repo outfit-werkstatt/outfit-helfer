@@ -2,8 +2,9 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross } from "./ui.js?v=3";
-import { allItems, getItem, getPhoto, updateItem, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, nrText } from "./speicher.js?v=3";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross } from "./ui.js?v=4";
+import { allItems, getItem, getPhoto, updateItem, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, nrText } from "./speicher.js?v=4";
+import { renderStil, stilKurz } from "./stil.js?v=1";
 import { GROUPS } from "./ki.js?v=3";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -43,7 +44,8 @@ async function render() {
   if (s.v === "liste") return renderListe(items, folders, s.id);
   if (s.v === "teil") return renderTeil(items, folders, s.nr);
   if (s.v === "korb") return renderKorb(items);
-  renderStart(items, folders);
+  if (s.v === "stil") return renderStil($("ansicht"), kopf("Mein Stil"));
+  renderStart(items, folders, await getStil());
 }
 const kopf = (titel, unter) => el("div", { class: "kopf" },
   el("button", { type: "button", class: "zurueck", onclick: back }, "‹ Zurück"),
@@ -57,8 +59,16 @@ function kachel(name, list, onclick) {
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
     el("span", { class: "name" }, name), el("span", { class: "anzahl" }, anzahl(list.length)));
 }
-function renderStart(items, folders) {
+function renderStart(items, folders, stil) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
+  // „Mein Stil“: Kurzfassung oder Bitte, es einmal einzustellen
+  const kurz = stilKurz(stil);
+  const stilKnopf = el("button", { type: "button", class: "btn" }, kurz.length ? "Ändern" : "Jetzt einstellen");
+  stilKnopf.onclick = () => go({ v: "stil" });
+  fill($("stilKarte"), el("div", { class: "panel stil-karte" },
+    el("div", { class: "titel" }, "✨ Mein Stil"),
+    el("div", { class: "hint" }, kurz.length ? kurz.join(" · ") : "Noch nicht eingestellt. Sag einmal, was du gern trägst und was lieber nicht – die Vorschläge halten sich daran."),
+    el("div", { class: "actions" }, stilKnopf)));
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };

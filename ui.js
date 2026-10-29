@@ -2,7 +2,7 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
 import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=3";
-import { getCustom, setCustom } from "./speicher.js?v=3";
+import { getCustom, setCustom } from "./speicher.js?v=4";
 
 export const $ = id => document.getElementById(id);
 const COLOR_RGB = new Map(COLORS.map(([n, , rgb]) => [n, rgb]));
