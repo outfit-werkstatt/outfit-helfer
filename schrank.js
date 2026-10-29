@@ -2,7 +2,7 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady } from "./ui.js?v=1";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross } from "./ui.js?v=2";
 import { allItems, getItem, getPhoto, updateItem, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, nrText } from "./speicher.js?v=3";
 import { GROUPS } from "./ki.js?v=3";
 
@@ -181,6 +181,7 @@ async function renderTeil(items, folders, nr) {
   if (!t) return back();
   const foto = await getPhoto(nr);
   const bild = el("img", { class: "gross", src: url(foto || t.vorschau), alt: beschreibung(t) });
+  bild.onclick = () => zeigeGross(bild.src, beschreibung(t));
   const zeile = (k, v) => v ? [el("dt", {}, k), el("dd", {}, v)] : [];
   const angaben = el("dl", { class: "angaben" },
     ...zeile("Art", t.gruppe ? `${t.gruppe} › ${t.art}` : t.art), ...zeile("Farbe", (t.farben || []).join(" / ")),

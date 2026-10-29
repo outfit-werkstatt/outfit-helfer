@@ -5,8 +5,8 @@
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=3";
 import { addItem, askPersist, nrText, getFolders } from "./speicher.js?v=3";
-import { $, el, fill, toast, choice, field, angabenFelder, customReady } from "./ui.js?v=1";
-import { refresh, initSchrank } from "./schrank.js?v=1";
+import { $, el, fill, toast, choice, field, angabenFelder, customReady, zeigeGross } from "./ui.js?v=2";
+import { refresh, initSchrank } from "./schrank.js?v=2";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -80,8 +80,11 @@ async function addPhoto(file, card) {
     };
     drop.onclick = removeCard;
 
+    // Vorschau antippen → ganzes Foto groß (nicht das ausgeschnittene, damit man Details sieht)
+    const lupe = el("button", { type: "button", class: "lupe", "aria-label": "Foto groß anzeigen" }, el("img", { src: vorschauUrl, alt: "" }), el("span", {}, "🔍"));
+    lupe.onclick = () => { const u = URL.createObjectURL(foto); zeigeGross(u, "", () => URL.revokeObjectURL(u)); };
     fill(card,
-      el("div", { class: "top" }, el("img", { src: vorschauUrl, alt: "" }), titel),
+      el("div", { class: "top" }, lupe, titel),
       ...form.elements,
       ordner ? field("Ordner", "freiwillig – in „Mein Kleiderschrank“ ist es sowieso", ordner.el) : null,
       el("div", { class: "actions" }, drop, save)

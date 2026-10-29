@@ -17,6 +17,17 @@ export function toast(text) {
   const t = $("toast"); t.textContent = text; t.hidden = false;
   clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 2500);
 }
+// Foto bildschirmfüllend zeigen; Tippen irgendwo oder Esc schließt. onClose z. B. zum Freigeben der Bild-Adresse.
+export function zeigeGross(url, alt = "", onClose = () => {}) {
+  const box = el("div", { class: "gross-ansicht", role: "dialog", "aria-label": "Foto groß" },
+    el("img", { src: url, alt }), el("button", { type: "button", class: "btn" }, "✕ Schließen"));
+  const onKey = e => { if (e.key === "Escape") close(); };
+  function close() { box.remove(); document.body.classList.remove("ohne-scroll"); document.removeEventListener("keydown", onKey); onClose(); }
+  box.onclick = close;
+  document.addEventListener("keydown", onKey);
+  document.body.classList.add("ohne-scroll");
+  document.body.append(box);
+}
 export const swatch = name => COLOR_RGB.has(name) ? el("span", { class: "sw", style: `background:rgb(${COLOR_RGB.get(name).join(",")})` }) : null;
 export const clean = s => s.replace(/\s+/g, " ").trim();
 export const names = list => list.map(([n]) => n);

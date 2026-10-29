@@ -36,7 +36,15 @@ label.upload input{display:none}
 /* Prüfen-Karte */
 .check{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:var(--gap)}
 .check .top{display:flex;gap:12px;align-items:center;margin-bottom:6px}
-.check .top img{width:96px;height:96px;object-fit:cover;border-radius:10px;background:var(--chip);flex-shrink:0}
+.check .top img{width:96px;height:96px;object-fit:cover;border-radius:10px;background:var(--chip);flex-shrink:0;display:block}
+.lupe{position:relative;padding:0;border:0;background:none;cursor:zoom-in;flex-shrink:0;border-radius:10px}
+.lupe span{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.55);border-radius:6px;padding:0 4px;font-size:.85rem}
+/* Foto groß: über allem, Tippen schließt */
+.gross-ansicht{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
+.gross-ansicht img{max-width:100%;max-height:calc(100% - 70px);object-fit:contain;border-radius:8px}
+body.ohne-scroll{overflow:hidden}
+.gross{cursor:zoom-in}
 .check .titel{font-weight:600}
 .field{padding:10px 0;border-top:1px solid var(--line)}
 .field .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px}
