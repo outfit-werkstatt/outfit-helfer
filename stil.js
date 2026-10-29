@@ -88,6 +88,14 @@ export async function renderStil(box, kopf) {
   text.oninput = () => { clearTimeout(timer); timer = setTimeout(() => speichern({ text: clean(text.value) || null }, false), 600); };
   text.onblur = () => { clearTimeout(timer); speichern({ text: clean(text.value) || null }, false); };
   sichtbar();
+  // Alles auf „egal“ zurück (nach Rückfrage). Selbst eingetippte Knöpfe bleiben, sie lassen sich über „Andere …“ löschen.
+  const zuruecksetzen = el("button", { type: "button", class: "btn" }, "Alles zurücksetzen");
+  zuruecksetzen.onclick = async () => {
+    if (!confirm("Alle Angaben in „Mein Stil“ zurücksetzen?\n\nDanach ist nichts mehr angetippt und das Textfeld leer. Deine Kleidung bleibt, wie sie ist.")) return;
+    clearTimeout(timer);
+    try { await setStil({ geaendert: new Date().toISOString() }); toast("Mein Stil ist zurückgesetzt"); renderStil(box, kopf); }
+    catch (e) { toast("Zurücksetzen hat nicht geklappt: " + (e?.message || e)); }
+  };
   // Beim Verlassen der Ansicht die Auswahl-Felder abmelden (sie hören sonst auf neue eigene Einträge)
   box.dispose?.(); box.dispose = () => widgets.forEach(w => w.dispose());
   fill(box, kopf,
@@ -99,5 +107,6 @@ export async function renderStil(box, kopf) {
     el("details", { class: "panel mehr" }, el("summary", {}, "Lieblingsfarben"),
       farbe("lieblingsfarben", "Farben, die ich gern trage"), farbe("nichtFarben", "Farben, die ich lieber nicht trage")),
     el("div", { class: "panel" }, field("Sonst noch etwas?", null, text)),
-    el("p", { class: "hint" }, "Wird sofort gespeichert und bleibt nur auf diesem Handy. Später kommt es mit in deine Sicherung. An ChatGPT geht es nur, wenn du die Anweisung selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."));
+    el("p", { class: "hint" }, "Wird sofort gespeichert und bleibt nur auf diesem Handy. Später kommt es mit in deine Sicherung. An ChatGPT geht es nur, wenn du die Anweisung selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."),
+    el("div", { class: "actions" }, zuruecksetzen));
 }

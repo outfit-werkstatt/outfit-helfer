@@ -4,7 +4,7 @@
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
 import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross } from "./ui.js?v=4";
 import { allItems, getItem, getPhoto, updateItem, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, nrText } from "./speicher.js?v=4";
-import { renderStil, stilKurz } from "./stil.js?v=2";
+import { renderStil, stilKurz } from "./stil.js?v=3";
 import { GROUPS } from "./ki.js?v=3";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
