@@ -1,4 +1,4 @@
-// Etappe 1e: Sicherung als ZIP-Datei speichern und laden („Sicherung vom TT.MM.JJJJ.zip“).
+// Etappe 1e: Sicherung als ZIP-Datei speichern und laden („Sicherung vom TT.MM.JJJJ Outfit Helfer.zip“).
 // Inhalt: Fotos als „012 - T-Shirt braun.jpg“, Vorschaubilder, angaben.json (Teile, Ordner, Mein Stil, eigene Knöpfe,
 // nächste Nummer) und „Lies mich.txt“. Teile im Papierkorb kommen nicht mit.
 // Laden ERSETZT alles. Die Datei kann von irgendwoher stammen, darum wird sie misstrauisch gelesen: nur erwartete Dateien,
@@ -91,7 +91,7 @@ async function erstellen(fortschritt) {
     teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene };
   dateien.unshift({ name: "angaben.json", data: utf8(JSON.stringify(json)) }, { name: "Lies mich.txt", data: utf8(LIES_MICH) });
   const blob = await zipErstellen(dateien, jetzt, (i, n) => fortschritt(`Sicherung packen: ${Math.round(100 * i / n)} % …`));
-  return { blob, name: `Sicherung vom ${datumText(jetzt)}.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length };
+  return { blob, name: `Sicherung vom ${datumText(jetzt)} Outfit Helfer.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length };
 }
 // Auf dem Handy über „Teilen“ (dort „In Dateien sichern“), am PC als Download.
 // Gibt null zurück, wenn im Teilen-Menü abgebrochen wurde. Klappt Teilen nicht, wird die Datei stattdessen heruntergeladen.
