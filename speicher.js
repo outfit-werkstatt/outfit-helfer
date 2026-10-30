@@ -1,7 +1,8 @@
 // Speicher auf dem Gerät (IndexedDB). Nichts verlässt das Handy.
 // teile: Angaben + kleine Vorschau, Schlüssel = feste Nummer (1, 2, 3 …). Bleibt klein, damit die Übersicht schnell lädt.
 // fotos: das große Foto (ca. 1200 px) getrennt davon, wird nur bei Bedarf geladen (Bild-Paket, Sicherung).
-// meta:  "naechsteNr" = nächste freie Nummer. Wird nie zurückgezählt, auch nicht nach dem Löschen.
+// meta:  "naechsteNr" = nächste freie Nummer. Wird von selbst nie zurückgezählt, auch nicht nach dem Löschen
+//        (nur auf ausdrücklichen Wunsch, wenn es gar keine Teile mehr gibt: nummernZuruecksetzen).
 //        "eigeneWerte" = selbst eingetippte Einträge, "ordner" = eigene Ordner [{ id, name }], "meinStil" = Vorlieben.
 // Am Teil: ordner = [ids] (ein Teil kann in mehreren Ordnern sein, „Mein Kleiderschrank“ = alle Teile, kein Eintrag),
 //          geloescht = Zeitpunkt, wenn es im Papierkorb liegt (sonst fehlt das Feld oder ist null).
@@ -125,6 +126,22 @@ export async function setFolderItems(id, nrs) {
     }
   };
   await done(tx);
+}
+// Nummern wieder bei 001 beginnen. Geht nur, wenn es gar keine Teile mehr gibt, auch nicht im Papierkorb: Das wird im selben
+// Schritt geprüft, in dem die Nummer zurückgesetzt wird. Gibt true zurück, wenn es geklappt hat.
+// „letzteSicherung“ fällt weg, weil ihre Nummern sonst mit den neuen Teilen verwechselt würden.
+export async function nummernZuruecksetzen() {
+  const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
+  let ok = false;
+  tx.objectStore("teile").count().onsuccess = e => {
+    if (e.target.result !== 0) return;
+    tx.objectStore("fotos").clear();
+    tx.objectStore("meta").put(1, "naechsteNr");
+    tx.objectStore("meta").delete("letzteSicherung");
+    ok = true;
+  };
+  await done(tx);
+  return ok;
 }
 // Großes Foto eines Teils (als Blob) oder null
 export async function getPhoto(nr) {

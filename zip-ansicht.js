@@ -6,9 +6,9 @@
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
-import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=7";
-import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=10";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=9";
+import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=8";
+import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=11";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=10";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=5";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
@@ -54,7 +54,9 @@ export function zipStand(items, letzte, stil, sonst) {
   const geaendert = da.filter(t => drin.has(t.nr) && t.geaendert > letzte.zeit).length;
   const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, geaendert && `${geaendert} geändert`,
     stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner oder eigene Knöpfe geändert"].filter(Boolean);
-  const tage = Math.max(0, Math.floor((Date.now() - Date.parse(letzte.zeit)) / TAG));
+  // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
+  const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
+  const tage = Math.max(0, Math.round((tagAnfang(Date.now()) - tagAnfang(letzte.zeit)) / TAG));
   return { nie: false, tage, datum: datumText(new Date(letzte.zeit)), aenderungen };
 }
 const tageText = n => n === 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`;

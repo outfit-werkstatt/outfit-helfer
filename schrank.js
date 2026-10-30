@@ -2,11 +2,11 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=10";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=7";
-import { renderStil, stilKurz } from "./stil.js?v=9";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=5";
-import { renderPasst } from "./passt.js?v=2";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=11";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nummernZuruecksetzen, nrText } from "./speicher.js?v=8";
+import { renderStil, stilKurz } from "./stil.js?v=10";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=6";
+import { renderPasst } from "./passt.js?v=3";
 import { GROUPS } from "./ki.js?v=5";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -55,14 +55,14 @@ async function render() {
   const [items, folders, stil, letzte, foto] = await Promise.all([
     s.v === "teil" ? getItem(s.nr).then(t => t ? [t] : []) : allItems(),
     getFolders(), getStil(), getMeta("letzteSicherung"), s.v === "teil" ? getPhoto(s.nr) : null]);
-  const sonst = await getMeta("sonstGeaendert");
+  const [sonst, naechste] = await Promise.all([getMeta("sonstGeaendert"), getMeta("naechsteNr")]);
   if (nr !== zeichnung) return;
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
   // Auswahl-Felder der vorigen Ansicht abmelden (sie hören sonst weiter auf neue eigene Einträge)
   const box = $("ansicht"); box.dispose?.(); box.dispose = null;
   if (s.v === "liste") return renderListe(items, folders, s.id);
   if (s.v === "teil") return renderTeil(items, folders, s.nr, foto);
-  if (s.v === "korb") return renderKorb(items);
+  if (s.v === "korb") return renderKorb(items, naechste);
   if (s.v === "stil") return renderStil(box, kopf("Mein Stil"), stil);
   if (s.v === "passt") {
     const t = items.find(x => x.nr === s.nr);
@@ -70,7 +70,7 @@ async function render() {
     return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
-  renderStart(items, folders, stil, letzte, sonst);
+  renderStart(items, folders, stil, letzte, sonst, naechste);
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
@@ -85,7 +85,23 @@ function kachel(name, list, onclick) {
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
     el("span", { class: "name" }, name), el("span", { class: "anzahl" }, anzahl(list.length)));
 }
-function renderStart(items, folders, stil, letzte, sonst) {
+// Nummern wieder bei 001 beginnen: nur, wenn es gar keine Teile mehr gibt. Sind sie nur noch im Papierkorb, ein Hinweis darauf.
+function nummernKarte(items, naechste) {
+  if (!(naechste > 1) || items.some(t => !t.geloescht)) return null;
+  if (items.length) return el("p", { class: "hint" }, "Sobald auch der Papierkorb leer ist, kannst du die Nummern wieder bei 001 beginnen lassen.");
+  const knopf = el("button", { type: "button", class: "btn" }, "Nummern wieder bei 001 beginnen");
+  knopf.onclick = async () => {
+    if (!confirm("Nummern wieder bei 001 beginnen?\n\nEs sind keine Teile mehr da, es geht also nichts verloren. Ordner, „Mein Stil“ und eigene Knöpfe bleiben.\n\nAlte ChatGPT-Antworten und alte Sicherungen nennen noch die alten Nummern. Dieselbe Nummer kann dann ein anderes Teil bekommen.")) return;
+    try {
+      toast(await nummernZuruecksetzen() ? "Das nächste Teil bekommt Nr. 001" : "Das geht nur, wenn keine Teile mehr da sind.");
+      neuZeichnen();
+    } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+  };
+  return el("div", { class: "panel" }, el("strong", {}, "🔢 Nummern"),
+    el("div", { class: "hint" }, `Dein Kleiderschrank ist leer, das nächste Teil bekäme aber Nr. ${nrText(naechste)}.`),
+    el("div", { class: "actions" }, knopf));
+}
+function renderStart(items, folders, stil, letzte, sonst, naechste) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
   // „Mein Stil“: Kurzfassung (höchstens 3 Angaben, alles Weitere steht in „Mein Stil“) oder Bitte, es einmal einzustellen
   const kurz = stilKurz(stil);
@@ -113,6 +129,7 @@ function renderStart(items, folders, stil, letzte, sonst) {
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
   fill($("korbLink"), el("span", { "aria-hidden": "true" }, "🗑"), el("span", { class: "u" }, korb ? `Papierkorb (${anzahl(korb)})` : "Papierkorb (leer)"));
   $("korbLink").onclick = () => go({ v: "korb" });
+  fill($("nummernKarte"), nummernKarte(items, naechste));
 }
 // Name für neuen oder umbenannten Ordner eingeben (max. 30 Zeichen, nicht doppelt)
 function nameEditor(box, start, folders, onOk, selfId = null) {
@@ -395,7 +412,7 @@ function renderTeil(items, folders, nr, foto) {
 }
 
 /* ---------- Papierkorb ---------- */
-function renderKorb(items) {
+function renderKorb(items, naechste) {
   const weg = items.filter(t => t.geloescht).sort((a, b) => b.geloescht.localeCompare(a.geloescht));
   const leeren = el("button", { type: "button", class: "btn" }, "Papierkorb leeren");
   leeren.onclick = async () => {
@@ -433,7 +450,8 @@ function renderKorb(items) {
   fill($("ansicht"),
     kopf("Papierkorb", `Gelöschte Teile bleiben ${KORB_TAGE} Tage hier und behalten ihre Nummer. Danach werden sie endgültig gelöscht.`, waehlenKnopf),
     el("div", { class: "grid" }, ...kacheln),
-    mehrfach ? leiste.el : weg.length ? el("div", { class: "actions" }, leeren) : el("p", { class: "hint" }, "Der Papierkorb ist leer."));
+    mehrfach ? leiste.el : weg.length ? el("div", { class: "actions" }, leeren) : el("p", { class: "hint" }, "Der Papierkorb ist leer."),
+    mehrfach ? null : nummernKarte(items, naechste));
 }
 
 /* ---------- Start ---------- */

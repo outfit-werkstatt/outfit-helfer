@@ -3,7 +3,7 @@
 // Vorlieben, keine Verbote: „Mein Stil“ verändert nur die Reihenfolge. Hartes Nie sind nur 🚫 und Papierkorb (siehe kandidaten).
 // Selbst eingetippte Einträge zählen über ihr „Ähnlich wie“; ohne das gelten sie als „passt zu vielem“.
 import { GROUP_OF } from "./ki.js?v=5";
-import { farbeRgb, wieVon, saisonVorschlag, groupOf } from "./ui.js?v=10";
+import { farbeRgb, wieVon, saisonVorschlag, groupOf } from "./ui.js?v=11";
 
 /* ---------- Was ist das für ein Teil? ---------- */
 // Art → [Platz im Outfit, Schick-Stufe 1 (sehr lässig) bis 5 (sehr schick)]
