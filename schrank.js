@@ -6,8 +6,8 @@ import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angaben
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nummernZuruecksetzen, nrText } from "./speicher.js?v=8";
 import { renderStil, stilKurz } from "./stil.js?v=10";
 import { renderZip, zipKarte } from "./zip-ansicht.js?v=7";
-import { renderPasst } from "./passt.js?v=4";
-import { renderOutfit } from "./outfit.js?v=1";
+import { renderPasst } from "./passt.js?v=5";
+import { renderOutfit } from "./outfit.js?v=2";
 import { GROUPS } from "./ki.js?v=5";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)

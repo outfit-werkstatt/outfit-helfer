@@ -2,8 +2,8 @@
 // Die Rechnung steht in regeln.js. Die ChatGPT-Anweisung kommt in der nächsten Etappe darunter.
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
 import { el, fill, field, choice } from "./ui.js?v=11";
-import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=4";
-import { auswahlFelder, kombiKarte } from "./passt.js?v=4";
+import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=5";
+import { auswahlFelder, kombiKarte } from "./passt.js?v=5";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
 let anlass = null, schickWahl = null, temperatur = null, wetter = [], mehrOffen = false;

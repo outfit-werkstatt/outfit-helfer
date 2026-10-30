@@ -4,7 +4,7 @@
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=11";
 import { nrText } from "./speicher.js?v=8";
 import { stilAktuell } from "./stil.js?v=10";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=4";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=5";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";

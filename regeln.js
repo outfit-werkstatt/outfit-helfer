@@ -270,13 +270,14 @@ function zusaetze(teile, nachPlatz, stil, sit = null) {
     nimm("zubehoer", art("Schal / Tuch"), 0.5); nimm("zubehoer", art("Hut / Mütze", "Handschuhe"), 0.5);
   }
   if (!sit) { if (teile.every(t => !saisonVon(t).includes("Sommer") || saisonVon(t).length > 1)) nimm("lage"); }
-  else if (sit.wetter.includes("Regen") && !sit.temp?.ohneLage) nimm("lage", art("Jacke", "Mantel"), 0.5);
+  else if (sit.w.nass && !sit.temp?.ohneLage) nimm("lage", art("Jacke", "Mantel"), 0.5);
   else if (!sit.temp || sit.temp.ideal >= 2.5) nimm("lage");
+  else if (!sit.temp.ohneLage && sit.w.leichteJacke) nimm("lage", t => waerme(t) <= 3.5, 0.5); // warm, aber bewölkt oder windig: z. B. eine Jeansjacke
   else if (!sit.temp.ohneLage && sit.ziel >= 4) nimm("lage", t => waerme(t) <= 3); // warm, aber schick: z. B. ein Blazer
   if (!sit?.anlass?.ohneSchmuck && teile.some(t => ["unten", "ganz"].includes(platzVon(t)))) nimm("guertel");
   nimm("tasche");
   if (!sit?.anlass?.ohneSchmuck && !(stil?.schmuck || []).includes("wenig Schmuck")) nimm("schmuck");
-  if (sit?.wetter.includes("Sonne")) nimm("zubehoer", art("Sonnenbrille"), 0.5);
+  if (sit?.w.sonne) nimm("zubehoer", art("Sonnenbrille"), 0.5);
   return out.slice(0, sit ? 4 : 3);
 }
 
@@ -304,7 +305,33 @@ export const TEMPERATUREN = {
   "20–26°": { ideal: 2 },
   "über 26°": { ideal: 1.3, ohneLage: true }
 };
-export const WETTER = ["Sonne", "Regen", "Schnee", "Wind"];
+// Jeder Wetter-Knopf bewirkt etwas, sonst wäre er nur Schmuck:
+// nass = 1 feucht, 2 Regen, 3 Starkregen · wind = 1 Wind, 2 Sturm · glatt = rutschig · gefuehlt = fühlt sich um so viel kälter (+) oder wärmer (−) an als die Zahl
+// kalt/warm = gilt als diese Temperatur, wenn keine gewählt ist · leichteJacke = eine leichte Schicht lohnt sich · tipp = steht immer dabei
+const WETTER_WIRKUNG = {
+  "Sonnig": { sonne: 1, gefuehlt: -0.2 },
+  "Bewölkt": { leichteJacke: 1, gefuehlt: 0.2 },
+  "Wechselhaft": { nass: 1, gefuehlt: 0.2, tipp: "Wechselhaft: Schichten, die du an- und ausziehen kannst, dazu ein kleiner Schirm." },
+  "Nebel": { nass: 1, gefuehlt: 0.3, tipp: "Nebel ist feucht und fühlt sich kälter an, als die Zahl sagt." },
+  "Nieselregen": { nass: 1, gefuehlt: 0.2, tipp: "Bei Nieselregen reicht meist eine Kapuze oder ein kleiner Schirm." },
+  "Regen": { nass: 2, gefuehlt: 0.3, tipp: "Bei Regen: Schirm einpacken." },
+  "Starkregen / Gewitter": { nass: 3, gefuehlt: 0.3, tipp: "Bei Starkregen hilft eine Jacke mit Kapuze mehr als ein Schirm." },
+  "Schnee": { nass: 2, glatt: 1, kalt: 1 },
+  "Glätte": { glatt: 1, kalt: 1 },
+  "Wind": { wind: 1, leichteJacke: 1, gefuehlt: 0.2 },
+  "Sturm": { wind: 2, leichteJacke: 1, gefuehlt: 0.4, tipp: "Bei Sturm bringt ein Schirm wenig, eine Kapuze hält besser." },
+  "Schwül": { schwuel: 1, warm: 1, gefuehlt: -0.3, tipp: "Bei Schwüle tragen sich Baumwolle und Leinen angenehmer als Synthetik." }
+};
+export const WETTER = Object.keys(WETTER_WIRKUNG);
+// Mehrere Knöpfe zusammen: Es zählt der stärkste Wert, „gefühlt“ wird zusammengezählt
+function wetterWirkung(wetter) {
+  const w = { nass: 0, wind: 0, gefuehlt: 0 };
+  for (const name of wetter) for (const [k, x] of Object.entries(WETTER_WIRKUNG[name] || {})) {
+    if (k === "gefuehlt") w.gefuehlt += x;
+    else if (k !== "tipp") w[k] = Math.max(w[k] || 0, x);
+  }
+  return w;
+}
 const WAERME = { "T-Shirt": 1.5, "Poloshirt": 2, "Langarmshirt": 2.5, "Top": 1, "Bluse": 2, "Hemd": 2.5, "Body": 2, "Pullover": 4, "Sweatshirt / Hoodie": 3.5, "Strickjacke": 3, "Weste": 2, "Blazer": 2.5, "Jacke": 3.5, "Mantel": 5,
   "Jeans": 3, "Hose": 3, "Leggings": 2.5, "Jogginghose": 3.5, "Shorts": 1, "Rock": 2, "Kleid": 2, "Jumpsuit": 2.5, "Sneaker": 3, "Stiefel": 4, "Absatzschuhe": 2, "Flache Schuhe": 2.5, "Sandalen": 1 };
 const MATERIAL_WAERME = { "Strick / Wolle": 1, "Kunstfell / Teddy": 1.5, "Leder": 0.5, "Wildleder": 0.5, "Cord": 0.5, "Tweed": 0.5, "Samt": 0.5, "Leinen": -1, "Chiffon": -1, "Spitze": -0.5, "Seide / Satin": -0.5 };
@@ -323,9 +350,11 @@ function waerme(t) {
 function situation({ anlass = null, schickWahl = null, temperatur = null, wetter = [] } = {}) {
   const a = ANLAESSE[anlass] || ANLAESSE[wieVon("Anlass", anlass)] || null;
   const drinnen = !!a?.drinnen; // zu Hause spielt das Wetter draußen keine Rolle
+  const draussen = drinnen ? [] : wetter, w = wetterWirkung(draussen);
   let temp = drinnen ? null : TEMPERATUREN[temperatur] || null;
-  if (!drinnen && !temp && wetter.includes("Schnee")) temp = TEMPERATUREN["unter 5°"];
-  return { anlassName: anlass, temperatur: drinnen ? null : temperatur, anlass: a, ziel: SCHICK_WAHL[schickWahl] ?? a?.schick ?? null, temp, wetter: drinnen ? [] : wetter };
+  if (!drinnen && !temp && w.kalt) temp = TEMPERATUREN["unter 5°"];
+  else if (!drinnen && !temp && w.warm) temp = TEMPERATUREN["20–26°"];
+  return { anlassName: anlass, temperatur: drinnen ? null : temperatur, anlass: a, ziel: SCHICK_WAHL[schickWahl] ?? a?.schick ?? null, temp, wetter: draussen, w };
 }
 const KLEIDUNG = new Set(["oben", "unten", "ganz", "lage"]);
 // Kommt ein Teil für diese Situation überhaupt infrage?
@@ -344,8 +373,9 @@ function passtZu(t, sit) {
     if (warm && (nur("Winter") || a === "Mantel")) return false;
     if (sit.temp.ohneLage && (p === "lage" || w >= 3.5)) return false;
   }
-  if (sit.wetter.includes("Regen") && (a === "Sandalen" || t.material === "Wildleder")) return false;
-  if (sit.wetter.includes("Schnee") && (["Sandalen", "Absatzschuhe", "Flache Schuhe"].includes(a) || t.material === "Wildleder")) return false;
+  if (sit.w.nass >= 2 && (a === "Sandalen" || t.material === "Wildleder")) return false;
+  if (sit.w.nass >= 3 && a === "Absatzschuhe") return false;
+  if (sit.w.glatt && ["Sandalen", "Absatzschuhe", "Flache Schuhe"].includes(a)) return false;
   return true;
 }
 // Pluspunkte und Abzüge für eine Kombination: Je näher an der gewünschten Schick-Stufe und Wärme, desto besser
@@ -354,16 +384,19 @@ function situationsPunkte(teile, sit) {
   let p = 0;
   if (sit.ziel != null) p -= schnitt(teile, t => Math.abs(schick(t) - sit.ziel)) * 0.8;
   if (sit.temp) {
-    const abstand = t => Math.abs(waerme(t) - (sit.temp.ideal + (platzVon(t) === "lage" ? 1 : 0)));
+    const abstand = t => Math.abs(waerme(t) - (sit.temp.ideal + sit.w.gefuehlt + (platzVon(t) === "lage" ? 1 : 0)));
     p -= schnitt(teile, abstand) * 0.5 + Math.max(...teile.map(abstand)) * 0.3; // ein einzelnes Teil, das gar nicht passt, soll auffallen
   }
   for (const t of teile) {
     const a = basisArt(t);
     if (sit.anlass?.dezent && gemustert(t)) p -= 1;
-    if (sit.wetter.includes("Regen") && (a === "Absatzschuhe" || t.material === "Seide / Satin")) p -= 0.5;
-    if (sit.wetter.includes("Regen") && platzVon(t) === "lage" && !["Jacke", "Mantel"].includes(a)) p -= 1;
-    if (sit.wetter.includes("Schnee") && a === "Stiefel") p += 1;
-    if (sit.wetter.includes("Wind") && (a === "Rock" || a === "Kleid")) p -= 0.3;
+    if (sit.w.nass && (t.material === "Seide / Satin" || (sit.w.nass >= 2 ? a === "Absatzschuhe" : a === "Sandalen" || t.material === "Wildleder"))) p -= 0.5;
+    if ((sit.w.nass || sit.w.wind) && platzVon(t) === "lage" && !["Jacke", "Mantel"].includes(a)) p -= sit.w.nass >= 2 || sit.w.wind >= 2 ? 1 : 0.5; // Strickjacke und Blazer halten Nässe und Wind kaum ab
+    if (sit.w.nass >= 3 && (a === "Flache Schuhe" || t.laenge === "maxi" || t.laenge === "knöchellang")) p -= 0.5; // lange Säume und dünne Sohlen werden schnell nass
+    if ((sit.w.glatt || sit.w.nass >= 3) && a === "Stiefel") p += 1;
+    if (sit.w.wind && (a === "Rock" || a === "Kleid")) p -= sit.w.wind >= 2 ? 1 : 0.3;
+    if (sit.w.schwuel && (t.material === "Baumwolle" || t.material === "Leinen")) p += 0.3;
+    if (sit.w.schwuel && ["Synthetik, glänzend", "Leder", "Wildleder", "Samt", "Kunstfell / Teddy"].includes(t.material)) p -= 0.5;
     if (sit.anlass?.schick === 1 && (t.stil || []).includes("sportlich")) p += 0.5;
   }
   return p;
@@ -371,15 +404,17 @@ function situationsPunkte(teile, sit) {
 function wetterTipps(teile, extras, sit, stil) {
   const o = [], alle = [...teile, ...extras], hat = (...arten) => alle.some(t => arten.includes(basisArt(t)));
   const luftig = teile.find(t => platzVon(t) === "ganz" || basisArt(t) === "Rock"), ideal = sit.temp?.ideal ?? 0;
-  if (sit.wetter.includes("Regen")) o.push("Bei Regen: Schirm einpacken.");
-  if (sit.wetter.includes("Schnee") && !hat("Stiefel")) o.push("Bei Schnee sind Schuhe mit gutem Profil am sichersten.");
+  for (const name of sit.wetter) if (WETTER_WIRKUNG[name]?.tipp) o.push(WETTER_WIRKUNG[name].tipp);
+  if (sit.w.glatt && !hat("Stiefel")) o.push("Bei Schnee und Glätte sind Schuhe mit gutem Profil am sichersten.");
   if (ideal >= 3.6 && luftig && stil?.mode !== "Herren" && !hat("Strumpfhose")) o.push(`Zu ${nr(luftig)} hält eine blickdichte Strumpfhose warm.`);
   else if (ideal >= 3.6) o.push("Mehrere dünne Lagen halten wärmer als eine dicke.");
-  if (ideal === 2.8 && !alle.some(t => platzVon(t) === "lage")) o.push("Für später eine leichte Jacke mitnehmen: Bei diesen Temperaturen wird es schnell kühl.");
+  const ohneJacke = !alle.some(t => platzVon(t) === "lage");
+  if (ideal === 2.8 && ohneJacke) o.push("Für später eine leichte Jacke mitnehmen: Bei diesen Temperaturen wird es schnell kühl.");
+  else if (sit.w.leichteJacke && ohneJacke && ideal < 2.8 && !sit.temp?.ohneLage) o.push("Es kann schnell kühler werden: Eine leichte Jacke lohnt sich.");
   if (ideal > 0 && ideal < 2) o.push("Bei Hitze fühlen sich helle, luftige Stoffe am angenehmsten an.");
-  if (sit.wetter.includes("Wind") && luftig) o.push(`${nr(luftig)} kann bei Wind hochwehen, eine Hose wäre sicherer.`);
-  if (sit.wetter.includes("Sonne") && !hat("Sonnenbrille")) o.push("Sonnenbrille nicht vergessen.");
-  return o;
+  if (sit.w.wind && luftig) o.push(`${nr(luftig)} kann bei Wind hochwehen, eine Hose wäre sicherer.`);
+  if (sit.w.sonne && !hat("Sonnenbrille")) o.push("Sonnenbrille nicht vergessen.");
+  return o.slice(0, 3); // Platz für mindestens einen Styling-Tipp lassen
 }
 
 /* ---------- Outfits für eine Situation ---------- */
