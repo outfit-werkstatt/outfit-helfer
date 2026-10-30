@@ -6,7 +6,8 @@ import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angaben
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nummernZuruecksetzen, nrText } from "./speicher.js?v=8";
 import { renderStil, stilKurz } from "./stil.js?v=10";
 import { renderZip, zipKarte } from "./zip-ansicht.js?v=7";
-import { renderPasst } from "./passt.js?v=3";
+import { renderPasst } from "./passt.js?v=4";
+import { renderOutfit } from "./outfit.js?v=1";
 import { GROUPS } from "./ki.js?v=5";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -69,6 +70,7 @@ async function render() {
     if (!t) return back();
     return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
+  if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden"), items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
   renderStart(items, folders, stil, letzte, sonst, naechste);
 }
@@ -112,6 +114,11 @@ function renderStart(items, folders, stil, letzte, sonst, naechste) {
     el("div", { class: "titel" }, "✨ Mein Stil"),
     el("div", { class: "hint" }, zeigen.length ? zeigen.join(" · ") : "Noch nicht eingestellt. Sag einmal, was du gern trägst und was lieber nicht – die Vorschläge halten sich daran."),
     el("div", { class: "actions" }, stilKnopf)));
+  fill($("outfitKarte"), el("div", { class: "panel stil-karte" },
+    el("div", { class: "titel" }, "👗 Outfit finden"),
+    el("div", { class: "hint" }, da.length ? "Sag, wofür es ist und wie das Wetter wird. Die App stellt aus deinem Kleiderschrank Outfits zusammen."
+      : "Sobald du Kleidung gespeichert hast, stellt die App hier Outfits für Anlass und Wetter zusammen."),
+    da.length ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "outfit" }) }, "Outfit finden")) : null));
   fill($("zipKarte"), zipKarte(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
