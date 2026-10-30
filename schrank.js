@@ -122,7 +122,7 @@ function nameEditor(box, start, folders, onOk, selfId = null) {
   ok.onclick = async () => {
     const name = clean(input.value), lower = name.toLowerCase();
     if (!name) { msg.textContent = "Bitte einen Namen eintippen."; return; }
-    if ([HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
+    if ([HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME, "Ohne Ordner"].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
       msg.textContent = "Diesen Namen gibt es schon."; return;
     }
     ok.disabled = true;

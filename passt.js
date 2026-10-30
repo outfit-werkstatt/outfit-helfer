@@ -5,19 +5,20 @@ import { nrText } from "./speicher.js?v=7";
 import { stilAktuell } from "./stil.js?v=8";
 import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=1";
 
-// Pro Sitzung gemerkt: abgewählte Ordner und der Schalter „Meinen Stil beachten“
-let ohneOrdner = new Set(), stilAn = true;
+// Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
+const OHNE_ORDNER = "Ohne Ordner";
+let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = true;
 
 // bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen wieder frei)
 export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, neuZeichnen) {
   const anker = items.find(t => t.nr === nr);
   if (!anker) return false;
   const stilDaten = stilAktuell(stil), mitStil = stilAn ? stilDaten : { mode: stilDaten.mode };
-  // Ordner, die es nicht mehr gibt, vergessen
-  const daIds = new Set(folders.map(f => f.id));
-  ohneOrdner = new Set([...ohneOrdner].filter(id => daIds.has(id)));
-  const pool = kandidaten(items, [...ohneOrdner]);
-  const r = kombinationen(anker, pool, mitStil), ideen = kaufideen(anker, pool, mitStil);
+  const angehakt = new Set(folders.map(f => f.id).filter(id => !abgewaehlt.has(id)));
+  // Ohne eigene Ordner gibt es nichts abzuwählen. Kaufideen rechnen immer mit dem ganzen Schrank:
+  // Was nur gerade abgewählt ist, fehlt ja nicht wirklich.
+  const pool = kandidaten(items, folders.length ? { angehakt, ohneOrdner: ohneOrdnerAn } : null);
+  const r = kombinationen(anker, pool, mitStil), ideen = kaufideen(anker, kandidaten(items), mitStil);
 
   const mini = (t, klein = false) => {
     const b = el("button", { type: "button", class: "teil mini" + (klein ? " klein" : "") },
@@ -36,16 +37,17 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
     k.luecken.length ? el("p", { class: "hint" }, `Hier fehlen noch: ${k.luecken.join(", ")}.`) : null,
     k.tipps.length ? el("ul", { class: "tipps" }, ...k.tipps.map(x => el("li", {}, x))) : null);
 
-  const ordnerWahl = folders.length ? field("Aus welchen Ordnern?", "Abgewählt = diese Teile diesmal weglassen, auch wenn sie noch in einem anderen Ordner liegen.",
-    choice({ options: folders.map(f => f.name), selected: folders.filter(f => !ohneOrdner.has(f.id)).map(f => f.name), max: 0,
-      onChange: sel => { ohneOrdner = new Set(folders.filter(f => !sel.includes(f.name)).map(f => f.id)); neuZeichnen(); } }).el) : null;
+  const ordnerWahl = folders.length ? field("Aus welchen Ordnern?", "Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt.",
+    choice({ options: [...folders.map(f => f.name), OHNE_ORDNER], selected: [...folders.filter(f => angehakt.has(f.id)).map(f => f.name), ...(ohneOrdnerAn ? [OHNE_ORDNER] : [])], max: 0,
+      onChange: sel => { abgewaehlt = new Set(folders.filter(f => !sel.includes(f.name)).map(f => f.id)); ohneOrdnerAn = sel.includes(OHNE_ORDNER); neuZeichnen(); } }).el) : null;
   const stilWahl = field("Meinen Stil beachten", "An: Was zu „Mein Stil“ passt, kommt zuerst. Weggelassen wird deswegen nichts.",
     choice({ options: ["An"], selected: stilAn ? ["An"] : [], onChange: sel => { stilAn = sel.length > 0; neuZeichnen(); } }).el);
 
   fill(box, kopf,
     el("div", { class: "panel" }, ordnerWahl, stilWahl),
     anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
-    r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
+    !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
+      : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
     ...r.kombis.map((k, i) => karte(k, `Kombination ${i + 1}`)),
     r.anders ? karte(r.anders, "✨ Mal was anderes") : null,
     ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),

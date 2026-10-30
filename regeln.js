@@ -174,10 +174,12 @@ function tipps(teile, extras, s) {
 }
 
 /* ---------- Welche Teile kommen infrage? ---------- */
-// Hartes Nie: Papierkorb und 🚫. Abgewählte Ordner: Teile daraus diesmal weglassen, auch wenn sie noch in einem anderen liegen.
-export function kandidaten(items, ohneOrdner = []) {
-  const aus = new Set(ohneOrdner);
-  return items.filter(t => !t.geloescht && !t.nichtAnziehen && !(t.ordner || []).some(o => aus.has(o)));
+// Hartes Nie: Papierkorb und 🚫. Ordner-Auswahl: Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt.
+// Teile ohne eigenen Ordner zählen über den eigenen Knopf „Ohne Ordner“. auswahl = { angehakt: Set der Ordner-IDs, ohneOrdner: an/aus }
+export function kandidaten(items, auswahl = null) {
+  const moeglich = items.filter(t => !t.geloescht && !t.nichtAnziehen);
+  if (!auswahl) return moeglich;
+  return moeglich.filter(t => t.ordner?.length ? t.ordner.some(o => auswahl.angehakt.has(o)) : auswahl.ohneOrdner);
 }
 // Was braucht ein Outfit noch, wenn dieses Teil gesetzt ist? Mehrere Wege möglich (Oberteil + Unterteil oder Kleid)
 const VORLAGEN = { oben: [["unten", "schuh"]], unten: [["oben", "schuh"]], ganz: [["schuh"]], lage: [["oben", "unten", "schuh"], ["ganz", "schuh"]], schuh: [["oben", "unten"], ["ganz"]] };
