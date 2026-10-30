@@ -7,8 +7,8 @@
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=7";
-import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=8";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=7";
+import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=9";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=8";
 import { GROUPS, GROUP_OF, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=4";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
@@ -152,15 +152,15 @@ function pruefen(j) {
   if (typeof s.text === "string") stil.text = cleanText(s.text).slice(0, 300) || null;
   if (zeit(s.geaendert)) stil.geaendert = zeit(s.geaendert);
   if (Array.isArray(stil.absatz)) stil.absatz = stil.absatz[0];
-  // Eigene Knöpfe: { Liste: [{ wert, gruppe? }] }
+  // Eigene Knöpfe: { Liste: [{ wert, gruppe?, wie? }] }
   const e = j.eigeneWerte && typeof j.eigeneWerte === "object" ? j.eigeneWerte : {}, eigene = {};
   for (const [key, list] of Object.entries(e).slice(0, 60)) {
     const name = text(key, 60);
     if (!name || VERBOTEN.has(name) || !Array.isArray(list)) continue;
     const gesehen = new Set();
-    eigene[name] = list.slice(0, 300).map(x => ({ wert: text(x?.wert, 30), gruppe: GRUPPEN.has(x?.gruppe) ? x.gruppe : undefined }))
+    eigene[name] = list.slice(0, 300).map(x => ({ wert: text(x?.wert, 30), gruppe: GRUPPEN.has(x?.gruppe) ? x.gruppe : null, wie: text(x?.wie, 30) }))
       .filter(x => x.wert && !gesehen.has(x.wert.toLowerCase()) && gesehen.add(x.wert.toLowerCase()))
-      .map(x => x.gruppe ? x : { wert: x.wert });
+      .map(x => ({ wert: x.wert, ...(x.gruppe ? { gruppe: x.gruppe } : {}), ...(x.wie ? { wie: x.wie } : {}) }));
   }
   const naechsteNr = Number.isInteger(j.naechsteNr) && j.naechsteNr > 0 && j.naechsteNr <= 1e6 ? j.naechsteNr : 1;
   return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, naechsteNr, ausgelassen };

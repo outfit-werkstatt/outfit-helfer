@@ -2,10 +2,11 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=8";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=9";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nrText } from "./speicher.js?v=7";
-import { renderStil, stilKurz } from "./stil.js?v=7";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=3";
+import { renderStil, stilKurz } from "./stil.js?v=8";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=4";
+import { renderPasst } from "./passt.js?v=1";
 import { GROUPS } from "./ki.js?v=4";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -63,6 +64,11 @@ async function render() {
   if (s.v === "teil") return renderTeil(items, folders, s.nr, foto);
   if (s.v === "korb") return renderKorb(items);
   if (s.v === "stil") return renderStil(box, kopf("Mein Stil"), stil);
+  if (s.v === "passt") {
+    const t = items.find(x => x.nr === s.nr);
+    if (!t) return back();
+    return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
+  }
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
   renderStart(items, folders, stil, letzte, sonst);
 }
@@ -326,8 +332,7 @@ const datum = iso => new Date(iso).toLocaleDateString("de-DE");
 function renderTeil(items, folders, nr, foto) {
   const t = items.find(x => x.nr === nr);
   if (!t) return back();
-  const bild = el("img", { class: "gross", src: url(foto || t.vorschau), alt: beschreibung(t) });
-  bild.onclick = () => zeigeGross(bild.src, beschreibung(t));
+  const bild = el("img", { class: "gross", src: url(foto || t.vorschau), alt: beschreibung(t) });  bild.onclick = () => zeigeGross(bild.src, beschreibung(t));
   const zeile = (k, v) => v ? [el("dt", {}, k), el("dd", {}, v)] : [];
   const angaben = el("dl", { class: "angaben" },
     ...zeile("Art", t.gruppe ? `${t.gruppe} › ${t.art}` : t.art), ...zeile("Farbe", (t.farben || []).join(" / ")),
@@ -383,9 +388,10 @@ function renderTeil(items, folders, nr, foto) {
     } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
   };
   const aktionen = el("div", { class: "actions" }, t.geloescht ? null : aendern, korb);
+  const passt = t.geloescht ? null : el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"));
   fill($("ansicht"),
     kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : null),
-    bild, inhalt, t.geloescht ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld), aktionen);
+    bild, passt, inhalt, t.geloescht ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld), aktionen);
 }
 
 /* ---------- Papierkorb ---------- */

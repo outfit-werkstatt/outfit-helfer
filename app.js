@@ -5,8 +5,8 @@
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=4";
 import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=7";
-import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=8";
-import { refresh, initSchrank } from "./schrank.js?v=11";
+import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=9";
+import { refresh, initSchrank } from "./schrank.js?v=12";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }

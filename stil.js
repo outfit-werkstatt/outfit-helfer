@@ -2,7 +2,7 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, cleanText, names, FARB_NAMEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=8";
+import { el, fill, toast, choice, field, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=9";
 import { setStil } from "./speicher.js?v=7";
 import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=4";
 
@@ -84,14 +84,16 @@ export function renderStil(box, kopf, stil) {
   }
   const widgets = [];
   const fragen = FRAGEN.map(f => {
-    const w = choice({ field: f.liste || "Stil: " + f.label, beispiel: f.beispiel, options: f.werte, selected: liste(s[f.k]), max: 0, onChange: sel => speichern({ [f.k]: sel }) });
+    // Die Muster-Liste teilt sich „Mein Stil“ mit den Teilen, darum auch hier „Ähnlich wie“
+    const w = choice({ field: f.liste || "Stil: " + f.label, beispiel: f.beispiel, options: f.werte, selected: liste(s[f.k]), max: 0, onChange: sel => speichern({ [f.k]: sel }),
+      aehnlich: f.k === "muster" ? { liste: names(PATTERNS) } : null });
     widgets.push(w);
     return { f, feld: field(f.label, f.hinweis || null, w.el) };
   });
   const feldVon = new Map(fragen.map(x => [x.f, x.feld]));
   const sichtbar = () => { for (const { f, feld } of fragen) feld.hidden = !passt(f, s.mode); };
   const modus = choice({ options: MODI, selected: s.mode ? [s.mode] : [], onChange: sel => { speichern({ mode: sel[0] || null }); sichtbar(); } });
-  const farbe = (k, titel) => field(titel, null, choice({ options: FARB_NAMEN, selected: s[k] || [], max: 0, withSwatch: true,
+  const farbe = (k, titel) => field(titel, null, choice({ options: GRUND_FARBEN, selected: s[k] || [], max: 0, withSwatch: true,
     onChange: sel => speichern({ [k]: sel }) }).el);
   const text = el("textarea", { class: "notiz", maxLength: 300, rows: 3, value: s.text || "", "aria-label": "Sonst noch etwas",
     placeholder: "z. B. keine Rollkragen, mag es bequem, trage oft Blazer zur Jeans" });

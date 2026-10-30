@@ -5,10 +5,36 @@ import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEV
 import { getCustom, setCustom } from "./speicher.js?v=7";
 
 export const $ = id => document.getElementById(id);
-// Farben: die der KI plus Silber und Roségold (für Schmuck; die KI kennt sie nicht und wählt sie nie vor)
-export const FARBEN = [...COLORS.map(([n, , rgb]) => [n, rgb]), ["Silber", [196, 198, 204]], ["Roségold", [214, 158, 140]]];
-export const FARB_NAMEN = FARBEN.map(([n]) => n);
+// Farben: die der KI plus weitere nur zum Antippen. Die KI kennt nur ihre gemessenen Farben und wählt die anderen nie vor
+// (viele ähnliche Töne würden ihre Trefferquote senken). Die Vorschlags-Regeln rechnen mit dem Farbwert, verstehen also alle.
+const MEHR_FARBEN = [
+  ["Silber", [196, 198, 204]], ["Roségold", [214, 158, 140]], ["Kupfer", [185, 105, 65]], ["Bronze", [140, 105, 55]],
+  ["Elfenbein", [245, 240, 225]], ["Steingrau", [140, 138, 130]], ["Graphit", [55, 55, 60]],
+  ["Sand", [220, 205, 175]], ["Nude", [225, 190, 165]], ["Cognac", [150, 85, 40]], ["Schoko", [85, 50, 35]], ["Rost", [170, 75, 40]], ["Terrakotta", [190, 95, 65]], ["Ocker", [190, 140, 40]],
+  ["Salbei", [160, 175, 145]], ["Moosgrün", [90, 105, 60]], ["Tannengrün", [20, 60, 45]], ["Smaragd", [0, 130, 90]], ["Lindgrün", [175, 205, 90]], ["Petrol", [20, 90, 105]],
+  ["Eisblau", [205, 225, 235]], ["Himmelblau", [125, 180, 225]], ["Taubenblau", [110, 130, 155]], ["Kobaltblau", [0, 70, 170]],
+  ["Lavendel", [190, 180, 225]], ["Mauve", [175, 140, 160]], ["Pflaume", [95, 40, 80]], ["Aubergine", [65, 30, 65]],
+  ["Puder", [240, 215, 210]], ["Altrosa", [205, 150, 155]], ["Himbeere", [190, 40, 90]], ["Magenta", [190, 20, 110]], ["Beere", [140, 30, 75]], ["Kirschrot", [170, 20, 40]],
+  ["Lachs", [245, 160, 130]], ["Apricot", [250, 195, 150]], ["Vanille", [245, 230, 170]], ["Zitronengelb", [250, 235, 90]],
+  ["Bunt / mehrfarbig", null]
+];
+export const FARBEN = [...COLORS.map(([n, , rgb]) => [n, rgb]), ...MEHR_FARBEN];
+// Für „Mein Stil“ reichen die Grundfarben: Die Regeln erkennen verwandte Töne selbst (mag Türkis → Petrol passt auch)
+export const GRUND_FARBEN = [...COLORS.map(([n]) => n), "Silber", "Roségold"];
+// Für das Auswahlfeld „Andere …“, nach Farbfamilien geordnet
+export const FARB_GRUPPEN = [
+  ["Schwarz, Grau, Weiß", ["Schwarz", "Graphit", "Anthrazit", "Grau", "Steingrau", "Hellgrau", "Weiß", "Elfenbein", "Creme"]],
+  ["Beige und Braun", ["Sand", "Beige", "Nude", "Taupe", "Camel", "Cognac", "Braun", "Schoko", "Dunkelbraun", "Rost", "Terrakotta"]],
+  ["Grün", ["Khaki", "Oliv", "Moosgrün", "Salbei", "Mint", "Lindgrün", "Grün", "Smaragd", "Dunkelgrün", "Tannengrün"]],
+  ["Blau", ["Eisblau", "Hellblau", "Himmelblau", "Türkis", "Petrol", "Taubenblau", "Jeansblau", "Blau", "Kobaltblau", "Dunkelblau"]],
+  ["Lila", ["Lavendel", "Flieder", "Mauve", "Lila", "Pflaume", "Aubergine"]],
+  ["Rosa und Rot", ["Puder", "Rosa", "Altrosa", "Pink", "Himbeere", "Magenta", "Beere", "Rot", "Kirschrot", "Bordeaux"]],
+  ["Orange und Gelb", ["Koralle", "Lachs", "Apricot", "Orange", "Ocker", "Senfgelb", "Gelb", "Zitronengelb", "Vanille"]],
+  ["Metall", ["Gold", "Silber", "Roségold", "Kupfer", "Bronze"]],
+  ["Mehrere", ["Bunt / mehrfarbig"]]
+];
 const COLOR_RGB = new Map(FARBEN);
+export const farbeRgb = name => COLOR_RGB.get(name) ?? null;
 export function el(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) if (k === "class") e.className = v; else if (k in e) e[k] = v; else e.setAttribute(k, v);
@@ -31,7 +57,8 @@ export function zeigeGross(url, alt = "", onClose = () => {}) {
   document.body.classList.add("ohne-scroll");
   document.body.append(box);
 }
-export const swatch = name => COLOR_RGB.has(name) ? el("span", { class: "sw", style: `background:rgb(${COLOR_RGB.get(name).join(",")})` }) : null;
+export const swatch = name => name === "Bunt / mehrfarbig" ? el("span", { class: "sw", style: "background:conic-gradient(#d33,#ec3,#3a5,#38c,#a4b,#d33)" })
+  : COLOR_RGB.get(name) ? el("span", { class: "sw", style: `background:rgb(${COLOR_RGB.get(name).join(",")})` }) : null;
 export const clean = s => s.replace(/\s+/g, " ").trim();
 // Wie clean, aber Zeilenumbrüche bleiben (höchstens eine Leerzeile) – für Notizen und „Sonst noch etwas?“
 export const cleanText = s => s.split("\n").map(clean).join("\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -45,7 +72,8 @@ export const beschreibung = t => `${t.art}${t.farben?.length ? ", " + t.farben.j
 /* ---------- Eigene Einträge („Andere …“ → selbst eintippen) ----------
    Pro Merkmal eine Liste, dauerhaft auf dem Gerät gespeichert. Ein neuer eigener Eintrag erscheint sofort als Knopf
    in allen offenen Karten und beim nächsten Mal wieder. Löschen entfernt nur den Knopf; Teile, die den Wert
-   schon haben, behalten ihn. Bei eigenen Arten wird gefragt, wozu sie gehören (für spätere Outfit-Regeln). */
+   schon haben, behalten ihn. Bei Art, Farbe, Muster und Material wird gefragt „Ähnlich wie …?“: Die Vorschlags-Regeln
+   rechnen dann mit dem bekannten Wert (wie), angezeigt wird weiter das eigene Wort. Eigene Arten bekommen daraus ihre Gruppe. */
 let custom = {};
 // Seit 0.6.3 teilen sich „Mein Stil“ und die Teil-Merkmale diese Listen (gleiche Wörter) → alte eigene Einträge umziehen
 const LISTEN_UMZUG = { "Stil: Welcher Stil passt zu dir?": "Stil", "Stil: Oberteile": "Weite", "Stil: Bund": "Bund",
@@ -65,13 +93,16 @@ async function ladeEigene() {
 export const customReady = ladeEigene().catch(e => console.error(e));
 const customValues = f => (custom[f] || []).map(c => c.wert);
 export const groupOf = a => GROUP_OF.get(a) ?? (custom.Art || []).find(c => c.wert === a)?.gruppe ?? null;
+// „Ähnlich wie“ eines eigenen Eintrags (oder null, wenn unbekannt)
+export const wieVon = (f, wert) => (custom[f] || []).find(c => c.wert === wert)?.wie ?? null;
 const widgets = new Set(); // offene Auswahl-Felder mit eigenen Einträgen
 // Änderungen nacheinander ausführen, damit sich zwei Karten nicht gegenseitig überschreiben
 let kette = Promise.resolve();
 const nacheinander = fn => (kette = kette.then(fn, fn));
-const addCustom = (f, wert, gruppe) => nacheinander(async () => {
+const addCustom = (f, wert, wie) => nacheinander(async () => {
   if (!customValues(f).some(v => v.toLowerCase() === wert.toLowerCase())) {
-    const next = { ...custom, [f]: [...(custom[f] || []), gruppe ? { wert, gruppe } : { wert }] };
+    const gruppe = f === "Art" ? GROUP_OF.get(wie) : null;
+    const next = { ...custom, [f]: [...(custom[f] || []), { wert, ...(gruppe ? { gruppe } : {}), ...(wie ? { wie } : {}) }] };
     await setCustom(next); custom = next;
   }
   for (const w of widgets) if (w.field === f) w.addOption(wert);
@@ -87,9 +118,10 @@ const EXAMPLE = { Art: "z. B. Kimono", Farbe: "z. B. Petrol", Muster: "z. B. Pai
 /* ---------- Auswahl-Knöpfe ----------
    options: sichtbare Knöpfe (in dieser Reihenfolge), more: weitere Werte im Auswahlfeld „Andere …“ ([Gruppe, [Werte]] oder [Werte]),
    selected: vorgewählte Werte, max: wie viele gleichzeitig (1 = nur einer, 0 = beliebig viele), onChange: wird nach jeder Änderung gerufen,
-   field: Name des Merkmals, wenn man eigene Einträge eintippen darf, groupDefault: Vorschlag „Gehört zu“ bei eigener Art,
-   beispiel: Platzhalter beim Eintippen, allein: Werte, die nur allein gewählt sein können (z. B. „ganzjährig“) */
-export function choice({ field = null, options, more = [], selected = [], max = 1, withSwatch = false, onChange = () => {}, groupDefault = null, beispiel = null, allein = [] }) {
+   field: Name des Merkmals, wenn man eigene Einträge eintippen darf, beispiel: Platzhalter beim Eintippen,
+   allein: Werte, die nur allein gewählt sein können (z. B. „ganzjährig“),
+   aehnlich: { liste (wie more), vorschlag(), pflicht } = Frage „Ähnlich wie …?“ beim Eintippen */
+export function choice({ field = null, options, more = [], selected = [], max = 1, withSwatch = false, onChange = () => {}, beispiel = null, allein = [], aehnlich = null }) {
   const sel = new Set(selected), wrap = el("div", { class: "chips" }), buttons = new Map();
   const editor = el("div", { class: "eigen-edit" }); editor.hidden = true;
   let picker = null; // Auswahlfeld „Andere …“
@@ -113,8 +145,16 @@ export function choice({ field = null, options, more = [], selected = [], max = 
   const known = () => [...buttons.keys(), ...more.flatMap(m => Array.isArray(m) ? m[1] : [m])];
   function openNew() {
     const input = el("input", { type: "text", maxLength: 30, placeholder: beispiel || EXAMPLE[field] || "", "aria-label": "Eigener Eintrag", autocomplete: "off" });
-    const grp = field === "Art" ? el("select", { "aria-label": "Gehört zu" }, ...GROUPS.map(([g]) => el("option", { value: g }, g))) : null;
-    if (grp) grp.value = groupDefault?.() || GROUPS[0][0];
+    let wie = null;
+    if (aehnlich) {
+      wie = el("select", { "aria-label": "Ähnlich wie" }, aehnlich.pflicht ? null : el("option", { value: "" }, "Weiß ich nicht"));
+      for (const m of aehnlich.liste) {
+        if (Array.isArray(m)) wie.append(el("optgroup", { label: m[0] }, ...m[1].map(v => el("option", { value: v }, v))));
+        else wie.append(el("option", { value: m }, m));
+      }
+      wie.value = aehnlich.vorschlag?.() || "";
+      if (!wie.value) wie.selectedIndex = 0;
+    }
     const msg = el("div", { class: "note" });
     const ok = el("button", { type: "button", class: "btn primary" }, "Übernehmen");
     ok.onclick = async () => {
@@ -124,7 +164,7 @@ export function choice({ field = null, options, more = [], selected = [], max = 
       const same = known().find(x => x.toLowerCase() === v.toLowerCase());
       if (same) { addButton(same, customValues(field).includes(same)); if (!sel.has(same)) toggle(same); close(); return; }
       ok.disabled = true;
-      try { await addCustom(field, v, grp?.value); }
+      try { await addCustom(field, v, wie?.value || null); }
       catch (e) { msg.textContent = "Konnte nicht gespeichert werden: " + (e?.message || e); ok.disabled = false; return; }
       if (!sel.has(v)) toggle(v);
       close();
@@ -132,7 +172,7 @@ export function choice({ field = null, options, more = [], selected = [], max = 
     input.onkeydown = e => { if (e.key === "Enter") ok.click(); };
     editor.replaceChildren(
       el("div", { class: "note" }, "Wird als eigener Knopf gespeichert und ist beim nächsten Mal wieder da."),
-      input, grp ? el("label", { class: "gehoert" }, "Gehört zu ", grp) : null, msg,
+      input, wie ? el("label", { class: "gehoert" }, "Ähnlich wie (damit die Vorschläge damit rechnen können; angezeigt wird dein Wort)", wie) : null, msg,
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: close }, "Abbrechen"), ok));
     editor.hidden = false; input.focus();
   }
@@ -225,10 +265,12 @@ export function saisonVorschlag(a, g, material) {
 }
 export const NICHT_ANZIEHEN = "🚫 Ziehe ich nicht an";
 export function angabenFelder(opt, onChange = () => {}) {
-  const art = choice({ field: "Art", options: opt.art.options, more: ALL_ARTS, selected: opt.art.selected, onChange: () => update(), groupDefault: () => groupOf(art.get()[0]) });
-  const farbe = choice({ field: "Farbe", options: opt.farbe.options, more: FARB_NAMEN, selected: opt.farbe.selected, max: 2, withSwatch: true, onChange: () => update() });
-  const muster = choice({ field: "Muster", options: opt.muster.options, selected: opt.muster.selected });
-  const material = choice({ field: "Material", options: opt.material.options, more: names(MATERIALS).filter(n => !opt.material.options.includes(n)), selected: opt.material.selected, onChange: () => update() });
+  // Vorschlag für „Ähnlich wie“: was gerade angetippt ist, bei einem eigenen Eintrag dessen „Ähnlich wie“
+  const artJetzt = () => { const a = art.get()[0]; return GROUP_OF.has(a) ? a : wieVon("Art", a) || "T-Shirt"; };
+  const art = choice({ field: "Art", options: opt.art.options, more: ALL_ARTS, selected: opt.art.selected, onChange: () => update(), aehnlich: { liste: ALL_ARTS, pflicht: true, vorschlag: artJetzt } });
+  const farbe = choice({ field: "Farbe", options: opt.farbe.options, more: FARB_GRUPPEN, selected: opt.farbe.selected, max: 2, withSwatch: true, onChange: () => update(), aehnlich: { liste: FARB_GRUPPEN, vorschlag: () => farbe.get()[0] } });
+  const muster = choice({ field: "Muster", options: opt.muster.options, selected: opt.muster.selected, aehnlich: { liste: names(PATTERNS), vorschlag: () => muster.get()[0] } });
+  const material = choice({ field: "Material", options: opt.material.options, more: names(MATERIALS).filter(n => !opt.material.options.includes(n)), selected: opt.material.selected, onChange: () => update(), aehnlich: { liste: names(MATERIALS), vorschlag: () => material.get()[0] } });
   // Ärmel und Hosenschnitt: feste Reihenfolge, nur wo sie passen
   const aermel = choice({ options: names(SLEEVES), selected: opt.aermel.selected });
   const schnitt = choice({ options: HOSENSCHNITTE, selected: opt.schnitt.selected });
