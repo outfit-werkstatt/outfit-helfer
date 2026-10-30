@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=4";
+import { loadAI, recognize, loadImage, toCanvas, canvasToBlob, kiInfo } from "./ki.js?v=5";
 import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=7";
-import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=9";
-import { refresh, initSchrank } from "./schrank.js?v=12";
+import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=10";
+import { refresh, initSchrank } from "./schrank.js?v=13";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -72,13 +72,14 @@ async function addPhoto(file, card) {
       // Gespeichert wird das Foto verkleinert (ca. 1200 px) und eine kleine Vorschau (freigestellt, wenn das geklappt hat)
       foto = await canvasToBlob(toCanvas(img, 1200, true), 0.85);
       vorschau = await canvasToBlob(toCanvas(r.cut || img, 400, true), 0.85);
+      r.cut?.close();
     } finally { URL.revokeObjectURL(img.src); }
     const vorschauUrl = URL.createObjectURL(vorschau);
     const pruefung = await findeDoppelt(r.vektor, hash), doppelt = pruefung.treffer;
     // Testanzeige: Messwerte der Doppel-Prüfung, um die Grenze an echten Handy-Fotos zu prüfen
     const n = pruefung.naechster, testZeile = testAnzeige() ? el("div", { class: "note" }, `Test: ${pruefung.mitDaten} von ${pruefung.alle} gespeicherten Teilen haben Prüfdaten. ` +
       (n ? `Ähnlichstes: ${n.teil ? "Nr. " + nrText(n.teil.nr) : "offene Karte"}, ${n.sim.toFixed(3).replace(".", ",")} (Grenze ${String(GRENZE).replace(".", ",")}), Fingerabdruck ${n.gleich ? "gleich" : "anders"}${hash ? "" : " (keiner berechnet)"}.`
-        : "Nichts zum Vergleichen.")) : null;
+        : "Nichts zum Vergleichen.") + ` KI rechnet: ${kiInfo.weg}, Hausregel dort: ${kiInfo.hausregel ? "ja" : "nein"}, ${kiInfo.sekunden.toFixed(1).replace(".", ",")} s.`) : null;
 
     const top = (list, n) => list.slice(0, n).map(c => c.label);
     const form = angabenFelder({

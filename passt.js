@@ -1,9 +1,9 @@
 // „Was passt dazu?“: ein Teil antippen → Kombinationen aus dem Kleiderschrank + schlichte Kaufideen (Entscheidung 6).
 // Die Rechnung steht in regeln.js, hier nur die Anzeige. Texte immer per textContent/DOM, nie per innerHTML.
-import { el, fill, field, choice, beschreibung } from "./ui.js?v=9";
+import { el, fill, field, choice, beschreibung } from "./ui.js?v=10";
 import { nrText } from "./speicher.js?v=7";
-import { stilAktuell } from "./stil.js?v=8";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=1";
+import { stilAktuell } from "./stil.js?v=9";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=2";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";
