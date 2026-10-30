@@ -137,6 +137,7 @@ function clipCanvas(canvas, { W, H, mask }) {
   const side = Math.max(bw, bh), out = new OffscreenCanvas(Math.round(side), Math.round(side));
   const o = out.getContext("2d"); o.fillStyle = "#ebebeb"; o.fillRect(0, 0, out.width, out.height);
   o.drawImage(cut, bx, by, bw, bh, (side - bw) / 2, (side - bh) / 2, bw, bh);
+  m.width = m.height = cut.width = cut.height = 0; // Zeichenflächen freigeben (iOS begrenzt ihren Speicher)
   return out;
 }
 
@@ -159,6 +160,8 @@ export async function recognize(bild) {
   const seg = await segment(full), cut = seg.ok ? clipCanvas(full, seg) : null;
   const views = [0, 90, 180, 270].map(d => rotated(full, d)).concat(cut ? [cut] : []);
   const out = await visionModel(await processor(await Promise.all(views.map(async c => RawImage.fromBlob(await canvasToBlob(c))))));
+  for (const c of views) if (c !== cut) c.width = c.height = 0;
+  full.width = full.height = 0;
   const vecs = normRows(out.image_embeds ?? out.pooler_output), fullVecs = vecs.slice(0, 4), matVecs = [vecs[0], vecs[4] || vecs[2]];
   const avgMap = (field, vs) => { const tot = new Map(); for (const v of vs) for (const [n, s] of scoreField(v, field)) tot.set(n, (tot.get(n) || 0) + s / vs.length); return tot; };
   // Art zweistufig: erst Oberkategorie, dann Art darin

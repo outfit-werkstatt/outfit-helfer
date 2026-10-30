@@ -9,7 +9,7 @@ import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=7";
 import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=10";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=9";
-import { GROUPS, GROUP_OF, loadImage, toCanvas, canvasToBlob } from "./ki.js?v=5";
+import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=5";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -188,7 +188,7 @@ function jpgPruefen(b) {
 async function fotoNeuZeichnen(bytes, max) {
   jpgPruefen(bytes);
   const img = await loadImage(new Blob([bytes], { type: "image/jpeg" }));
-  try { return await (await canvasToBlob(toCanvas(img, max, true), 0.85)).arrayBuffer(); }
+  try { return await (await alsJpg(img, max)).arrayBuffer(); }
   finally { URL.revokeObjectURL(img.src); }
 }
 // Wurde die ZIP entpackt und neu gepackt (Dateien-App, Windows, Mac), liegt alles oft in einem Unterordner,
