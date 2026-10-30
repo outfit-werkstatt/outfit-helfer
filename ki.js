@@ -34,12 +34,17 @@ function imHintergrund() {
     const adresse = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
     const w = new Worker(adresse, { type: "module" }), offen = new Map();
     let id = 0, bereit = false;
-    const scheitert = text => { clearTimeout(uhr); URL.revokeObjectURL(adresse); w.terminate(); rej(new Error(text)); };
-    const uhr = setTimeout(() => scheitert("Der Hintergrund meldet sich nicht"), 30000);
+    // Wartezeit zählt nur, solange die App sichtbar ist: In einer anderen App friert das iPhone alles ein,
+    // sonst sähe das Zurückkommen wie ein Hintergrund aus, der sich nicht meldet.
+    let uhr = null;
+    const uhrStellen = () => { clearTimeout(uhr); if (document.visibilityState === "visible") uhr = setTimeout(() => scheitert("Der Hintergrund meldet sich nicht"), 30000); };
+    const uhrAus = () => { clearTimeout(uhr); document.removeEventListener("visibilitychange", uhrStellen); };
+    document.addEventListener("visibilitychange", uhrStellen); uhrStellen();
+    const scheitert = text => { uhrAus(); URL.revokeObjectURL(adresse); w.terminate(); rej(new Error(text)); };
     const frage = (auftrag, mit = [], fortschritt) => new Promise((ok, nein) => { offen.set(++id, { ok, nein, fortschritt }); w.postMessage({ id, ...auftrag }, mit); });
     w.onmessage = ({ data: d }) => {
       if (d.typ === "da") {
-        clearTimeout(uhr); URL.revokeObjectURL(adresse); bereit = true;
+        uhrAus(); URL.revokeObjectURL(adresse); bereit = true;
         kiInfo.weg = "Hintergrund"; kiInfo.hausregel = d.hausregel;
         res({ loadAI: (fortschritt, erzeugen) => frage({ typ: "laden", erzeugen }, [], fortschritt), recognize: bild => frage({ typ: "erkennen", bild }, [bild]) });
         return;
