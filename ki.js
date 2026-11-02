@@ -1,7 +1,7 @@
 // Erkennung für die App, Seite der Bedienung: Begriffe (ki-listen.js), Bilder laden und verkleinern, Auftrag an die KI.
 // Die KI rechnet 5–6 Sekunden pro Foto. Täte sie das in der Seite, könnte das iPhone so lange nichts zeichnen und beim
 // Scrollen bliebe alles schwarz. Darum rechnet sie im Hintergrund (ki-arbeiter.js, ki-rechnen.js).
-export * from "./ki-listen.js?v=1";
+export * from "./ki-listen.js?v=2";
 
 /* ---------- Bilder ---------- */
 const canvasToBlob = (c, q = 0.9) => new Promise(r => c.toBlob(r, "image/jpeg", q));
@@ -46,7 +46,7 @@ const START_ZEIT = 30000, FOTO_ZEIT = 120000; // ein Foto dauert auf dem iPhone 
 // Startet den Hintergrund. blob:-Datei, weil nur so die Hausregel der Seite auch dort gilt (GitHub Pages kann keine Kopfzeile setzen).
 function imHintergrund() {
   return new Promise((res, rej) => {
-    const code = `import ${JSON.stringify(new URL("ki-arbeiter.js?v=1", import.meta.url).href)};`;
+    const code = `import ${JSON.stringify(new URL("ki-arbeiter.js?v=2", import.meta.url).href)};`;
     const adresse = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
     const w = new Worker(adresse, { type: "module" }), offen = new Map();
     let id = 0, bereit = false;
@@ -83,7 +83,7 @@ function imHintergrund() {
 // Geht der Hintergrund nicht, rechnet die KI wie früher in der Seite: stockender zu bedienen, aber sie funktioniert.
 async function inDerSeite(grund) {
   console.warn("KI rechnet in der Seite:", grund);
-  const m = await import("./ki-rechnen.js?v=1");
+  const m = await import("./ki-rechnen.js?v=2");
   kiInfo.weg = "in der Seite"; kiInfo.grund = grund?.message || String(grund);
   return m;
 }

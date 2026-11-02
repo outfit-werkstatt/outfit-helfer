@@ -7,9 +7,9 @@
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=8";
-import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=11";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=10";
-import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=5";
+import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=12";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=11";
+import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=6";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos

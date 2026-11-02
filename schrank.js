@@ -2,13 +2,13 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=11";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=12";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nummernZuruecksetzen, nrText } from "./speicher.js?v=8";
-import { renderStil, stilKurz } from "./stil.js?v=10";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=7";
-import { renderPasst } from "./passt.js?v=5";
-import { renderOutfit } from "./outfit.js?v=2";
-import { GROUPS } from "./ki.js?v=5";
+import { renderStil, stilKurz } from "./stil.js?v=11";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=8";
+import { renderPasst } from "./passt.js?v=6";
+import { renderOutfit } from "./outfit.js?v=3";
+import { GROUPS } from "./ki.js?v=6";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
 const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;

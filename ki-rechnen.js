@@ -4,7 +4,7 @@
 // dazu Ärmel und Hosenschnitt (gemessen am 28.10.2026: Ärmel 35/36, Hosenschnitt 13/15 mit ganzem Foto in 4 Drehungen).
 // Die englischen Begriffe sind vorab in Zahlen übersetzt (app-begriffe.json).
 import { env, AutoModel, AutoTokenizer, AutoProcessor, SiglipTextModel, SiglipVisionModel, RawImage } from "./lib/transformers.min.js";
-import { GROUPS, GROUP_OF, MATERIALS, PATTERNS, COLORS, SLEEVES, LEGS } from "./ki-listen.js?v=1";
+import { GROUPS, GROUP_OF, MATERIALS, PATTERNS, COLORS, SLEEVES, LEGS } from "./ki-listen.js?v=2";
 env.allowRemoteModels = false;
 env.allowLocalModels = true;
 env.localModelPath = new URL("models/", import.meta.url).href;

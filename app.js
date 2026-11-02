@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=5";
+import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=6";
 import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=8";
-import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=11";
-import { refresh, initSchrank } from "./schrank.js?v=17";
+import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=12";
+import { refresh, initSchrank } from "./schrank.js?v=18";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -25,6 +25,7 @@ function updateProgress() {
   if (total && finished >= total && !open) total = finished = 0;
   $("fortschritt").hidden = !total;
   if (!total) return;
+  $("fortschrittHinweis").hidden = total < 2;
   $("fortschrittBar").style.width = (100 * finished / total).toFixed(0) + "%";
   $("fortschrittText").textContent = finished < total ? `Fotos erkannt: ${finished} von ${total} …`
     : total === 1 ? "Foto erkannt. Bitte prüfen und speichern."

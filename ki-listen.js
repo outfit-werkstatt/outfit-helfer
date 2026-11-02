@@ -56,7 +56,10 @@ export const COLORS = [
   ["Türkis", "turquoise", [60, 180, 180]], ["Hellblau", "light blue", [160, 200, 230]], ["Jeansblau", "denim blue", [82, 110, 150]], ["Blau", "blue", [42, 82, 182]],
   ["Dunkelblau", "navy blue", [30, 40, 80]], ["Lila", "purple", [120, 70, 150]], ["Flieder", "lilac", [190, 170, 215]], ["Rosa", "pink", [240, 182, 196]],
   ["Pink", "hot pink", [220, 60, 130]], ["Rot", "red", [200, 32, 40]], ["Bordeaux", "burgundy", [110, 26, 42]], ["Koralle", "coral", [240, 122, 100]],
-  ["Orange", "orange", [235, 130, 40]], ["Senfgelb", "mustard yellow", [205, 165, 42]], ["Gelb", "yellow", [245, 215, 62]], ["Gold", "gold", [200, 166, 82]]
+  ["Orange", "orange", [235, 130, 40]], ["Senfgelb", "mustard yellow", [205, 165, 42]], ["Gelb", "yellow", [245, 215, 62]], ["Gold", "gold", [200, 166, 82]],
+  // Silber seit 02.11.2026: gemessen an 32 Fotos (Schmuck, Taschen, Schuhe) Metall-Schmuck 15/15 statt 6/15 (vorher Hellgrau oder,
+  // wegen des gespiegelten Holzbodens, Gold), Kleidung unverändert 45/47, Silber kam dort nie vor. Roségold machte die goldene Uhr zu Roségold → weggelassen.
+  ["Silber", "silver", [196, 198, 204]]
 ];
 // Ärmel: kurze „three-quarter“-Sätze zogen fast alles zu ¾, darum die genaueren Formulierungen
 export const SLEEVES = [

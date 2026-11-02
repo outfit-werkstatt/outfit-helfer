@@ -2,9 +2,9 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=11";
+import { el, fill, toast, choice, field, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=12";
 import { setStil } from "./speicher.js?v=8";
-import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=5";
+import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=6";
 
 // Abschnitte mit Fragen. Bei jeder Frage beliebig viele Knöpfe (nichts angetippt = egal) und „Andere …“ zum Eintippen.
 // Wo es dasselbe Merkmal auch am Teil gibt, stehen hier dieselben Wörter und dieselbe Liste für eigene Einträge (liste),
@@ -71,6 +71,17 @@ export function stilKurz(s) {
   if (s.nichtFarben?.length) teile.push("lieber nicht " + s.nichtFarben.join(", "));
   if (s.text) teile.push("„" + kuerzen(s.text.replace(/\s*\n\s*/g, " / "), 60) + "“");
   return teile;
+}
+
+// Vollständig für die ChatGPT-Anweisung (ohne Damen/Herren, das steht dort eigens): eine Zeile pro beantworteter Frage
+export function stilZeilen(s) {
+  s = stilAktuell(s);
+  const z = [];
+  for (const f of FRAGEN) if (liste(s[f.k]).length && passt(f, s.mode)) z.push(`${f.k === "richtung" ? "Stil" : f.label}: ${liste(s[f.k]).join(", ")}`);
+  if (s.lieblingsfarben?.length) z.push("Lieblingsfarben: " + s.lieblingsfarben.join(", "));
+  if (s.nichtFarben?.length) z.push("Farben lieber nicht: " + s.nichtFarben.join(", "));
+  if (s.text) z.push("Sonst noch: " + s.text.replace(/\s*\n\s*/g, " / "));
+  return z;
 }
 
 export function renderStil(box, kopf, stil) {

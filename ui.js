@@ -1,14 +1,14 @@
 // Bausteine für die Bedienung, die mehrere Ansichten brauchen: Elemente bauen, Meldungen, Auswahl-Knöpfe, Angaben-Felder.
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
-import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=5";
+import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=6";
 import { getCustom, setCustom } from "./speicher.js?v=8";
 
 export const $ = id => document.getElementById(id);
 // Farben: die der KI plus weitere nur zum Antippen. Die KI kennt nur ihre gemessenen Farben und wählt die anderen nie vor
 // (viele ähnliche Töne würden ihre Trefferquote senken). Die Vorschlags-Regeln rechnen mit dem Farbwert, verstehen also alle.
 const MEHR_FARBEN = [
-  ["Silber", [196, 198, 204]], ["Roségold", [214, 158, 140]], ["Kupfer", [185, 105, 65]], ["Bronze", [140, 105, 55]],
+  ["Roségold", [214, 158, 140]], ["Kupfer", [185, 105, 65]], ["Bronze", [140, 105, 55]],
   ["Elfenbein", [245, 240, 225]], ["Steingrau", [140, 138, 130]], ["Graphit", [55, 55, 60]],
   ["Sand", [220, 205, 175]], ["Nude", [225, 190, 165]], ["Cognac", [150, 85, 40]], ["Schoko", [85, 50, 35]], ["Rost", [170, 75, 40]], ["Terrakotta", [190, 95, 65]], ["Ocker", [190, 140, 40]],
   ["Salbei", [160, 175, 145]], ["Moosgrün", [90, 105, 60]], ["Tannengrün", [20, 60, 45]], ["Smaragd", [0, 130, 90]], ["Lindgrün", [175, 205, 90]], ["Petrol", [20, 90, 105]],
@@ -20,7 +20,7 @@ const MEHR_FARBEN = [
 ];
 export const FARBEN = [...COLORS.map(([n, , rgb]) => [n, rgb]), ...MEHR_FARBEN];
 // Für „Mein Stil“ reichen die Grundfarben: Die Regeln erkennen verwandte Töne selbst (mag Türkis → Petrol passt auch)
-export const GRUND_FARBEN = [...COLORS.map(([n]) => n), "Silber", "Roségold"];
+export const GRUND_FARBEN = [...COLORS.map(([n]) => n), "Roségold"];
 // Für das Auswahlfeld „Andere …“, nach Farbfamilien geordnet
 export const FARB_GRUPPEN = [
   ["Schwarz, Grau, Weiß", ["Schwarz", "Graphit", "Anthrazit", "Grau", "Steingrau", "Hellgrau", "Weiß", "Elfenbein", "Creme"]],
@@ -275,6 +275,8 @@ export function angabenFelder(opt, onChange = () => {}) {
   const aermel = choice({ options: names(SLEEVES), selected: opt.aermel.selected });
   const schnitt = choice({ options: HOSENSCHNITTE, selected: opt.schnitt.selected });
   const fArmel = field("Ärmel", null, aermel.el), fSchnitt = field("Hosenschnitt", null, schnitt.el);
+  // Muster ist bei Schmuck sinnlos (Uhr „Kariert“, Ohrringe „Animal-Print“), darum dort ausgeblendet
+  const fMuster = field("Muster", null, muster.el);
   // Weitere Merkmale: eigene Einträge erlaubt (außer Saison), eingeklappt unter „Mehr Angaben“
   let saisonAuto = !!opt.saisonAuto;
   const extra = Object.fromEntries(Object.entries(MERKMALE).map(([k, m]) => {
@@ -289,7 +291,7 @@ export function angabenFelder(opt, onChange = () => {}) {
     field("Vorschläge", "Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.", nicht.el));
   const visible = () => {
     const a = art.get()[0], g = groupOf(a);
-    fArmel.hidden = !HAS_SLEEVES.has(g); fSchnitt.hidden = !HAS_LEGS.has(a);
+    fArmel.hidden = !HAS_SLEEVES.has(g); fSchnitt.hidden = !HAS_LEGS.has(a); fMuster.hidden = g === "Schmuck";
     for (const x of Object.values(extra)) x.f.hidden = !a || !x.m.passt(a, g);
     if (saisonAuto && a) extra.saison.w.set(saisonVorschlag(a, g, material.get()[0]));
   };
@@ -297,11 +299,11 @@ export function angabenFelder(opt, onChange = () => {}) {
   visible();
   const wert = k => extra[k].f.hidden ? null : extra[k].w.get()[0] || null;
   return {
-    elements: [field("Art", null, art.el), field("Farbe", "bis zu 2", farbe.el), field("Muster", null, muster.el),
+    elements: [field("Art", null, art.el), field("Farbe", "bis zu 2", farbe.el), fMuster,
       field("Material", opt.material.note || null, material.el), fArmel, fSchnitt, mehr],
     get: () => {
       const a = art.get()[0];
-      return { art: a, gruppe: groupOf(a), farben: farbe.get(), muster: muster.get()[0] || null, material: material.get()[0] || null,
+      return { art: a, gruppe: groupOf(a), farben: farbe.get(), muster: fMuster.hidden ? null : muster.get()[0] || null, material: material.get()[0] || null,
         aermel: fArmel.hidden ? null : aermel.get()[0] || null, schnitt: fSchnitt.hidden ? null : schnitt.get()[0] || null,
         weite: wert("weite"), laenge: wert("laengeOben") ?? wert("laengeUnten"), bund: wert("bund"),
         stil: extra.stil.w.get(), saison: extra.saison.w.get(), notiz: cleanText(notiz.value) || null, nichtAnziehen: nicht.get().length > 0 };

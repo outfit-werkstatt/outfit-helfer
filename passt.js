@@ -1,10 +1,11 @@
 // „Was passt dazu?“: ein Teil antippen → Kombinationen aus dem Kleiderschrank + schlichte Kaufideen (Entscheidung 6).
 // Die Rechnung steht in regeln.js, hier nur die Anzeige. Texte immer per textContent/DOM, nie per innerHTML.
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
-import { el, fill, field, choice, beschreibung } from "./ui.js?v=11";
+import { el, fill, field, choice, beschreibung } from "./ui.js?v=12";
 import { nrText } from "./speicher.js?v=8";
-import { stilAktuell } from "./stil.js?v=10";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=5";
+import { stilAktuell } from "./stil.js?v=11";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=6";
+import { chatgptPanel } from "./chatgpt.js?v=1";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";
@@ -24,15 +25,17 @@ export function auswahlFelder(items, folders, stil, neuZeichnen) {
   return { ordnerWahl, stilWahl, pool, mitStil };
 }
 
-// Eine Kombination mit Nummern, kleinen Fotos, Begründung und Tipps. bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen wieder frei)
+// Kleine Kachel eines Teils (antippen → Teil ansehen). bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen wieder frei)
+export function miniKachel(t, bild, oeffnen, klein = false) {
+  const b = el("button", { type: "button", class: "teil mini" + (klein ? " klein" : "") },
+    el("span", { class: "bild" }, el("img", { src: bild(t.vorschau), alt: beschreibung(t), loading: "lazy" }), el("span", { class: "plakette" }, nrText(t.nr))),
+    el("span", { class: "text" }, `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`));
+  b.onclick = () => oeffnen(t.nr);
+  return b;
+}
+// Eine Kombination mit Nummern, kleinen Fotos, Begründung und Tipps
 export function kombiKarte(k, titel, bild, oeffnen) {
-  const mini = (t, klein = false) => {
-    const b = el("button", { type: "button", class: "teil mini" + (klein ? " klein" : "") },
-      el("span", { class: "bild" }, el("img", { src: bild(t.vorschau), alt: beschreibung(t), loading: "lazy" }), el("span", { class: "plakette" }, nrText(t.nr))),
-      el("span", { class: "text" }, `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`));
-    b.onclick = () => oeffnen(t.nr);
-    return b;
-  };
+  const mini = (t, klein = false) => miniKachel(t, bild, oeffnen, klein);
   return el("div", { class: "panel kombi" },
     titel ? el("div", { class: "kombi-titel" }, titel) : null,
     el("div", { class: "kombi-nummern" }, k.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")),
@@ -60,6 +63,7 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
     r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen) : null,
     ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),
       el("ul", { class: "tipps" }, ...ideen.map(x => el("li", {}, el("strong", {}, x.was), ": ", x.warum)))) : null,
-    el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen kommen später über ChatGPT."));
+    el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen gibt es über ChatGPT, siehe unten."),
+    chatgptPanel(items, stil, { teil: anker }, t => miniKachel(t, bild, oeffnen)));
   return true;
 }

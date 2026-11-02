@@ -6,7 +6,7 @@ let hausregel = false;
 try { (0, eval)("1"); } catch { hausregel = true; }
 
 if (hausregel) {
-  const { loadAI, recognize } = await import("./ki-rechnen.js?v=1");
+  const { loadAI, recognize } = await import("./ki-rechnen.js?v=2");
   self.onmessage = async ({ data: { id, typ, bild, erzeugen } }) => {
     try {
       if (typ === "laden") {

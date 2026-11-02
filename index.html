@@ -15,14 +15,14 @@
 <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=13">
+<link rel="stylesheet" href="app.css?v=14">
 </head>
 <body>
 <main>
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
   <div id="ansichtStart">
   <h1>Outfit-Helfer</h1>
-  <div class="version" id="version">Version 0.10.1 (mehr Wetter) · 30.10.2026</div>
+  <div class="version" id="version">Version 0.11 (ChatGPT, Silber) · 02.11.2026</div>
 
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
@@ -64,14 +64,17 @@
   <div class="panel" id="fortschritt" hidden>
     <div class="status" id="fortschrittText"></div>
     <div class="bar"><div id="fortschrittBar"></div></div>
-    <div id="alleBox" hidden>
-      <div class="actions"><button type="button" class="btn primary" id="alleSpeichern">Alle speichern</button></div>
-      <div class="hint">Speichert jede Karte so, wie sie gerade angetippt ist. Ändern geht auch später noch.</div>
-      <div class="hint" id="alleDoppelt" hidden></div>
-    </div>
+    <div class="hint" id="fortschrittHinweis">Bitte jede Karte kurz prüfen: Stimmen Art, Farbe und Material? Unter der letzten Karte kannst du alle zusammen speichern.</div>
   </div>
 
   <section id="pruefen"></section>
+
+  <!-- Bewusst unter den Karten und nicht hervorgehoben: Man soll erst an allen Karten vorbei, bevor man alle auf einmal speichert -->
+  <div class="panel" id="alleBox" hidden>
+    <div class="hint">Alles durchgesehen? Speichert jede Karte so, wie sie gerade angetippt ist. Ändern geht auch später noch.</div>
+    <div class="hint" id="alleDoppelt" hidden></div>
+    <div class="actions"><button type="button" class="btn" id="alleSpeichern">Alle speichern</button></div>
+  </div>
 
   <div id="outfitKarte"></div>
   <div id="stilKarte"></div>
@@ -86,6 +89,6 @@
   <section id="ansicht" hidden></section>
 </main>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=20"></script>
+<script type="module" src="app.js?v=21"></script>
 </body>
 </html>
