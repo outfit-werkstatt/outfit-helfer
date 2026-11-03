@@ -27,8 +27,10 @@ let current = { v: "start", d: 0 }, urls = [];
 let bearbeitet = false; // „Angaben ändern“ ist offen: dann nicht von außen neu zeichnen, sonst wären die Änderungen weg
 let mehrfach = null;    // „Auswählen“ (Ordner-Ansicht, Papierkorb): Set der angetippten Nummern, sonst null
 const url = blob => { const u = URL.createObjectURL(blob); urls.push(u); return u; };
+// Gescrollt wird im eigenen Bereich #rahmen, nicht in der ganzen Seite (wegen Uhrzeit und Akku auf dem iPhone, siehe app.css)
+const scrollStelle = () => $("rahmen").scrollTop, scrollen = y => $("rahmen").scrollTo(0, y);
 export function go(state) {
-  history.replaceState({ ...current, y: scrollY }, "");
+  history.replaceState({ ...current, y: scrollStelle() }, "");
   current = { ...state, d: current.d + 1 };
   history.pushState(current, "");
   show(0);
@@ -43,10 +45,10 @@ async function show(y) {
   auswahl = null; bearbeitet = false; mehrfach = null; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
   $("ansichtStart").hidden = current.v !== "start"; $("ansicht").hidden = current.v === "start";
   try { await render(); } catch (e) { toast("Anzeigen hat nicht geklappt: " + (e?.message || e)); console.error(e); }
-  scrollTo(0, y);
+  scrollen(y);
 }
 // Dieselbe Ansicht neu zeichnen, ohne zu springen
-async function neuZeichnen() { const y = scrollY; await render(); scrollTo(0, y); }
+async function neuZeichnen() { const y = scrollStelle(); await render(); scrollen(y); }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
 export async function refresh() { if (current.v !== "stil" && current.v !== "sicherung" && current.v !== "fertigEins" && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),

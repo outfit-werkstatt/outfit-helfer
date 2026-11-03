@@ -6,7 +6,7 @@
 import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=6";
 import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=9";
 import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige, infoKnoepfeVerbinden } from "./ui.js?v=13";
-import { refresh, initSchrank } from "./schrank.js?v=22";
+import { refresh, initSchrank } from "./schrank.js?v=23";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -207,8 +207,19 @@ $("version").onclick = () => {
   const jetzt = Date.now(); taps = [...taps.filter(t => jetzt - t < 3000), jetzt];
   if (taps.length < 5) return;
   taps = []; const an = !testAnzeige(); setTestAnzeige(an);
-  toast(an ? "Testanzeige an" : "Testanzeige aus"); refresh();
+  toast(an ? "Testanzeige an" : "Testanzeige aus"); refresh(); testInfo();
 };
+
+// Testanzeige: Werte zu Uhrzeit und Akku (Statusleiste), falls der Inhalt auf einem Gerät wieder darunter läuft
+function testInfo() {
+  const box = $("testInfo"); box.hidden = !testAnzeige();
+  if (box.hidden) return;
+  const p = el("div", { style: "position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none" });
+  document.body.append(p); const env = p.getBoundingClientRect().height; p.remove();
+  box.textContent = `Test Statusleiste: gemeldet ${Math.round(env)} px, Home-Bildschirm-App ${navigator.standalone ? "ja" : "nein"}, ` +
+    `Scroll-Bereich beginnt bei ${Math.round($("rahmen").getBoundingClientRect().top)} px, Fenster ${innerWidth}×${innerHeight}, Bildschirm ${screen.width}×${screen.height}.`;
+}
+testInfo();
 // Noch nicht gespeicherte Karten: beim Schließen oder Neuladen nachfragen (am PC; Safari auf dem iPhone fragt meist nicht)
 addEventListener("beforeunload", e => { if ($("pruefen").querySelector(".check")) { e.preventDefault(); e.returnValue = ""; } });
 
