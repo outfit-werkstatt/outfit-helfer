@@ -6,7 +6,7 @@
 import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=6";
 import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=9";
 import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige, infoKnoepfeVerbinden } from "./ui.js?v=13";
-import { refresh, initSchrank } from "./schrank.js?v=21";
+import { refresh, initSchrank } from "./schrank.js?v=22";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }

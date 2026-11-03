@@ -384,6 +384,6 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
       mitInfo(el("strong", {}, "Sicherung laden"),
         "Holt den Stand aus einer Sicherung zurück, z. B. auf einem neuen Handy.",
         "Vorher prüft die App die Datei und sagt dir genau, was übernommen wird und was verloren ginge."),
-      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, Papierkorb)."),
+      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, Papierkorb)."),
       el("label", { class: "btn datei" }, "Sicherung auswählen …", eingabe), ladenStatus));
 }
