@@ -23,7 +23,7 @@ function updateProgress() {
   $("alleDoppelt").hidden = !doppelt;
   $("alleDoppelt").textContent = `${doppelt === 1 ? "1 Foto" : doppelt + " Fotos"} mit „Vielleicht doppelt“ ${doppelt === 1 ? "wird" : "werden"} ausgelassen – bitte einzeln ansehen.`;
   if (total && finished >= total && !open) total = finished = 0;
-  wachPruefen();
+  wachPruefen(); warteBox();
   $("fortschritt").hidden = !total;
   $("fortschrittHinweis").hidden = total < 2;
   if (!total) return;
@@ -270,13 +270,24 @@ addEventListener("beforeunload", e => { if (ablagen > 0) { e.preventDefault(); e
 /* ---------- Start ---------- */
 infoKnoepfeVerbinden();
 initSchrank().catch(e => { $("kacheln").replaceChildren(el("p", { class: "hint" }, "Speicher konnte nicht geöffnet werden: " + (e?.message || e))); });
-let queue = Promise.resolve();
+let queue = Promise.resolve(), wartend = 0;
 // Fotos nacheinander erkennen (spart Speicher auf dem Handy); fertige Karten kann man schon speichern.
-// Für jedes Foto sofort eine Karte „wartet …“, damit man sieht, was noch kommt.
+// Eine Karte erscheint erst, wenn das Foto erkannt ist. Was noch wartet (auch das gerade laufende), zählt das Kästchen darunter.
+function warteBox() {
+  $("warteBox").hidden = !wartend;
+  $("warteText").textContent = aiState === "bereit" ? "⏳ Wartet auf Erkennung" : "⏳ Wartet, bis die KI bereit ist";
+  $("warteZahl").textContent = wartend === 1 ? "1 Foto" : `${wartend} Fotos`;
+  $("warteBar").style.width = total ? (100 * finished / total).toFixed(0) + "%" : "0";
+}
 function einreihen(entwurf) {
-  const card = el("div", { class: "check" }, el("div", { class: "wait" }, entwurf.r ? "wird geladen …" : "wartet auf die Erkennung …"));
-  $("pruefen").append(card);
-  queue = queue.then(() => addPhoto(entwurf, card));
+  wartend++; warteBox();
+  queue = queue.then(async () => {
+    // Schon an ihrem Platz, aber unsichtbar, bis sie fertig ist (so zählt sie bei „Noch … zum Prüfen“ von Anfang an mit)
+    const card = el("div", { class: "check" }); card.hidden = true;
+    $("pruefen").append(card);
+    await addPhoto(entwurf, card);
+    card.hidden = false; wartend--; warteBox();
+  });
 }
 $("files").addEventListener("change", ev => {
   const list = [...ev.target.files]; ev.target.value = "";
@@ -306,7 +317,7 @@ async function startAI() {
       $("status").textContent = "✅ KI ist bereit.";
       $("uploadLabel").classList.remove("disabled");
       setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
-      kiIstBereit();
+      kiIstBereit(); warteBox();
     }
     wachPruefen();
   } catch (e) {

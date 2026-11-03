@@ -18,7 +18,7 @@
 <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=20">
+<link rel="stylesheet" href="app.css?v=21">
 </head>
 <body>
 <!-- Eigener Scroll-Bereich: Inhalt läuft auf dem iPhone sonst beim Scrollen unter Uhrzeit und Akku (siehe app.css) -->
@@ -27,7 +27,7 @@
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
   <div id="ansichtStart">
   <h1>Outfit-Helfer</h1>
-  <div class="version" id="version">Version 0.15 (Entwürfe beim Hinzufügen, bessere Regeln) · 03.11.2026</div>
+  <div class="version" id="version">Version 0.15.1 (wartende Fotos in einem Kästchen) · 04.11.2026</div>
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
     <button type="button" class="link" id="warnMehr">Wie geht es sicherer?</button>
@@ -78,6 +78,12 @@
   <div class="hint" id="fortschrittHinweis" hidden>Bitte jede Karte kurz prüfen: Stimmen Art, Farbe und Material? Unter der letzten Karte kannst du alle zusammen speichern. Nicht Gespeichertes bleibt erhalten, auch wenn die App zwischendurch zugeht.</div>
 
   <section id="pruefen"></section>
+  <!-- Wartende Fotos in EINEM Kästchen statt einer Karte pro Foto (bei 50 Fotos war das eine endlose Liste, iPhone-Test 0.15).
+       Eine Karte erscheint erst, wenn das Foto erkannt ist und geprüft werden kann. -->
+  <div class="warte-box" id="warteBox" hidden>
+    <div class="warte-kopf"><span id="warteText">⏳ Wartet auf Erkennung</span><span class="warte-zahl" id="warteZahl"></span></div>
+    <div class="bar"><div id="warteBar"></div></div>
+  </div>
 
   <!-- Bewusst unter den Karten und nicht hervorgehoben: Man soll erst an allen Karten vorbei, bevor man alle auf einmal speichert -->
   <div class="panel" id="alleBox" hidden>
@@ -100,6 +106,6 @@
 </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=27"></script>
+<script type="module" src="app.js?v=28"></script>
 </body>
 </html>

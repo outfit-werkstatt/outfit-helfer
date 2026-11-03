@@ -66,6 +66,10 @@ label.upload input{display:none}
 /* Fortschritt beim Hinzufügen: bleibt beim Scrollen durch die Karten oben (unter der Uhrzeit) stehen */
 #fortschritt{position:sticky;top:calc(env(safe-area-inset-top) + 8px);z-index:40;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
 #fortschrittHinweis{margin:-6px 0 16px}
+/* Wartende Fotos: ein Kästchen mit Anzahl und Balken statt vieler leerer Karten */
+.warte-box{background:var(--card);border:1px dashed var(--accent);border-radius:var(--radius);padding:12px 14px;margin-bottom:var(--gap)}
+.warte-kopf{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:600}
+.warte-zahl{flex:0 0 auto;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 10px;font-size:.85rem}
 
 /* Prüfen-Karte */
 .check{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:var(--gap)}
