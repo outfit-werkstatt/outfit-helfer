@@ -23,12 +23,19 @@ const GRUPPEN_PLATZ = { "Oberteile": "oben", "Jacken & Mäntel": "lage", "Untert
 const basisArt = t => GROUP_OF.has(t.art) ? t.art : wieVon("Art", t.art);
 export const platzVon = t => ARTEN[basisArt(t)]?.[0] ?? GRUPPEN_PLATZ[t.gruppe ?? groupOf(t.art)] ?? "zubehoer";
 const SCHICK_PLUS = { elegant: 1, Business: 1, klassisch: 0.5, "schick-lässig": 0.5, lässig: -0.5, sportlich: -1, Streetwear: -1 };
+// Material verschiebt die Schick-Stufe (seit 0.15, iPhone-Test: eine Jeansjacke ging bei „schick“ als normale Jacke durch).
+// Bei der Jeans steckt der Jeansstoff schon in der Art.
+const SCHICK_MATERIAL = { "Seide / Satin": 0.5, "Samt": 0.5, "Spitze": 0.5, "Chiffon": 0.5, "Tweed": 0.5, "Leder": 0.5, "Denim / Jeansstoff": -0.75, "Kunstfell / Teddy": -0.5 };
 function schick(t) {
-  let s = ARTEN[basisArt(t)]?.[1] ?? 3;
+  const art = basisArt(t);
+  let s = ARTEN[art]?.[1] ?? 3;
   for (const st of t.stil || []) s += SCHICK_PLUS[st] ?? 0;
-  if (["Seide / Satin", "Samt"].includes(t.material)) s += 0.5;
+  if (!(art === "Jeans" && t.material === "Denim / Jeansstoff")) s += SCHICK_MATERIAL[t.material] ?? 0;
   return Math.min(5, Math.max(1, s));
 }
+// Echte Jacken für draußen. Strickjacke, Blazer und Weste sind auch eine Lage, halten aber Kälte, Wind und Nässe kaum ab.
+const AUSSEN = new Set(["Jacke", "Mantel"]);
+const aussen = t => AUSSEN.has(basisArt(t));
 const schickWort = s => s >= 3.75 ? "eher schick" : s <= 2.25 ? "eher lässig" : "alltagstauglich";
 const saisonVon = t => t.saison?.length ? t.saison : saisonVorschlag(t.art, t.gruppe, t.material);
 
@@ -142,19 +149,30 @@ const stilSchnitt = (teile, s) => teile.reduce((sum, t) => sum + stilPunkte(t, s
 
 /* ---------- Tipps und Begründung ---------- */
 const nr = t => `Nr. ${String(t.nr).padStart(3, "0")}`;
+// Begründung: Seit 0.15 geht es um die Farben, die auffallen (vorher nur um die ersten beiden Teile, eine gelbe Jacke kam nicht vor)
 function warum(teile) {
-  const a = hauptFarbe(teile[0]), schnitt = teile.reduce((s, t) => s + schick(t), 0) / teile.length;
-  const gleich = (x, y) => x.name && x.name === y.name;
-  for (const t of teile.slice(1)) {
-    const b = hauptFarbe(t), art = farbPaar(a, b).art;
-    if (art === "offen" || gleich(a, b)) continue;
-    const ruhig = a.neutral ? a : b, bunt = a.neutral ? b : a;
-    const text = art === "neutral" ? (a.neutral && b.neutral ? `${a.name} und ${b.name} sind beide neutral und ruhig.` : `${ruhig.name} ist neutral und passt zu ${bunt.name}.`)
-      : art === "tonInTon" ? `${a.name} und ${b.name} sind Ton in Ton.` : art === "verwandt" ? `${a.name} und ${b.name} sind verwandte Farben.`
-      : art === "kontrast" ? `${a.name} und ${b.name} bilden einen Kontrast.` : null;
-    if (text) return `${text} Insgesamt ${schickWort(schnitt)}.`;
+  const schnitt = teile.reduce((s, t) => s + schick(t), 0) / teile.length;
+  const bekannt = teile.map(t => ({ t, f: hauptFarbe(t) })).filter(x => !x.f.unbekannt), farbig = bekannt.filter(x => !x.f.neutral);
+  let text = "";
+  if (!farbig.length) text = bekannt.length >= 2 ? "Alles in ruhigen, neutralen Farben." : "";
+  else if (farbig.length === 1) {
+    const { t, f } = farbig[0], rest = bekannt.length > 1 ? ", der Rest bleibt ruhig" : "";
+    text = f.bunt ? `${nr(t)} bringt die Farbe${rest}.` : `${f.name} (${nr(t)}) setzt den Farbtupfer${rest}.`;
+  } else {
+    const [a, b] = farbig, art = farbPaar(a.f, b.f).art, namen = `${a.f.bunt ? nr(a.t) : a.f.name} und ${b.f.bunt ? nr(b.t) : b.f.name}`;
+    text = a.f.name === b.f.name ? `${a.f.name} wiederholt sich (${nr(a.t)} und ${nr(b.t)}).`
+      : art === "tonInTon" ? `${namen} sind Ton in Ton.` : art === "verwandt" ? `${namen} sind verwandte Farben.`
+      : art === "kontrast" ? `${namen} bilden einen Kontrast.` : `${namen} sind ein mutiger Mix.`;
+    if (farbig.length === 2 && bekannt.length > 2) text += " Der Rest bleibt neutral.";
   }
-  return `Insgesamt ${schickWort(schnitt)}.`;
+  return `${text}${text ? " " : ""}Insgesamt ${schickWort(schnitt)}.`;
+}
+// Genau ein Farbtupfer zu sonst neutralen Teilen wirkt lebendiger, ohne gewagt zu sein. Kleiner Bonus beim Sortieren,
+// außer sie mag es ausdrücklich gedeckt oder schwarz-weiß (seit 0.15: vorher war jeder zweite Vorschlag ganz ohne Farbe).
+function farbtupfer(teile, s) {
+  if ((s?.farbstil || []).some(x => x === "gedeckt / neutral" || x === "Schwarz-Weiß")) return 0;
+  const f = teile.filter(t => KLEIDUNG.has(platzVon(t)) || platzVon(t) === "schuh").map(hauptFarbe).filter(x => !x.unbekannt);
+  return f.filter(x => !x.neutral).length === 1 && f.length >= 2 ? 0.3 : 0;
 }
 // ideen = Kaufideen dieses Outfits (dann kein allgemeiner Schmuck-Tipp, die Idee sagt es schon)
 function tipps(teile, extras, s, ideen = []) {
@@ -201,12 +219,16 @@ const GANZES_OUTFIT = [["oben", "unten", "schuh"], ["ganz", "schuh"]];
 const PLATZ_NAME = { oben: "Oberteile", unten: "Unterteile", schuh: "Schuhe", ganz: "Kleider", lage: "Jacken oder Mäntel" };
 
 /* ---------- Bis zu 3 verschiedene Kombinationen auswählen ---------- */
-const JE_PLATZ = 10, ANZAHL = 3;
+const JE_PLATZ = 10, ANZAHL = 3, ABSTAND_ZUM_BESTEN = 1;
 // frei(k) = die Teile, die nicht fest gesetzt sind. Nicht dreimal fast dasselbe zeigen: Erst Kombinationen mit ganz anderer
 // Kleidung (Schuhe dürfen gleich sein), reicht das nicht, dann wenigstens nicht identisch.
-function verschiedene(sortiert, frei) {
+// Seit 0.15 nur Kombinationen, die nicht viel schlechter sind als die beste (wert = Punkte): Vorher musste der zweite und dritte
+// Vorschlag unbedingt andere Teile haben, und bei wenigen schicken Teilen kam dann Pullover + Jeans für „schick“ heraus.
+// Lieber nur einen oder zwei Vorschläge zeigen.
+function verschiedene(sortiert, frei, wert) {
+  const grenze = wert(sortiert[0]) - ABSTAND_ZUM_BESTEN, gut = sortiert.filter(k => wert(k) >= grenze);
   const kleidung = k => frei(k).filter(t => platzVon(t) !== "schuh"), wahl = [];
-  const auswaehlen = ok => { for (const k of sortiert) { if (wahl.length >= ANZAHL) break; if (!wahl.includes(k) && wahl.every(w => ok(k, w))) wahl.push(k); } };
+  const auswaehlen = ok => { for (const k of gut) { if (wahl.length >= ANZAHL) break; if (!wahl.includes(k) && wahl.every(w => ok(k, w))) wahl.push(k); } };
   auswaehlen((k, w) => !kleidung(k).some(t => w.teile.includes(t)));
   auswaehlen((k, w) => kleidung(k).filter(t => w.teile.includes(t)).length < Math.max(1, kleidung(k).length));
   return wahl;
@@ -246,10 +268,10 @@ export function kombinationen(anker, alle, stil = null) {
   if (!alleRoh.length) return { kombis: [], anders: null, hinweis: "Dazu fehlen im Kleiderschrank noch passende Teile." };
   // Winterpullover + Sandalen oder Bluse + Jogginghose nur zeigen, wenn es gar nichts anderes gibt
   const roh = alleRoh.filter(k => !bricht(k.teile)).length ? alleRoh.filter(k => !bricht(k.teile)) : alleRoh;
-  // Reihenfolge: Stimmigkeit zuerst, „Mein Stil“ als Bonus
-  const gesamt = k => k.stimmig + k.stil * 0.3;
+  // Reihenfolge: Stimmigkeit zuerst, „Mein Stil“ und ein Farbtupfer als Bonus
+  const gesamt = k => k.stimmig + k.stil * 0.3 + farbtupfer(k.teile, stil);
   const sortiert = [...roh].sort((a, b) => gesamt(b) - gesamt(a)), frei = k => k.teile.slice(1);
-  const wahl = verschiedene(sortiert, frei), anders = malWasAnderes(roh, wahl, frei), benutzt = new Map();
+  const wahl = verschiedene(sortiert, frei, gesamt), anders = malWasAnderes(roh, wahl, frei), benutzt = new Map();
   // Tasche und Schmuck als Kaufidee pro Kombination (sie hängen vom Outfit ab), alles andere gesammelt unter „Könnte noch fehlen“
   const fertig = k => {
     const { extras, ideen } = zusaetze(k.teile, nachPlatz, stil, null, benutzt);
@@ -291,11 +313,12 @@ function zusaetze(teile, nachPlatz, stil, sit = null, benutzt = new Map()) {
   const kleidung = teile.filter(t => KLEIDUNG.has(platzVon(t))), mitte = kleidung.reduce((s, t) => s + schick(t), 0) / Math.max(1, kleidung.length);
   const schickOk = t => Math.abs(schick(t) - mitte) <= 1.25;
   // Liefert "genommen", "verbraucht" (es gäbe ein passendes, aber es kam schon zweimal vor) oder "keins"
-  const nimm = (p, passt = () => true, grenze = 1.5) => {
+  // oftOk: darf in jedem Vorschlag vorkommen (die Jacke bei Regen, wie die Schuhe)
+  const nimm = (p, passt = () => true, grenze = 1.5, oftOk = false) => {
     if (da.has(p) && p !== "zubehoer") return "genommen";
     const wert = t => teile.reduce((s, z) => s + paar(t, z), 0) / teile.length + stilPunkte(t, stil) * 0.2;
     const gute = (nachPlatz[p] || []).filter(t => passt(t) && !out.includes(t) && wert(t) >= grenze);
-    const frei = gute.filter(t => (benutzt.get(t) || 0) < 2).sort((x, y) => wert(y) - wert(x));
+    const frei = gute.filter(t => oftOk || (benutzt.get(t) || 0) < 2).sort((x, y) => wert(y) - wert(x));
     if (frei.length) { out.push(frei[0]); return "genommen"; }
     return gute.length ? "verbraucht" : "keins";
   };
@@ -305,8 +328,11 @@ function zusaetze(teile, nachPlatz, stil, sit = null, benutzt = new Map()) {
     if (teile.some(t => platzVon(t) === "ganz" || basisArt(t) === "Rock")) nimm("zubehoer", art("Strumpfhose"), 0.5);
     nimm("zubehoer", art("Schal / Tuch"), 0.5); nimm("zubehoer", art("Hut / Mütze", "Handschuhe"), 0.5);
   }
-  if (!sit) { if (teile.every(t => !saisonVon(t).includes("Sommer") || saisonVon(t).length > 1)) nimm("lage", schickOk, 2.5); }
-  else if (sit.w.nass && !sit.temp?.ohneLage) nimm("lage", art("Jacke", "Mantel"), 0.5);
+  // Bei Nässe und Wind eine echte Jacke (bei Wärme eine leichte); gibt es keine, geht es weiter wie ohne Wetter
+  const gegenWetter = sit && (sit.w.nass || sit.w.wind) && !sit.temp?.ohneLage
+    && nimm("lage", t => aussen(t) && (!sit.temp || sit.temp.ideal >= 2.5 || waerme(t) <= 3.5), 0.5, true) === "genommen";
+  if (gegenWetter) { /* erledigt */ }
+  else if (!sit) { if (teile.every(t => !saisonVon(t).includes("Sommer") || saisonVon(t).length > 1)) nimm("lage", schickOk, 2.5); }
   else if (!sit.temp) { if (!sit.anlass?.ohneSchmuck) nimm("lage", schickOk, 2); } // beim Sport ohne Wetterangabe keine Jacke
   else if (sit.temp.ideal >= 2.5) nimm("lage", schickOk, 2);
   else if (!sit.temp.ohneLage && sit.w.leichteJacke) nimm("lage", t => waerme(t) <= 3.5, 0.5); // warm, aber bewölkt oder windig: z. B. eine Jeansjacke
@@ -495,16 +521,25 @@ export function outfitsFuer(wahl, alle, stil = null) {
     return roh;
   };
   const passend = nutzbar.filter(t => passtZu(t, sit)), genauNachPlatz = platzListe(passend);
+  // Muss eine Jacke dabei sein (kalt), dann eine echte, wenn es eine gibt: Bei Kälte gewann sonst oft die Strickjacke,
+  // weil sie bei „schick“ besser zum Rest passt (iPhone-Test 30.10.2026)
+  if (jacke.length && genauNachPlatz.lage?.some(aussen)) genauNachPlatz.lage = genauNachPlatz.lage.filter(aussen);
   let roh = rechne(genauNachPlatz), nachPlatz = genauNachPlatz, notloesung = false;
   // Nichts Passendes dabei: lieber das Nächstbeste zeigen und ehrlich dazusagen, als gar nichts
   if (!roh.length) { nachPlatz = platzListe(nutzbar); roh = rechne(nachPlatz); notloesung = roh.length > 0; }
   if (!roh.length) return { kombis: [], anders: null, hinweis: "Dafür fehlen im Kleiderschrank noch Teile: Oberteile und Unterteile oder ein Kleid." };
   const heil = roh.filter(k => !bricht(k.teile));
   if (heil.length) roh = heil;
-  const gesamt = k => k.stimmig + k.stil * 0.3 + k.sit;
+  // Soll es schick sein, darf die Kleidung im Schnitt nicht viel lässiger sein (z. B. Pullover + Jeans bei „schick“).
+  // Einzelne lässige Teile gehen, wenn der Rest das ausgleicht (Jeans mit Hemd und Mantel). Gibt es nichts anderes, bleibt alles.
+  if (sit.ziel >= 3.5) {
+    const schickGenug = roh.filter(k => { const kl = k.teile.filter(t => KLEIDUNG.has(platzVon(t))); return kl.reduce((s, t) => s + schick(t), 0) / kl.length >= sit.ziel - 0.75; });
+    if (schickGenug.length) roh = schickGenug;
+  }
+  const gesamt = k => k.stimmig + k.stil * 0.3 + k.sit + farbtupfer(k.teile, stil);
   // Die Jacke darf sich wie die Schuhe wiederholen: Meist gibt es nur wenige, und sonst müsste bei Regen die Strickjacke herhalten
   const sortiert = [...roh].sort((a, b) => gesamt(b) - gesamt(a)), frei = k => k.teile.filter(t => platzVon(t) !== "lage");
-  const auswahl = verschiedene(sortiert, frei), anders = malWasAnderes(roh, auswahl, frei);
+  const auswahl = verschiedene(sortiert, frei, gesamt), anders = malWasAnderes(roh, auswahl, frei);
   const fuer = [sit.anlassName, sit.temperatur, ...sit.wetter].filter(Boolean).join(", ");
   const vorhanden = platzListe(nutzbar);
   const tippStil = sit.anlass?.ohneSchmuck || sit.anlass?.ohneExtras ? { ...stil, schmuck: ["wenig Schmuck"] } : stil; // kein Schmuck-Tipp beim Sport oder zu Hause
