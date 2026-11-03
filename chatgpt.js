@@ -29,14 +29,15 @@ const merker = frage => { const k = frage.teil ? "teil:" + frage.teil.nr : "situ
 const datum = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const ohneUmbruch = s => s.replace(/\s*\n\s*/g, " / ");
 const MODE_TEXT = { Damen: "Damenmode", Herren: "Herrenmode", beides: "Damen- und Herrenmode" };
-// Eine Zeile pro Teil, z. B. „Nr. 012 – T-Shirt, braun; Material: Baumwolle; Ärmel: kurz; Saison: Sommer“
-export function teilZeile(t) {
+// Eine Zeile pro Teil, z. B. „Nr. 012 – T-Shirt, braun; Material: Baumwolle; Ärmel: kurz; Saison: Sommer“.
+// mitSaison = false für die Anweisung fürs Bild (dort zählen Material und Schnitt, die Saison nicht)
+export function teilZeile(t, mitSaison = true) {
   const z = [`Nr. ${nrText(t.nr)} – ${beschreibung(t)}`];
   if (t.muster && t.muster !== "Einfarbig") z.push("Muster: " + t.muster);
   if (t.material) z.push("Material: " + t.material);
   for (const [k, n] of [["aermel", "Ärmel"], ["schnitt", "Hosenschnitt"], ["weite", "Weite"], ["laenge", "Länge"], ["bund", "Bund"]]) if (t[k]) z.push(`${n}: ${t[k]}`);
   if (t.stil?.length) z.push("Stil: " + t.stil.join(", "));
-  z.push("Saison: " + (t.saison?.length ? t.saison : saisonVorschlag(t.art, t.gruppe, t.material)).join(", "));
+  if (mitSaison) z.push("Saison: " + (t.saison?.length ? t.saison : saisonVorschlag(t.art, t.gruppe, t.material)).join(", "));
   if (t.notiz) z.push("Notiz: " + ohneUmbruch(t.notiz));
   return z.join("; ");
 }
@@ -105,9 +106,12 @@ function anfrageText(frage, freitext, stil) {
 // damit er auch in einem neuen Chat funktioniert. traegt = „Ich“ (Foto der Person hängt dran) oder „Model“, pro Sitzung gemerkt.
 const TRAEGT = { ich: "Ich (Foto anhängen)", model: "Ein Model" };
 let traegt = TRAEGT.model;
+// Die Teile mit Material und Schnitt (Gemini machte am 03.11.2026 aus der Lederhose eine Stoffhose und aus der eckigen
+// Tasche einen Beutel, als nur „Hose, schwarz“ dastand).
 const bildText = (wovon, teile = null) => [
-  `Erstelle bitte ein realistisches Foto von ${wovon}${teile ? ": " + teile.map(t => `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`).join("; ") : ""}.`,
-  teile ? "- Angehängt ist das Bild-Paket: Darauf siehst du genau diese Teile groß, mit Nummer. Übernimm sie so genau wie möglich (Farbe, Schnitt, Länge, Muster, Material und Details wie Knöpfe, Aufdruck, Schnallen oder Zifferblatt)."
+  `Erstelle bitte ein realistisches Foto von ${wovon}${teile ? ":" : "."}`,
+  ...(teile || []).map(t => "• " + teilZeile(t, false)),
+  teile ? "- Angehängt ist das Bild-Paket: Darauf siehst du genau diese Teile groß, mit Nummer. Übernimm sie so genau wie möglich (Farbe, Schnitt, Länge, Muster, Material und Details wie Knöpfe, Aufdruck, Schnallen oder Zifferblatt). Material und Form nicht verändern: Leder bleibt Leder, eine eckige Tasche bleibt eckig, eine schmale Hose bleibt schmal und eine weite weit."
     : "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Länge, Muster, Material).",
   traegt === TRAEGT.ich
     ? `- Angehängt ist außerdem ein Foto von mir${teile ? " (das andere Bild)" : ""}. Zeig genau diese Person in dem Outfit: gleiches Gesicht, gleiche Haare, gleiche Figur und Hautfarbe. Nichts an der Person verschönern oder verändern.`
