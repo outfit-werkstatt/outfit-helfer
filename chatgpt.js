@@ -261,6 +261,10 @@ const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*
 // „Outfit Nr. 2“ ist die Nummer des Outfits, nicht die eines Teils
 const OUTFIT_NR = new RegExp(`\\b(${WORT})\\s*Nr\\.?\\s*\\d+`, "gi");
 const NUMMER = /\bNr\.?\s*0*(\d{1,6})\b([^\n]*?)(?=\bNr\.?\s*\d|$)/gi;
+// Teile eines Outfits stehen in eigenen Zeilen („- Nr. 009 – Hemd“, „Oberteil: Nr. 040“, „1. Nr. 009“, „| Nr. 009 |“,
+// „Outfit 1: Nr. 009 + Nr. 008“). Nummern mitten im Text gehören nicht dazu (Styling-Tipp „mit einer Haarklammer,
+// z. B. Nr. 062“, Gemini 03.11.2026) – außer die Gruppe hat gar keine solche Zeile („Kombiniere das Hemd (Nr. 009) mit …“).
+const TEIL_ZEILE = /^[^\p{L}\d]*(\d+[.)]\s*)?([\p{L}][\p{L}\d &/+-]{0,24}:[^\p{L}\d]*)?Nr\.?\s*\d/iu;
 const lesbar = s => s.replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "");
 // Arten in einfacher Form („Ohrringe“ → „ohrring“), um zu sehen, ob ChatGPT bei einer Nummer ein ganz anderes Teil beschreibt
 const stamm = w => w.toLowerCase().replace(/(en|e|n|s)$/, "");
@@ -275,15 +279,17 @@ export function antwortLesen(text, items) {
   const gruppen = [];
   let akt = null;
   for (const zeile of text.split(/\r?\n/)) {
-    if (!akt || KOPF.test(zeile)) { akt = { zeilen: [], nrs: [], beschr: new Map() }; gruppen.push(akt); }
+    if (!akt || KOPF.test(zeile)) { akt = { zeilen: [], nrs: [], imText: [], beschr: new Map() }; gruppen.push(akt); }
     akt.zeilen.push(zeile);
-    for (const m of zeile.replace(OUTFIT_NR, "").matchAll(NUMMER)) {
+    const ohne = zeile.replace(OUTFIT_NR, ""), liste = TEIL_ZEILE.test(ohne) ? akt.nrs : akt.imText;
+    for (const m of ohne.matchAll(NUMMER)) {
       const n = +m[1], b = m[2].replace(/^[\s–—\-:,(]+/, "").replace(/[\s+,;)]+$/, "").slice(0, 60);
       if (n <= 0) continue;
-      if (!akt.nrs.includes(n)) akt.nrs.push(n);
+      if (!liste.includes(n)) liste.push(n);
       if (b && !akt.beschr.has(n)) akt.beschr.set(n, b);
     }
   }
+  for (const g of gruppen) if (!g.nrs.length) g.nrs = g.imText;
   const nachNr = new Map(items.map(t => [t.nr, t])), unbekannt = new Set();
   const out = gruppen.map(g => {
     const teile = [], hinweise = [];
@@ -428,6 +434,8 @@ export function chatgptPanel(items, stil, frage, kachel) {
 
   const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort aus dem Chat hier einfügen", "aria-label": "Antwort aus dem Chat" });
   feld.oninput = () => { m.antwort = feld.value; };
+  // Eingefügt → gleich anzeigen (der Knopf „Outfits anzeigen“ bleibt für selbst getippte Änderungen)
+  feld.onpaste = () => setTimeout(() => { m.antwort = feld.value; anzeigen(feld.value); }, 0);
   const anzeigen = text => {
     m.angezeigt = text.slice(0, MAX_ANTWORT);
     if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); return; }
