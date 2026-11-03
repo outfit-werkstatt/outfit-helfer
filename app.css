@@ -168,4 +168,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 /* Sammelbilder für ChatGPT als kleine Vorschau */
 .sammelbilder{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin:10px 0}
 .sammelbild{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff}
+/* Bild-Paket: ein Outfit groß, als Vorschau */
+.bildpaket-box .actions{flex-wrap:wrap}
+.bildpaket{display:block;width:100%;max-width:360px;height:auto;margin:10px 0;border-radius:8px;border:1px solid var(--line);background:#fff}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#22201c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}

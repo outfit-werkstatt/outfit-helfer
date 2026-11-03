@@ -5,7 +5,7 @@ import { el, fill, field, choice, beschreibung } from "./ui.js?v=12";
 import { nrText } from "./speicher.js?v=8";
 import { stilAktuell } from "./stil.js?v=12";
 import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=7";
-import { chatgptPanel } from "./chatgpt.js?v=3";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=3";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";
@@ -36,6 +36,9 @@ export function miniKachel(t, bild, oeffnen, klein = false) {
 // Eine Kombination mit Nummern, kleinen Fotos, Begründung und Tipps
 export function kombiKarte(k, titel, bild, oeffnen) {
   const mini = (t, klein = false) => miniKachel(t, bild, oeffnen, klein);
+  // Bild-Paket erst auf Wunsch (die Ansicht wird bei jedem Tippen neu gezeichnet). Nur die Kleidung, nicht „Dazu passt auch“.
+  const paketBox = el("div", {}), paketKnopf = el("button", { type: "button", class: "btn" }, "🖼 Bild von diesem Outfit");
+  paketKnopf.onclick = () => { const b = bildPaketBereich(k.teile, "diesem Outfit aus meinem Kleiderschrank"); paketKnopf.hidden = true; fill(paketBox, b.el); b.erstellen(); };
   return el("div", { class: "panel kombi" },
     titel ? el("div", { class: "kombi-titel" }, titel) : null,
     el("div", { class: "kombi-nummern" }, k.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")),
@@ -46,7 +49,8 @@ export function kombiKarte(k, titel, bild, oeffnen) {
     k.luecken.length ? el("p", { class: "hint" }, `Hier fehlen noch: ${k.luecken.join(", ")}.`) : null,
     // Kein vorhandenes Teil passt wirklich: lieber eine Kaufidee als irgendetwas dazulegen
     k.ideen?.length ? el("p", { class: "hint" }, `🛍 Würde gut dazu passen: ${k.ideen.join(", ")}.`) : null,
-    k.tipps.length ? el("ul", { class: "tipps" }, ...k.tipps.map(x => el("li", {}, x))) : null);
+    k.tipps.length ? el("ul", { class: "tipps" }, ...k.tipps.map(x => el("li", {}, x))) : null,
+    el("div", { class: "actions" }, paketKnopf), paketBox);
 }
 
 export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, neuZeichnen) {
