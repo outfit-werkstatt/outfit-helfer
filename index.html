@@ -7,8 +7,11 @@
      schicken (connect-src 'self'), kein Code direkt in der Seite. 'wasm-unsafe-eval' braucht der KI-Rechenkern. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Outfit-Helfer</title>
-<!-- Als App auf dem Home-Bildschirm: eigenes Fenster, eigener Speicher ohne 7-Tage-Regel. Symbol kommt mit dem Design. -->
+<!-- Als App auf dem Home-Bildschirm: eigenes Fenster, eigener Speicher ohne 7-Tage-Regel. -->
 <link rel="manifest" href="manifest.webmanifest">
+<!-- Symbol: volles Quadrat ohne Durchsichtiges, das iPhone rundet die Ecken selbst ab -->
+<link rel="apple-touch-icon" href="symbol-180.png">
+<link rel="icon" type="image/png" href="symbol-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Outfit-Helfer">
@@ -24,7 +27,7 @@
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
   <div id="ansichtStart">
   <h1>Outfit-Helfer</h1>
-  <div class="version" id="version">Version 0.14.2 (Statusleiste, eigener Scroll-Bereich) · 03.11.2026</div>
+  <div class="version" id="version">Version 0.14.3 (Symbol für den Home-Bildschirm) · 03.11.2026</div>
   <div class="note" id="testInfo" hidden></div>
 
   <div class="warnzeile" id="warnzeile" hidden>
