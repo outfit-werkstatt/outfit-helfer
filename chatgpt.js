@@ -101,16 +101,25 @@ function anfrageText(frage, freitext, stil) {
   ].filter(z => z !== null).join("\n");
 }
 // Zweite Nachricht, erst nach der Antwort mit den Outfits. wovon = „Outfit 2 aus deiner Antwort“ o. Ä.;
-// teile = die Teile auf dem Bild-Paket (ohne Paket verweist der Text auf die Sammelbilder)
+// teile = die Teile auf dem Bild-Paket (ohne Paket verweist der Text auf die Sammelbilder). Der Text nennt die Teile selbst,
+// damit er auch in einem neuen Chat funktioniert. traegt = „Ich“ (Foto der Person hängt dran) oder „Model“, pro Sitzung gemerkt.
+const TRAEGT = { ich: "Ich (Foto anhängen)", model: "Ein Model" };
+let traegt = TRAEGT.model;
 const bildText = (wovon, teile = null) => [
-  `Erstelle jetzt bitte ein Bild von ${wovon}${teile ? ": " + teile.map(t => `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`).join("; ") : ""}.`,
-  teile ? "- Auf dem angehängten Bild-Paket siehst du genau diese Teile groß. Halte dich an diese Fotos (Farbe, Schnitt, Muster, Material und Details wie Knöpfe, Aufdruck oder Zifferblatt)."
-    : "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Muster, Material).",
+  `Erstelle bitte ein realistisches Foto von ${wovon}${teile ? ": " + teile.map(t => `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`).join("; ") : ""}.`,
+  teile ? "- Angehängt ist das Bild-Paket: Darauf siehst du genau diese Teile groß, mit Nummer. Übernimm sie so genau wie möglich (Farbe, Schnitt, Länge, Muster, Material und Details wie Knöpfe, Aufdruck, Schnallen oder Zifferblatt)."
+    : "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Länge, Muster, Material).",
+  traegt === TRAEGT.ich
+    ? `- Angehängt ist außerdem ein Foto von mir${teile ? " (das andere Bild)" : ""}. Zeig genau diese Person in dem Outfit: gleiches Gesicht, gleiche Haare, gleiche Figur und Hautfarbe. Nichts an der Person verschönern oder verändern.`
+    : "- Zeig das Outfit an einem Model.",
+  "- Ganzer Körper von Kopf bis Fuß, natürliche Haltung, ruhiger Hintergrund, Tageslicht.",
   "- Zeig nur Teile aus meinem Kleiderschrank. Füg nichts dazu, was nicht im Outfit steht, auch keinen Schmuck, keine Tasche und keine Kaufidee.",
   "- Fehlt etwas (z. B. eine Jacke), lass es im Bild weg und schreib es nur als Text darunter: „Mit … würde es noch besser aussehen“.",
-  "- Schreib unter das Bild, welche Nummern darauf zu sehen sind.",
-  "- Wenn ich ein Foto von mir anhänge, zeig mich darin, sonst ein Model."
+  "- Schreib unter das Bild, welche Nummern darauf zu sehen sind."
 ].join("\n");
+// Knöpfe „Wer soll es tragen?“ (in Schritt 4 und bei den Vorschlägen der App)
+const traegtWahl = () => field("Wer soll das Outfit tragen?", "Für dich selbst: Häng im Chat zusätzlich ein Foto von dir an (ganzer Körper, gutes Licht). Das Foto geht an den Anbieter.",
+  choice({ options: Object.values(TRAEGT), selected: [traegt], onChange: sel => { traegt = sel[0] || TRAEGT.model; } }).el);
 
 /* ---------- Sammelbilder ---------- */
 // Je Bild bis zu 28 Teile (4 Spalten × 7 Reihen). Weniger pro Bild wäre schärfer, bräuchte aber mehr der wenigen Uploads.
@@ -208,16 +217,17 @@ export function bildPaketBereich(alle, wovon) {
     paketOffen = { zu };
     const kopierBox = el("div", {});
     const teilen = el("button", { type: "button", class: "btn" }, mobil() ? "🖼 Bild-Paket sichern / teilen" : "🖼 Bild-Paket herunterladen");
-    teilen.onclick = async () => { if (await bilderWeitergeben([datei])) toast("Jetzt den Bild-Wunsch kopieren"); };
-    const wunsch = el("button", { type: "button", class: "btn primary" }, "📋 Bild-Wunsch kopieren");
+    teilen.onclick = async () => { if (await bilderWeitergeben([datei])) toast("Jetzt die Anweisung fürs Bild kopieren"); };
+    const wunsch = el("button", { type: "button", class: "btn primary" }, "📋 Anweisung fürs Bild kopieren");
     wunsch.onclick = async () => {
       const text = bildText(wovon, teile.slice(0, PAKET_MAX));
       if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
-      fill(kopierBox); toast("Bild-Wunsch kopiert – mit dem Bild-Paket im Chat senden");
+      fill(kopierBox); toast("Anweisung kopiert – mit den Bildern im Chat senden");
     };
     fill(box, el("img", { src: url, alt: "Bild-Paket: " + teile.map(t => "Nr. " + nrText(t.nr)).join(" + "), class: "bildpaket" }),
       teile.length > PAKET_MAX ? el("p", { class: "hint" }, `Im Bild-Paket sind die ersten ${PAKET_MAX} Teile.`) : null,
-      el("p", { class: "hint" }, `So geht's: ① ${mobil() ? "„Bild-Paket sichern“ tippen und „Bild sichern“ wählen." : "Bild-Paket herunterladen."} ② „Bild-Wunsch kopieren“. ③ In ChatGPT oder Gemini das Bild-Paket anhängen (für ein Bild von dir zusätzlich ein Foto von dir), den Text einfügen und senden.`),
+      traegtWahl(),
+      el("p", { class: "hint" }, `So geht's: ① ${mobil() ? "„Bild-Paket sichern“ tippen und „Bild sichern“ wählen." : "Bild-Paket herunterladen."} ② „Anweisung fürs Bild kopieren“. ③ In ChatGPT oder Gemini mit ＋ das Bild-Paket anhängen (und für „Ich“ ein Foto von dir), die Anweisung einfügen und senden.`),
       el("p", { class: "hint" }, "Gut zu wissen: Das Bild-Paket zeigt deine Originalfotos, also auch den Hintergrund (Boden, Zimmer). Schau kurz drüber, bevor du es hochlädst – es geht an den Anbieter. In den Gratis-Versionen zählt jedes angehängte Bild zu den wenigen Uploads pro Tag."),
       el("div", { class: "actions" }, teilen, wunsch), kopierBox);
   }
@@ -412,14 +422,15 @@ export function chatgptPanel(items, stil, frage, kachel) {
     if (!outfits.length) {
       const bildBox = el("div", {});
       const wahl = choice({ options: ["Outfit 1", "Outfit 2", "Outfit 3"], selected: [m.bildOutfit], onChange: sel => { m.bildOutfit = sel[0] || "Outfit 1"; } });
-      const knopfBild = el("button", { type: "button", class: "btn" }, "📋 Bild-Wunsch kopieren");
+      const knopfBild = el("button", { type: "button", class: "btn" }, "📋 Anweisung fürs Bild kopieren");
       knopfBild.onclick = async () => {
         const text = bildText(`${OUTFITS.includes(m.bildOutfit) ? m.bildOutfit : "Outfit 1"} aus deiner Antwort`);
         if (!await kopieren(text)) { vonHand(bildBox, text); return; }
-        fill(bildBox); toast("Bild-Wunsch kopiert – im selben Chat einfügen");
+        fill(bildBox); toast("Anweisung kopiert – im selben Chat einfügen");
       };
       fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Erst wenn die Antwort mit den Outfits da ist. Welches Outfit?", wahl.el),
         el("p", { class: "hint" }, "Tipp: Füg die Antwort zuerst bei Schritt 3 ein. Dann macht die App ein Bild-Paket mit genau diesen Teilen in groß, und das Bild wird deinen echten Sachen ähnlicher."),
+        traegtWahl(),
         el("div", { class: "actions" }, knopfBild), bildBox);
       return;
     }
@@ -469,5 +480,5 @@ export function chatgptPanel(items, stil, frage, kachel) {
     el("div", { class: "actions" }, leeren, knopfZeigen),
     ergebnis,
     schritt4,
-    el("p", { class: "hint" }, "Für ein Bild von dir selbst: Häng im Chat ein Foto von dir an. Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel."));
+    el("p", { class: "hint" }, "Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel."));
 }
