@@ -63,6 +63,10 @@ label.upload input{display:none}
 .warnzeile{background:var(--chip);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:.9rem}
 .link{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 
+/* Fortschritt beim Hinzufügen: bleibt beim Scrollen durch die Karten oben (unter der Uhrzeit) stehen */
+#fortschritt{position:sticky;top:calc(env(safe-area-inset-top) + 8px);z-index:40;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+#fortschrittHinweis{margin:-6px 0 16px}
+
 /* Prüfen-Karte */
 .check{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:var(--gap)}
 .check .top{display:flex;gap:12px;align-items:center;margin-bottom:6px}

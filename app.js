@@ -4,8 +4,8 @@
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=6";
-import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=9";
-import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige, infoKnoepfeVerbinden } from "./ui.js?v=13";
+import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwuerfe } from "./speicher.js?v=9";
+import { $, el, fill, toast, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige, infoKnoepfeVerbinden } from "./ui.js?v=13";
 import { refresh, initSchrank } from "./schrank.js?v=23";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
@@ -23,9 +23,10 @@ function updateProgress() {
   $("alleDoppelt").hidden = !doppelt;
   $("alleDoppelt").textContent = `${doppelt === 1 ? "1 Foto" : doppelt + " Fotos"} mit „Vielleicht doppelt“ ${doppelt === 1 ? "wird" : "werden"} ausgelassen – bitte einzeln ansehen.`;
   if (total && finished >= total && !open) total = finished = 0;
+  wachPruefen();
   $("fortschritt").hidden = !total;
-  if (!total) return;
   $("fortschrittHinweis").hidden = total < 2;
+  if (!total) return;
   $("fortschrittBar").style.width = (100 * finished / total).toFixed(0) + "%";
   $("fortschrittText").textContent = finished < total ? `Fotos erkannt: ${finished} von ${total} …`
     : total === 1 ? "Foto erkannt. Bitte prüfen und speichern."
@@ -60,29 +61,72 @@ async function findeDoppelt(vektor, hash) {
   return { treffer: best, naechster, mitDaten: teile.filter(t => t.vektor || t.hash).length, alle: teile.length };
 }
 
-/* ---------- Prüfen-Karte für ein Foto ---------- */
-async function addPhoto(file, card) {
-  card.replaceChildren(el("div", { class: "wait" }, "wird erkannt …"));
+/* ---------- Entwürfe ----------
+   Jedes ausgewählte Foto wird sofort als Entwurf gespeichert (erst das Original, nach der Erkennung verkleinert mit dem
+   Ergebnis der KI und dem, was angetippt ist). Schließt das iPhone die App, z. B. weil der Speicher knapp wird, kommen
+   beim nächsten Öffnen alle Karten wieder: erkannte sofort, wartende werden weiter erkannt. Fehler beim Zwischenspeichern
+   halten nichts auf, dann fehlt eben nur der Schutz. */
+let naechsteId = Date.now() * 1000, ablagen = 0;
+const ablegen = (() => { let kette = Promise.resolve(); // Originale nacheinander schreiben, sonst liegen 40 Fotos gleichzeitig im Speicher
+  return (id, file) => { ablagen++;
+    return kette = kette.then(() => entwurfSpeichern({ id, datei: file, dateiTyp: file.type }))
+      .catch(e => console.error("Entwurf nicht gespeichert", e)).finally(() => { ablagen--; }); };
+})();
+
+/* ---------- Bildschirm wach halten ----------
+   Solange die KI lädt oder Fotos erkannt werden, soll das iPhone nicht von selbst sperren (gesperrt pausiert alles).
+   Geht in Safari ab iOS 16.4, in der Home-Bildschirm-App erst ab iOS 18.4; sonst passiert einfach nichts.
+   Das Handy gibt die Sperre beim Verlassen der App selbst frei, beim Zurückkommen wird sie neu angefordert. */
+let wachSperre = null, wachAnfrage = false, wachAbgelehnt = false; // abgelehnt: erst nach dem Zurückkommen in die App neu fragen
+const wachNoetig = () => aiState === "lädt" || finished < total;
+async function wachPruefen() {
+  if (wachAnfrage) return;
+  if (wachNoetig() && !wachSperre && !wachAbgelehnt && document.visibilityState === "visible" && navigator.wakeLock) {
+    wachAnfrage = true;
+    try { const s = await navigator.wakeLock.request("screen"); wachSperre = s; s.addEventListener("release", () => { if (wachSperre === s) wachSperre = null; }); }
+    catch (e) { wachAbgelehnt = true; console.warn("Bildschirm wach halten geht nicht:", e?.message || e); }
+    wachAnfrage = false;
+    if (!wachNoetig()) wachPruefen(); // inzwischen fertig geworden → gleich wieder freigeben
+  } else if (!wachNoetig() && wachSperre) { const s = wachSperre; wachSperre = null; s.release().catch(() => {}); }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") wachAbgelehnt = false; wachPruefen(); });
+
+/* ---------- Prüfen-Karte für ein Foto ----------
+   e = Entwurf: { id, datei } zum Erkennen, oder ein schon erkannter Entwurf { id, hash, foto, vorschau, r, wahl, ordner, doppeltOk } */
+async function addPhoto(e, card) {
   await customReady;
+  // Änderungen und Löschen erst, wenn der Entwurf selbst fertig geschrieben ist (sonst käme er hinterher wieder)
+  let erstSicherung = Promise.resolve(e.gesichert);
   try {
-    const hash = await fingerabdruck(file);
-    const img = await loadImage(file);
-    let r, foto, vorschau;
-    try {
-      r = await recognize(img);
-      // Gespeichert wird das Foto verkleinert (ca. 1200 px) und eine kleine Vorschau (freigestellt, wenn das geklappt hat)
-      foto = await alsJpg(img, 1200);
-      vorschau = await alsJpg(r.cut || img, 400);
-    } finally { r?.cut?.close(); URL.revokeObjectURL(img.src); }
+    if (!e.r) {
+      card.replaceChildren(el("div", { class: "wait" }, aiState === "bereit" ? "wird erkannt …" : "wartet, bis die KI bereit ist …"));
+      await kiBereit;
+      card.replaceChildren(el("div", { class: "wait" }, "wird erkannt …"));
+      const file = e.datei, hash = await fingerabdruck(file);
+      const img = await loadImage(file);
+      let r, foto, vorschau;
+      try {
+        r = await recognize(img);
+        // Gespeichert wird das Foto verkleinert (ca. 1200 px) und eine kleine Vorschau (freigestellt, wenn das geklappt hat)
+        foto = await alsJpg(img, 1200);
+        vorschau = await alsJpg(r.cut || img, 400);
+      } finally { r?.cut?.close(); URL.revokeObjectURL(img.src); }
+      const { cut, ...ergebnis } = r; // das ausgeschnittene Bild steckt schon in der Vorschau
+      // Erkannt: Original im Entwurf durch das verkleinerte Foto ersetzen (erst wenn das Original fertig geschrieben ist)
+      const neu = { id: e.id, hash, foto, vorschau, r: ergebnis, wahl: null, ordner: [], doppeltOk: false };
+      erstSicherung = erstSicherung.then(() => entwurfSpeichern(neu)).catch(x => console.error("Entwurf nicht gespeichert", x));
+      e = neu;
+    }
+    const { r, hash, foto, vorschau } = e;
     const vorschauUrl = URL.createObjectURL(vorschau);
-    const pruefung = await findeDoppelt(r.vektor, hash), doppelt = pruefung.treffer;
+    const pruefung = await findeDoppelt(r.vektor, hash), doppelt = e.doppeltOk ? null : pruefung.treffer;
     // Testanzeige: Messwerte der Doppel-Prüfung, um die Grenze an echten Handy-Fotos zu prüfen
     const n = pruefung.naechster, testZeile = testAnzeige() ? el("div", { class: "note" }, `Test: ${pruefung.mitDaten} von ${pruefung.alle} gespeicherten Teilen haben Prüfdaten. ` +
       (n ? `Ähnlichstes: ${n.teil ? "Nr. " + nrText(n.teil.nr) : "offene Karte"}, ${n.sim.toFixed(3).replace(".", ",")} (Grenze ${String(GRENZE).replace(".", ",")}), Fingerabdruck ${n.gleich ? "gleich" : "anders"}${hash ? "" : " (keiner berechnet)"}.`
         : "Nichts zum Vergleichen.") + ` KI rechnet: ${kiInfo.weg}${kiInfo.grund ? ` (${kiInfo.grund})` : ""}, ${kiInfo.sekunden.toFixed(1).replace(".", ",")} s.`) : null;
 
     const top = (list, n) => list.slice(0, n).map(c => c.label);
-    const form = angabenFelder({
+    const vorschlag = {
       art: { options: top(r.art, 3), selected: [r.art[0].label] },
       // Farbe: bis zu 2; die zweite nur vorwählen, wenn die KI sie für ähnlich wahrscheinlich hält (wie in der Testseite)
       farbe: { options: top(r.farbe, 5), selected: [r.farbe[0].label, ...r.farbe.slice(1, 2).filter(c => c.score >= 0.2).map(c => c.label)] },
@@ -93,7 +137,15 @@ async function addPhoto(file, card) {
       aermel: { selected: [r.aermel[0].label] }, schnitt: { selected: [r.schnitt[0].label] },
       // Weitere Merkmale ohne KI-Vorwahl; nur die Saison wird nach Art und Material vorgeschlagen
       saisonAuto: true
-    }, () => update());
+    };
+    // Wiederhergestellte Karte: dieselben Knöpfe wie nach der Erkennung, angetippt ist, was sie schon gewählt hatte
+    const w = e.wahl, gewesen = w && angabenVon(w), mitAuswahl = (k, sel) => ({ ...vorschlag[k], selected: sel });
+    const form = angabenFelder(w ? { ...gewesen, mehrOffen: false,
+      art: mitAuswahl("art", w.art ? [w.art] : []), farbe: mitAuswahl("farbe", gewesen.farbe.selected),
+      muster: mitAuswahl("muster", gewesen.muster.selected), material: mitAuswahl("material", gewesen.material.selected),
+      // ausgeblendet (z. B. Ärmel bei einer Hose) war nichts gewählt → wieder der Vorschlag der KI, falls die Art noch wechselt
+      aermel: w.aermel ? gewesen.aermel : vorschlag.aermel, schnitt: w.schnitt ? gewesen.schnitt : vorschlag.schnitt
+    } : vorschlag, () => update());
     // Eigene Ordner gleich mit auswählen (freiwillig); in „Mein Kleiderschrank“ ist jedes Teil sowieso.
     // Werden Ordner angelegt, umbenannt oder gelöscht, während die Karte offen ist, baut sich die Auswahl neu auf (Gewähltes bleibt).
     let folders = [], ordner = null;
@@ -106,6 +158,7 @@ async function addPhoto(file, card) {
       fill(ordnerBox, ordner ? field("Ordner", "freiwillig – in „Mein Kleiderschrank“ ist es sowieso", ordner.el) : null);
     }
     await baueOrdner();
+    if (ordner && e.ordner?.length) ordner.set(folders.filter(f => e.ordner.includes(f.id)).map(f => f.name));
     const onOrdner = () => baueOrdner().catch(e => console.error(e));
     document.addEventListener("ordner-geaendert", onOrdner);
     const titel = el("div", { class: "titel" });
@@ -129,13 +182,25 @@ async function addPhoto(file, card) {
       const text = doppelt.gleich ? (doppelt.teil ? `Dieses Foto ist schon gespeichert: ${wer}.` : `Dieses Foto ist zweimal ausgewählt, siehe ${wer}.`)
         : `Sieht aus wie ${wer}. Ist es dasselbe Teil?`;
       const behalten = el("button", { type: "button", class: "btn klein" }, "Ist ein anderes Teil – behalten");
-      behalten.onclick = () => { doppeltOffen = false; doppeltBox.remove(); updateProgress(); };
+      behalten.onclick = () => { doppeltOffen = false; doppeltBox.remove(); updateProgress(); merken(); };
       doppeltBox = el("div", { class: "doppelt" }, el("img", { src: doppeltUrl || doppelt.karte.url, alt: "" }),
         el("div", {}, el("strong", {}, "⚠️ Vielleicht doppelt"), el("div", {}, text),
           el("div", { class: "note" }, "Wenn ja: unten „Verwerfen“."), behalten));
     }
     offene.set(card, { vektor: r.vektor, hash, titel: () => titel.textContent, url: vorschauUrl });
+    // Was angetippt ist, kurz nach jeder Änderung im Entwurf merken (Klicks, Auswahlfelder und die Notiz landen alle hier)
+    let merkTimer = null, weg = false;
+    function merken() {
+      clearTimeout(merkTimer);
+      merkTimer = setTimeout(() => {
+        if (weg) return;
+        const felder = { wahl: form.get(), ordner: gewaehlteOrdner(), doppeltOk: !doppeltOffen };
+        erstSicherung.then(() => weg || entwurfAendern(e.id, felder)).catch(x => console.error("Entwurf nicht gespeichert", x));
+      }, 400);
+    }
+    for (const ereignis of ["click", "change", "input"]) card.addEventListener(ereignis, merken);
     const removeCard = () => {
+      weg = true; clearTimeout(merkTimer);
       karten.delete(card); offene.delete(card); document.removeEventListener("ordner-geaendert", onOrdner);
       URL.revokeObjectURL(vorschauUrl); if (doppeltUrl) URL.revokeObjectURL(doppeltUrl);
       form.dispose(); card.remove(); updateProgress();
@@ -152,7 +217,7 @@ async function addPhoto(file, card) {
           hash, vektor: r.vektor,
           // Was die KI ursprünglich meinte, damit wir später sehen, wie oft korrigiert wurde
           ki: { art: r.art[0].label, farbe: r.farbe[0].label, muster: r.muster[0].label, material: r.material[0].label, aermel: r.aermel[0].label, schnitt: r.schnitt[0].label }
-        });
+        }, e.id); // der Entwurf verschwindet im selben Schritt, so kann ein Teil nie doppelt entstehen
         removeCard();
         return nr;
       } catch (e) { speichert = false; update(); throw e; }
@@ -161,7 +226,10 @@ async function addPhoto(file, card) {
       try { const nr = await speichern(); toast(`Gespeichert als Nr. ${nrText(nr)}`); nachSpeichern(); }
       catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
     };
-    drop.onclick = () => { if (confirm("Dieses Foto verwerfen?\n\nEs wird nicht gespeichert.")) removeCard(); };
+    drop.onclick = () => {
+      if (!confirm("Dieses Foto verwerfen?\n\nEs wird nicht gespeichert.")) return;
+      removeCard(); erstSicherung.then(() => entwurfLoeschen(e.id)).catch(x => console.error(x));
+    };
     karten.set(card, { bereit: () => !speichert && !!form.get().art && !doppeltOffen, doppelt: () => doppeltOffen, speichern });
 
     // Vorschau antippen → ganzes Foto groß (nicht das ausgeschnittene, damit man Details sieht)
@@ -175,11 +243,12 @@ async function addPhoto(file, card) {
       el("div", { class: "actions" }, drop, save)
     );
     update();
-  } catch (e) {
+  } catch (x) {
     karten.delete(card); offene.delete(card);
-    card.replaceChildren(el("div", { class: "wait" }, `❌ ${file.name}: ${e?.message || e}`),
-      el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => { card.remove(); updateProgress(); } }, "Entfernen")));
-    console.error(e);
+    const entfernen = () => { card.remove(); updateProgress(); erstSicherung.then(() => entwurfLoeschen(e.id)).catch(y => console.error(y)); };
+    card.replaceChildren(el("div", { class: "wait" }, `❌ ${e.datei?.name || "Foto"}: ${x?.message || x}`),
+      el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: entfernen }, "Entfernen")));
+    console.error(x);
   } finally {
     finished++; updateProgress();
   }
@@ -220,32 +289,34 @@ function testInfo() {
     `Scroll-Bereich beginnt bei ${Math.round($("rahmen").getBoundingClientRect().top)} px, Fenster ${innerWidth}×${innerHeight}, Bildschirm ${screen.width}×${screen.height}.`;
 }
 testInfo();
-// Noch nicht gespeicherte Karten: beim Schließen oder Neuladen nachfragen (am PC; Safari auf dem iPhone fragt meist nicht)
-addEventListener("beforeunload", e => { if ($("pruefen").querySelector(".check")) { e.preventDefault(); e.returnValue = ""; } });
+// Offene Karten sind als Entwurf gespeichert. Nur solange Originale noch geschrieben werden, beim Schließen nachfragen (am PC).
+addEventListener("beforeunload", e => { if (ablagen > 0) { e.preventDefault(); e.returnValue = ""; } });
 
 /* ---------- Start ---------- */
 infoKnoepfeVerbinden();
 initSchrank().catch(e => { $("kacheln").replaceChildren(el("p", { class: "hint" }, "Speicher konnte nicht geöffnet werden: " + (e?.message || e))); });
 let queue = Promise.resolve();
+// Fotos nacheinander erkennen (spart Speicher auf dem Handy); fertige Karten kann man schon speichern.
+// Für jedes Foto sofort eine Karte „wartet …“, damit man sieht, was noch kommt.
+function einreihen(entwurf) {
+  const card = el("div", { class: "check" }, el("div", { class: "wait" }, entwurf.r ? "wird geladen …" : "wartet auf die Erkennung …"));
+  $("pruefen").append(card);
+  queue = queue.then(() => addPhoto(entwurf, card));
+}
 $("files").addEventListener("change", ev => {
   const list = [...ev.target.files]; ev.target.value = "";
   if (!list.length) return;
   total += list.length; updateProgress();
-  // Fotos nacheinander erkennen (spart Speicher auf dem Handy); fertige Karten kann man schon speichern.
-  // Für jedes Foto sofort eine Karte „wartet …“, damit man sieht, was noch kommt.
-  for (const f of list) {
-    const card = el("div", { class: "check" }, el("div", { class: "wait" }, "wartet auf die Erkennung …"));
-    $("pruefen").append(card);
-    queue = queue.then(() => addPhoto(f, card));
-  }
+  for (const f of list) { const id = naechsteId++; einreihen({ id, datei: f, gesichert: ablegen(id, f) }); }
 });
 // Häufigster Fehler beim ersten Start: der Download (ca. 100 MB) reißt ab, z. B. weil die App kurz verlassen,
 // der Bildschirm gesperrt wurde oder das WLAN weg war. Dann einmal von selbst neu versuchen, sobald die App
 // wieder im Vordergrund ist, sonst per Knopf. Schon fertig geladene Dateien bleiben im Speicher.
 let aiState = "aus", aiTries = 0; // aus | lädt | bereit
+let kiIstBereit; const kiBereit = new Promise(r => { kiIstBereit = r; }); // erfüllt, sobald Fotos erkannt werden können
 async function startAI() {
   if (aiState !== "aus") return;
-  aiState = "lädt"; aiTries++;
+  aiState = "lädt"; aiTries++; wachPruefen();
   $("kiPanel").hidden = false; $("kiHilfe").hidden = true; $("kiRetry").hidden = true; $("kiLaden").hidden = false;
   $("barfill").style.width = "0"; $("status").textContent = "KI wird geladen …";
   try {
@@ -260,9 +331,11 @@ async function startAI() {
       $("status").textContent = "✅ KI ist bereit.";
       $("uploadLabel").classList.remove("disabled");
       setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
+      kiIstBereit();
     }
+    wachPruefen();
   } catch (e) {
-    aiState = "aus"; $("kiLaden").hidden = true;
+    aiState = "aus"; $("kiLaden").hidden = true; wachPruefen();
     const wo = e.dateien?.length ? ` (bei ${e.dateien.join(", ")})` : "";
     $("status").textContent = `❌ Die KI konnte nicht geladen werden${wo}: ${e?.message || e}`;
     $("kiHilfe").hidden = false; $("kiRetry").hidden = false;
@@ -298,3 +371,12 @@ if (mobile && !standalone) {
     $("imBrowser").onclick = () => { remember.set(); browserOk(); $("imBrowser").onclick = browserOk; startAI(); };
   }
 } else startAI();
+
+// Fotos vom letzten Mal, die noch nicht gespeichert waren (App geschlossen, Handy neu gestartet …): Karten wieder zeigen
+entwuerfe().then(alte => {
+  if (!alte.length) return;
+  naechsteId = Math.max(naechsteId, ...alte.map(x => x.id + 1));
+  total += alte.length; updateProgress();
+  alte.forEach(einreihen);
+  toast(alte.length === 1 ? "1 Foto vom letzten Mal ist noch nicht gespeichert – siehe unten." : `${alte.length} Fotos vom letzten Mal sind noch nicht gespeichert – siehe unten.`);
+}).catch(e => console.error("Entwürfe nicht lesbar", e));

@@ -9,8 +9,11 @@
 //        "outfits" = fertige Outfits [{ id, name, nrs, text, quelle: "chat"|"app", erstellt, geaendert, foto: true|false }].
 //        Ein Foto vom fertigen Look liegt in „fotos“ unter "outfit:<id>" (groß) und "outfit-klein:<id>" (Vorschau). Die Schlüssel
 //        sind Text, die der Teile Zahlen: So braucht es keinen neuen Speicherbereich und keinen Umbau der Datenbank.
+// entwuerfe (ab DB_VERSION 2): ausgewählte Fotos, die noch nicht gespeichert sind (wartend oder erkannt), Schlüssel = id.
+//        Damit nichts verloren geht, wenn das iPhone die App beim Hinzufügen vieler Fotos schließt. Kommt nicht in die Sicherung.
 // Bilder liegen als ArrayBuffer statt als Blob: ältere Safari-Versionen hatten Fehler mit Blobs in IndexedDB.
-const DB_NAME = "outfit-helfer", DB_VERSION = 1;
+// Umzug 1 → 2: nur der neue Bereich „entwuerfe“ kommt dazu, die anderen bleiben unverändert.
+const DB_NAME = "outfit-helfer", DB_VERSION = 2;
 let dbPromise = null;
 function db() {
   if (!dbPromise) dbPromise = new Promise((res, rej) => {
@@ -20,8 +23,10 @@ function db() {
       if (!d.objectStoreNames.contains("teile")) d.createObjectStore("teile", { keyPath: "nr" });
       if (!d.objectStoreNames.contains("fotos")) d.createObjectStore("fotos");
       if (!d.objectStoreNames.contains("meta")) d.createObjectStore("meta");
+      if (!d.objectStoreNames.contains("entwuerfe")) d.createObjectStore("entwuerfe", { keyPath: "id" });
     };
-    req.onsuccess = () => res(req.result);
+    // Will eine neuere Version der App umziehen, gibt diese hier die Datenbank frei (sonst wartet die neue ewig)
+    req.onsuccess = () => { req.result.onversionchange = () => req.result.close(); res(req.result); };
     req.onerror = () => rej(req.error);
   });
   return dbPromise;
@@ -34,12 +39,12 @@ const done = tx => new Promise((res, rej) => {
 const request = req => new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
 const toBlob = buf => new Blob([buf], { type: "image/jpeg" });
 
-// Neues Teil speichern: Nummer vergeben, Angaben und Foto in EINEM Schritt schreiben.
+// Neues Teil speichern: Nummer vergeben, Angaben und Foto in EINEM Schritt schreiben, dabei den Entwurf (falls angegeben) löschen.
 // Klappt etwas nicht, wird nichts gespeichert und die Nummer nicht verbraucht.
-export async function addItem({ foto, vorschau, ...angaben }) {
+export async function addItem({ foto, vorschau, ...angaben }, entwurfId = null) {
   // Erst umwandeln, dann schreiben: während einer Transaktion darf nicht auf anderes gewartet werden
   const [fotoBuf, vorschauBuf] = await Promise.all([foto.arrayBuffer(), vorschau.arrayBuffer()]);
-  const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
+  const tx = (await db()).transaction(["teile", "fotos", "meta", "entwuerfe"], "readwrite");
   const meta = tx.objectStore("meta");
   let nr;
   meta.get("naechsteNr").onsuccess = e => {
@@ -48,8 +53,38 @@ export async function addItem({ foto, vorschau, ...angaben }) {
     tx.objectStore("teile").add({ ...angaben, vorschau: vorschauBuf, nr, erstellt: new Date().toISOString() });
     tx.objectStore("fotos").add(fotoBuf, nr);
   };
+  if (entwurfId != null) tx.objectStore("entwuerfe").delete(entwurfId);
   await done(tx);
   return nr;
+}
+// Entwürfe: { id, datei?, dateiTyp?, hash?, foto?, vorschau?, r?, wahl?, ordner?, doppeltOk? }
+// datei = Original-Foto, solange es noch nicht erkannt ist; danach foto/vorschau (verkleinert) und r = Ergebnis der KI.
+// Bilder kommen als Blob herein und gehen als Blob heraus, gespeichert werden ArrayBuffer (siehe oben).
+const BILDER = ["datei", "foto", "vorschau"];
+export async function entwurfSpeichern(e) {
+  const bufs = await Promise.all(BILDER.map(k => e[k] ? e[k].arrayBuffer() : null));
+  const rec = { ...e };
+  BILDER.forEach((k, i) => { if (bufs[i]) rec[k] = bufs[i]; else delete rec[k]; });
+  const tx = (await db()).transaction("entwuerfe", "readwrite");
+  tx.objectStore("entwuerfe").put(rec);
+  await done(tx);
+}
+// Kleine Änderungen (Auswahl, Ordner …) ohne die Bilder neu zu schicken; gibt es den Entwurf nicht mehr, passiert nichts
+export async function entwurfAendern(id, felder) {
+  const tx = (await db()).transaction("entwuerfe", "readwrite"), E = tx.objectStore("entwuerfe");
+  E.get(id).onsuccess = ev => { if (ev.target.result) E.put({ ...ev.target.result, ...felder }); };
+  await done(tx);
+}
+export async function entwurfLoeschen(id) {
+  const tx = (await db()).transaction("entwuerfe", "readwrite");
+  tx.objectStore("entwuerfe").delete(id);
+  await done(tx);
+}
+// Alle Entwürfe in der Reihenfolge, in der die Fotos ausgewählt wurden
+export async function entwuerfe() {
+  const alle = await request((await db()).transaction("entwuerfe").objectStore("entwuerfe").getAll());
+  return alle.map(e => ({ ...e, datei: e.datei ? new Blob([e.datei], { type: e.dateiTyp || "image/jpeg" }) : null,
+    foto: e.foto ? toBlob(e.foto) : null, vorschau: e.vorschau ? toBlob(e.vorschau) : null }));
 }
 // Alle Teile mit Vorschau (als Blob), ohne die großen Fotos
 export async function allItems() {
