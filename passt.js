@@ -4,8 +4,8 @@
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=12";
 import { nrText } from "./speicher.js?v=8";
 import { stilAktuell } from "./stil.js?v=11";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=6";
-import { chatgptPanel } from "./chatgpt.js?v=1";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=7";
+import { chatgptPanel } from "./chatgpt.js?v=2";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";
@@ -44,6 +44,8 @@ export function kombiKarte(k, titel, bild, oeffnen) {
     k.extras.length ? el("div", { class: "kombi-teile" }, ...k.extras.map(t => mini(t, true))) : null,
     el("p", { class: "hint" }, k.warum),
     k.luecken.length ? el("p", { class: "hint" }, `Hier fehlen noch: ${k.luecken.join(", ")}.`) : null,
+    // Kein vorhandenes Teil passt wirklich: lieber eine Kaufidee als irgendetwas dazulegen
+    k.ideen?.length ? el("p", { class: "hint" }, `🛍 Würde gut dazu passen: ${k.ideen.join(", ")}.`) : null,
     k.tipps.length ? el("ul", { class: "tipps" }, ...k.tipps.map(x => el("li", {}, x))) : null);
 }
 

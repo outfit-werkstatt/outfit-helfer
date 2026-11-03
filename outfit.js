@@ -2,9 +2,9 @@
 // Die Rechnung steht in regeln.js, darunter die Anfrage an ChatGPT (chatgpt.js).
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
 import { el, fill, field, choice } from "./ui.js?v=12";
-import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=6";
-import { auswahlFelder, kombiKarte, miniKachel } from "./passt.js?v=6";
-import { chatgptPanel } from "./chatgpt.js?v=1";
+import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=7";
+import { auswahlFelder, kombiKarte, miniKachel } from "./passt.js?v=7";
+import { chatgptPanel } from "./chatgpt.js?v=2";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
 let anlass = null, schickWahl = null, temperatur = null, wetter = [], mehrOffen = false;
@@ -36,7 +36,7 @@ export function renderOutfit(box, kopf, items, folders, stil, bild, oeffnen, neu
     ...r.kombis.map((k, i) => kombiKarte(k, `Outfit ${i + 1}`, bild, oeffnen)),
     r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen) : null,
     el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Wetter, Anlass). Trends und kreativere Ideen gibt es über ChatGPT, siehe unten."),
-    chatgptPanel(items, stil, { situation: fuer }, t => miniKachel(t, bild, oeffnen)));
+    chatgptPanel(items, stil, { situation: { anlass, schickWahl, temperatur, wetter } }, t => miniKachel(t, bild, oeffnen)));
 
   fill(box, kopf,
     el("div", { class: "panel" },

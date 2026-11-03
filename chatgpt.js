@@ -1,24 +1,31 @@
-// ChatGPT (Entscheidung 4, unterer Teil): Text zum Kopieren und „ChatGPT-Antwort einfügen“.
-// Ablauf (Wunsch 02.11.2026): einmal den ganzen Kleiderschrank in einen eigenen ChatGPT-Chat geben (ohne Ordner-Auswahl),
-// danach pro Situation oder Teil nur noch eine kurze Anfrage in denselben Chat.
-// Die App schickt selbst nichts: Sie kopiert Text, den die Nutzerin selbst in ChatGPT einfügt (Hinweis auf OpenAI steht dabei).
+// ChatGPT (Entscheidung 4, unterer Teil). Ablauf seit 0.12 nach Alis Vorstellung (03.11.2026): ChatGPT soll den GANZEN
+// Kleiderschrank sehen, nicht nur Text.
+// 1. Einmal den Kleiderschrank an einen eigenen ChatGPT-Chat geben: Sammelbilder (JPG, je bis 28 Teile mit großer Nummer) plus
+//    Text mit Nummer und Angaben. Warum Bilder und keine PDF oder ZIP: ChatGPT liest in PDFs (außer „Enterprise“) nur den Text und
+//    sieht Fotos in einer ZIP nicht an; die kostenlose Version erlaubt nur etwa 3 Uploads pro Tag (Quellen in CLAUDE.md).
+// 2. Später nur die Änderungen geben (neue oder geänderte Teile als Bild, entfernte als Text). Das spart Uploads.
+// 3. Pro Situation oder Teil eine ausführliche Anfrage: worum es geht, alle angetippten Angaben, „Mein Stil“, der Auftrag
+//    (Outfits, Farben, Layering, Trends, Styling-Tipps, Kaufideen, auf Wunsch ein Bild an ihr oder an einem Model).
+// 4. Antwort einfügen → die App zeigt die Outfits mit den eigenen Fotos.
+// Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst in ChatGPT hoch (Hinweis auf OpenAI steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, field, choice, toast, beschreibung, cleanText, saisonVorschlag, wieVon } from "./ui.js?v=12";
+import { el, fill, choice, field, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=12";
 import { nrText, getMeta, setMeta } from "./speicher.js?v=8";
 import { stilAktuell, stilZeilen } from "./stil.js?v=11";
-import { kandidaten } from "./regeln.js?v=6";
-import { GROUP_OF } from "./ki.js?v=6";
+import { kandidaten } from "./regeln.js?v=7";
+import { GROUPS, GROUP_OF } from "./ki.js?v=6";
 
 const MAX_ANTWORT = 20000;
-// Pro Sitzung gemerkt: Ansichten werden bei jedem Tippen neu gezeichnet, Eingetipptes und Eingefügtes soll dabei bleiben.
-// Getrennt je Frage („Outfit finden“ bzw. „Was passt dazu?“ für ein bestimmtes Teil), damit nichts in die falsche Ansicht wandert.
-let stilMit = null; // null = noch nicht angetippt → wie beim letzten Kopieren (sonst an)
+// Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
+// damit nichts in die falsche Ansicht wandert.
+let stilMit = true, bildMit = true, vorbereitet = null, vorschauUrls = [];
 const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt }
 const merker = frage => { const k = frage.teil ? "teil:" + frage.teil.nr : "situation"; if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "" }); return merk.get(k); };
 
 /* ---------- Texte ---------- */
 const datum = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const ohneUmbruch = s => s.replace(/\s*\n\s*/g, " / ");
+const MODE_TEXT = { Damen: "Damenmode", Herren: "Herrenmode", beides: "Damen- und Herrenmode" };
 // Eine Zeile pro Teil, z. B. „Nr. 012 – T-Shirt, braun; Material: Baumwolle; Ärmel: kurz; Saison: Sommer“
 export function teilZeile(t) {
   const z = [`Nr. ${nrText(t.nr)} – ${beschreibung(t)}`];
@@ -30,38 +37,113 @@ export function teilZeile(t) {
   if (t.notiz) z.push("Notiz: " + ohneUmbruch(t.notiz));
   return z.join("; ");
 }
-const MODE_TEXT = { Damen: "Damenmode", Herren: "Herrenmode", beides: "Damen- und Herrenmode" };
-// Der ganze Kleiderschrank (ohne Papierkorb und 🚫) mit Spielregeln. kern = alles außer dem Datum, für den Vergleich „noch aktuell?“
-function schrankText(items, stil, mitStil) {
-  const teile = kandidaten(items).sort((a, b) => a.nr - b.nr), s = stilAktuell(stil), zeilen = mitStil ? stilZeilen(s) : [];
-  const kopf = [
-    "Hallo! Bitte hilf mir in diesem Chat, Outfits aus meinem Kleiderschrank zusammenzustellen.", "",
-    "So machen wir es:",
-    "- Unten steht mein ganzer Kleiderschrank. Jedes Teil hat eine feste Nummer.",
-    "- Danach schicke ich dir eine Situation (Anlass, Wetter) oder ein Teil, das ich tragen möchte.",
-    "- Schlag mir dann bis zu 3 Outfits vor, nur aus diesen Teilen. Schreib jedes so: „Outfit 1: Nr. 012 + Nr. 031 + Nr. 007“. Nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“) und gib 1 bis 3 konkrete Styling-Tipps.",
-    "- Erfinde keine Nummern. Fehlt für ein gutes Outfit etwas (z. B. passende Schuhe), sag es ehrlich.",
-    "- Kaufideen bitte nur allgemein (z. B. „camelfarbener Gürtel“), ohne Shops und ohne Links.",
-    "- Schicke ich dir später einen neuen Kleiderschrank, gilt nur noch der neue."
-  ];
-  if (MODE_TEXT[s.mode]) kopf.push("", "Mode: " + MODE_TEXT[s.mode]);
-  if (zeilen.length) kopf.push("", "Mein Stil (Vorlieben, keine Verbote – schlag gern auch mal eine Alternative vor):", ...zeilen.map(z => "- " + z));
-  const liste = teile.map(teilZeile);
-  const kern = [...kopf, "", `Mein Kleiderschrank (${teile.length} Teile):`, ...liste].join("\n");
-  const text = [...kopf, "", `Mein Kleiderschrank (Stand ${datum(new Date())}, ${teile.length} Teile):`, ...liste, "",
-    `Antworte jetzt bitte nur kurz mit „Verstanden, ${teile.length} Teile“.`].join("\n");
-  return { text, kern, anzahl: teile.length };
-}
-// Kurzer Fingerabdruck (FNV-1a), um zu sehen, ob sich seit dem Kopieren etwas geändert hat
+// Reihenfolge wie in der App: nach Oberkategorie (Oberteile, Jacken, Unterteile …), darin nach Nummer
+const GRUPPEN_REIHE = new Map(GROUPS.map(([g], i) => [g, i]));
+const sortiert = teile => [...teile].sort((a, b) => ((GRUPPEN_REIHE.get(a.gruppe ?? groupOf(a.art)) ?? 99) - (GRUPPEN_REIHE.get(b.gruppe ?? groupOf(b.art)) ?? 99)) || a.nr - b.nr);
+// Kurzer Fingerabdruck (FNV-1a) je Teil, um zu sehen, was sich seit dem letzten Mal geändert hat
 const fingerabdruck = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
-const LISTE_OBEN = "aus meinem Kleiderschrank (die Liste oben in diesem Chat)";
-function anfrageText(frage, freitext) {
-  const dazu = freitext ? `Dazu: ${ohneUmbruch(freitext)}` : null;
-  if (frage.teil) return [`Ich möchte Nr. ${nrText(frage.teil.nr)} – ${beschreibung(frage.teil)} tragen.`, dazu,
-    `Bitte zeig mir bis zu 3 Kombinationen damit ${LISTE_OBEN}, mit Nummern und Styling-Tipps.`,
-    "Nenn mir außerdem höchstens 3 allgemeine Kaufideen, was noch gut dazu passen würde (ohne Shops, ohne Links)."].filter(Boolean).join("\n");
-  return [frage.situation ? `Neue Situation: ${frage.situation}` : "Ich suche ein Outfit.", dazu,
-    `Bitte schlag mir bis zu 3 Outfits ${LISTE_OBEN} vor, mit Nummern und Styling-Tipps.`].filter(Boolean).join("\n");
+const standVon = teile => Object.fromEntries(teile.map(t => [t.nr, fingerabdruck(teilZeile(t))]));
+// Was ist seit dem letzten Mal anders? (stand.teile = { Nr: Fingerabdruck }; Teile von vor 0.12 haben keinen Stand → „nie“)
+function vergleich(teile, stand) {
+  if (!stand?.teile) return { nie: true };
+  const alt = stand.teile, jetzt = standVon(teile);
+  const neu = teile.filter(t => alt[t.nr] !== jetzt[t.nr]); // neue und geänderte (z. B. Farbe korrigiert, oder Nummer neu vergeben)
+  const weg = Object.keys(alt).map(Number).filter(n => !(n in jetzt)).sort((a, b) => a - b);
+  return { neu, weg, zeit: stand.zeit, gleich: !neu.length && !weg.length };
+}
+function schrankText(teile, stil, anzahlBilder) {
+  const s = stilAktuell(stil);
+  return [
+    "Hallo! In diesem Chat sollst du mir helfen, Outfits aus meinem eigenen Kleiderschrank zusammenzustellen – wie eine persönliche Stylistin.", "",
+    `Auf den ${anzahlBilder === 1 ? "angehängten Bild" : `angehängten Bildern (${anzahlBilder} Stück)`} siehst du meine Kleidung, meinen Schmuck und meine Accessoires. Jedes Teil hat oben links eine feste Nummer. Unten steht dieselbe Liste als Text, mit den Angaben, die ich selbst eingetragen habe.`,
+    anzahlBilder > 3 ? "Die kostenlose Version erlaubt mir nur wenige Uploads am Tag. Fehlen noch Bilder, schicke ich sie später nach." : null, "",
+    "So machen wir es:",
+    "- Ich schicke dir später einen Anlass mit Wetter oder ein Teil, das ich tragen möchte.",
+    "- Dann stellst du Outfits nur aus diesen Teilen zusammen und nennst jedes Teil mit seiner Nummer.",
+    "- Erfinde keine Nummern. Wenn du ein Teil auf den Bildern nicht gut erkennst, frag nach.",
+    "- Schicke ich dir eine Änderung (neue Teile oder Teile, die weg sind), gilt ab dann der neue Stand.",
+    MODE_TEXT[s.mode] ? `\nMode: ${MODE_TEXT[s.mode]}` : null, "",
+    `Mein Kleiderschrank (Stand ${datum(new Date())}, ${teile.length} Teile):`, ...sortiert(teile).map(teilZeile), "",
+    `Antworte jetzt bitte nur kurz mit „Verstanden, ${teile.length} Teile“.`
+  ].filter(z => z !== null).join("\n");
+}
+function aenderungText(neu, weg) {
+  return [`Änderung an meinem Kleiderschrank (Stand ${datum(new Date())}). Ab jetzt gilt:`,
+    neu.length ? `\nNeu oder geändert (${neu.length > PRO_BILD ? "auf den angehängten Bildern" : "auf dem angehängten Bild"}):` : null, ...sortiert(neu).map(teilZeile),
+    weg.length ? `\nNicht mehr da, bitte nicht mehr vorschlagen: ${weg.map(n => "Nr. " + nrText(n)).join(", ")}` : null,
+    "", "Antworte bitte nur kurz mit „Verstanden“."].filter(z => z !== null).join("\n");
+}
+const temperaturText = t => t ? t.replace("°", " °C") : null;
+function anfrageText(frage, freitext, stil) {
+  const s = stilAktuell(stil), zeilen = stilMit ? stilZeilen(s) : [], q = frage.situation || {};
+  const angaben = frage.teil ? [] : [["Anlass", q.anlass], ["Wie schick", q.schickWahl], ["Temperatur", temperaturText(q.temperatur)], ["Wetter", q.wetter?.join(", ")]].filter(([, v]) => v);
+  const teil = frage.teil && `Nr. ${nrText(frage.teil.nr)} – ${beschreibung(frage.teil)}`;
+  return [
+    frage.teil ? `Hallo! Ich möchte ${teil} tragen und suche passende Kombinationen aus meinem Kleiderschrank (die Bilder und die Liste weiter oben in diesem Chat).`
+      : "Hallo! Ich brauche ein Outfit aus meinem Kleiderschrank (die Bilder und die Liste weiter oben in diesem Chat).", "",
+    "Worum es geht:",
+    ...angaben.map(([k, v]) => `- ${k}: ${v}`),
+    freitext ? `- Dazu: ${ohneUmbruch(freitext)}` : null,
+    !frage.teil && !angaben.length && !freitext ? "- Ich habe nichts Besonderes angegeben: Schlag mir etwas Schönes für den Alltag vor." : null,
+    frage.teil && !freitext ? "- Sonst nichts Besonderes, gern alltagstauglich." : null,
+    MODE_TEXT[s.mode] ? `- Mode: ${MODE_TEXT[s.mode]}` : null,
+    zeilen.length ? "\nMein Stil (Vorlieben, keine Verbote – schlag gern auch mal eine Alternative vor):" : null, ...zeilen.map(z => "- " + z), "",
+    "Bitte:",
+    `1. ${frage.teil ? `Zeig mir bis zu 3 Kombinationen mit ${teil}` : "Stell mir bis zu 3 Outfits zusammen"}, nur aus meinen Teilen. Nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“) und schreib jedes als „Outfit 1“, „Outfit 2“ …`,
+    "2. Nimm nur dazu, was wirklich passt: lieber keine Tasche und kein Schmuck als etwas Unpassendes.",
+    "3. Erklär kurz, warum es passt: Farbkombination, Schnitte, Layering und was davon gerade im Trend ist.",
+    "4. Gib konkrete Styling-Tipps (z. B. reinstecken, Ärmel krempeln, welcher Schmuck, welche Tasche, Haare).",
+    `5. ${frage.teil ? "Nenn höchstens 3 allgemeine Kaufideen, die gut dazu passen würden" : "Fehlt etwas Wichtiges, nenn höchstens 3 allgemeine Kaufideen"} (ohne Shops und ohne Links).`,
+    bildMit ? "6. Erstelle danach ein Bild von Outfit 1. Wenn ich dir ein Foto von mir mitschicke, zeig mich darin, sonst ein Model. Bleib dabei so nah wie möglich an meinen echten Teilen." : null
+  ].filter(z => z !== null).join("\n");
+}
+
+/* ---------- Sammelbilder ---------- */
+// Je Bild bis zu 28 Teile (4 Spalten × 7 Reihen). Weniger pro Bild wäre schärfer, bräuchte aber mehr der wenigen Uploads.
+const PRO_BILD = 28, SPALTEN = 4, KACHEL = 400, TEXT_H = 64, KOPF_H = 84;
+const kuerzen = (x, text, breite) => { if (x.measureText(text).width <= breite) return text; while (text.length > 1 && x.measureText(text + "…").width > breite) text = text.slice(0, -1); return text + "…"; };
+async function sammelbilder(teile, titel) {
+  const liste = sortiert(teile), anzahl = Math.max(1, Math.ceil(liste.length / PRO_BILD)), je = Math.ceil(liste.length / anzahl), dateien = [];
+  for (let b = 0; b < anzahl; b++) {
+    const stueck = liste.slice(b * je, (b + 1) * je), reihen = Math.ceil(stueck.length / SPALTEN);
+    const c = document.createElement("canvas"); c.width = SPALTEN * KACHEL; c.height = KOPF_H + reihen * (KACHEL + TEXT_H);
+    const x = c.getContext("2d");
+    x.fillStyle = "#ffffff"; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = "#222222"; x.font = "bold 40px system-ui, -apple-system, sans-serif"; x.textBaseline = "alphabetic";
+    x.fillText(kuerzen(x, `${titel} · Bild ${b + 1} von ${anzahl} · ${stueck.length} Teile`, c.width - 48), 24, 56);
+    for (let i = 0; i < stueck.length; i++) {
+      const t = stueck[i], cx = (i % SPALTEN) * KACHEL, cy = KOPF_H + Math.floor(i / SPALTEN) * (KACHEL + TEXT_H);
+      x.fillStyle = "#ebebeb"; x.fillRect(cx + 8, cy + 8, KACHEL - 16, KACHEL - 16);
+      try {
+        const bm = await createImageBitmap(t.vorschau instanceof Blob ? t.vorschau : new Blob([t.vorschau], { type: "image/jpeg" }));
+        const s = Math.min((KACHEL - 32) / bm.width, (KACHEL - 32) / bm.height), w = bm.width * s, h = bm.height * s;
+        x.drawImage(bm, cx + (KACHEL - w) / 2, cy + (KACHEL - h) / 2, w, h); bm.close();
+      } catch (e) { console.error(e); }
+      // Große Nummer oben links, damit ChatGPT und sie dieselbe Nummer sehen (Entscheidung 7)
+      x.fillStyle = "#111111";
+      if (x.roundRect) { x.beginPath(); x.roundRect(cx + 16, cy + 16, 132, 66, 14); x.fill(); } else x.fillRect(cx + 16, cy + 16, 132, 66);
+      x.fillStyle = "#ffffff"; x.font = "bold 48px system-ui, -apple-system, sans-serif"; x.fillText(nrText(t.nr), cx + 28, cy + 66);
+      x.fillStyle = "#222222"; x.font = "28px system-ui, -apple-system, sans-serif";
+      x.fillText(kuerzen(x, beschreibung(t), KACHEL - 32), cx + 16, cy + KACHEL + 40);
+    }
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    c.width = c.height = 0; // Zeichenfläche freigeben (iOS begrenzt ihren Speicher)
+    if (!blob) throw new Error("Das Bild konnte nicht erstellt werden.");
+    dateien.push(new File([blob], `${titel} ${b + 1} von ${anzahl}.jpg`, { type: "image/jpeg" }));
+  }
+  return dateien;
+}
+// Handy: Teilen-Menü („Bilder sichern“ legt sie in die Fotos, oder direkt an die ChatGPT-App). PC: herunterladen.
+// Muss direkt im Antippen laufen (navigator.share braucht ein frisches Tippen), darum werden die Bilder vorher erstellt.
+async function bilderWeitergeben(dateien) {
+  if (navigator.canShare?.({ files: dateien })) {
+    try { await navigator.share({ files: dateien }); return true; } catch (e) { if (e?.name === "AbortError") return false; console.error(e); }
+  }
+  for (const f of dateien) {
+    const a = el("a", { href: URL.createObjectURL(f), download: f.name }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+  return true;
 }
 
 /* ---------- Kopieren ---------- */
@@ -117,7 +199,7 @@ export function antwortLesen(text, items) {
       if (!t) { unbekannt.add(n); continue; }
       if (t.geloescht) hinweise.push(`Nr. ${nrText(n)} liegt im Papierkorb.`);
       else if (t.nichtAnziehen) hinweise.push(`Nr. ${nrText(n)} ist als „🚫 Ziehe ich nicht an“ markiert.`);
-      if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ ChatGPT beschreibt Nr. ${nrText(n)} als „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt ChatGPT einen alten Stand: Kopiere den Kleiderschrank neu.`);
+      if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ ChatGPT beschreibt Nr. ${nrText(n)} als „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt ChatGPT einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
       teile.push(t);
     }
     return { text: lesbar(g.zeilen.join("\n")).trim(), teile, hinweise };
@@ -125,63 +207,97 @@ export function antwortLesen(text, items) {
   return { gruppen: out, unbekannt: [...unbekannt].sort((a, b) => a - b) };
 }
 
-/* ---------- Anzeige ---------- */
-// frage = { situation: "Essen gehen · schick · …" } oder { teil }; kachel(t) = kleine Kachel eines Teils
-export function chatgptPanel(items, stil, frage, kachel) {
-  const m = merker(frage);
-  const s1 = el("div", {}), status = el("div", { class: "hint" }, "…"), kopierBox1 = el("div", {}), kopierBox2 = el("div", {}), ergebnis = el("div", {});
-  const MIT = "Meinen Stil mitschicken";
-  const stilWahl = choice({ options: [MIT], selected: stilMit !== false ? [MIT] : [], onChange: sel => { stilMit = sel.length > 0; pruefen(); } });
-  const schrank = el("details", { class: "mehr" }, el("summary", {}, "1. Kleiderschrank an ChatGPT geben"), s1);
-  // Ist der Kleiderschrank in ChatGPT noch aktuell? (verglichen wird mit dem, was zuletzt kopiert wurde)
-  let zustand = "unbekannt"; // "nie" | "aktuell" | "alt"
+/* ---------- Schritt 1: Kleiderschrank an ChatGPT geben ---------- */
+// Auch in der Ansicht „Sicherung“ (zip-ansicht.js). nachher() = nach dem Kopieren des Textes (Stand neu anzeigen)
+export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
+  const teile = kandidaten(items), status = el("div", { class: "hint" }, "…"), knoepfe = el("div", { class: "actions" }), box = el("div", {});
+  let v = { nie: true };
+  const vorbereiten = async (art, knopf) => {
+    knopf.disabled = true; const alt = knopf.textContent; knopf.textContent = "Bilder werden erstellt …";
+    try {
+      const nur = art === "alles" ? teile : v.neu;
+      const dateien = nur.length ? await sammelbilder(nur, art === "alles" ? "Mein Kleiderschrank" : "Neu im Kleiderschrank") : [];
+      vorbereitet = { art, dateien, text: art === "alles" ? schrankText(teile, stil, dateien.length) : aenderungText(v.neu, v.weg), stand: standVon(teile) };
+      zeigen();
+    } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+    finally { knopf.disabled = false; knopf.textContent = alt; }
+  };
+  function zeigen() {
+    vorschauUrls.forEach(u => URL.revokeObjectURL(u)); vorschauUrls = [];
+    if (!vorbereitet) { fill(box); return; }
+    const { art, dateien, text } = vorbereitet, n = dateien.length, kopierBox = el("div", {});
+    const bilderKnopf = el("button", { type: "button", class: "btn" }, mobil() ? `🖼 ${n === 1 ? "Bild" : n + " Bilder"} sichern / teilen` : `🖼 ${n === 1 ? "Bild" : n + " Bilder"} herunterladen`);
+    bilderKnopf.onclick = async () => { if (await bilderWeitergeben(dateien)) toast(mobil() ? "Danach den Text kopieren" : "Heruntergeladen – jetzt den Text kopieren"); };
+    const textKnopf = el("button", { type: "button", class: "btn primary" }, "📋 Text kopieren");
+    textKnopf.onclick = async () => {
+      if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
+      fill(kopierBox);
+      try { await setMeta("chatgptStand", { zeit: new Date().toISOString(), teile: vorbereitet.stand }); } catch (e) { console.error(e); }
+      toast("Text kopiert – jetzt zusammen mit den Bildern in ChatGPT senden");
+      vorbereitet = null; nachher(); pruefen();
+    };
+    const bilder = dateien.map(f => { const u = URL.createObjectURL(f); vorschauUrls.push(u); return el("img", { src: u, alt: f.name, class: "sammelbild" }); });
+    fill(box, el("div", { class: "sammelbilder" }, ...bilder),
+      el("p", { class: "hint" }, art === "alles"
+        ? `So geht's: ① ${n ? (mobil() ? `„${n === 1 ? "Bild" : n + " Bilder"} sichern“ tippen und im Menü „Bilder sichern“ wählen – sie landen in deinen Fotos.` : "Bilder herunterladen.") : ""} ② „Text kopieren“ tippen. ③ In ChatGPT einen neuen Chat anlegen, mit ＋ die Bilder anhängen, den Text einfügen und senden.`
+        : `So geht's: ${n ? `① Bild${n === 1 ? "" : "er"} sichern. ② ` : "① "}„Text kopieren“. ${n ? "③" : "②"} In deinem Kleiderschrank-Chat ${n ? "das Bild anhängen und " : ""}den Text einfügen und senden.`),
+      n > 3 ? el("p", { class: "hint" }, `Die kostenlose Version von ChatGPT erlaubt nur etwa 3 Uploads pro Tag. Schick heute 3 Bilder und die übrigen ${n - 3} morgen nach (einfach mit „Hier sind die weiteren Bilder“).`) : null,
+      el("div", { class: "actions" }, n ? bilderKnopf : null, textKnopf), kopierBox);
+  }
   async function pruefen() {
     const stand = await getMeta("chatgptStand").catch(() => null);
-    // Häkchen wie beim letzten Kopieren, solange es in dieser Sitzung nicht angetippt wurde (sonst hieße es fälschlich „geändert“)
-    if (stilMit === null && stand && stand.mitStil === false) stilWahl.set([]);
-    const mit = stilMit ?? stand?.mitStil ?? true, { kern } = schrankText(items, stil, mit);
-    zustand = !stand ? "nie" : stand.fingerabdruck === fingerabdruck(kern) ? "aktuell" : "alt";
-    status.textContent = zustand === "nie" ? "Noch nicht kopiert. Leg in ChatGPT einen neuen Chat an (z. B. „Mein Kleiderschrank“) und füge ihn dort ein."
-      : zustand === "aktuell" ? `✅ Zuletzt kopiert am ${datum(new Date(stand.zeit))}, seitdem nichts geändert.`
-      : `⚠️ Seit dem Kopieren am ${datum(new Date(stand.zeit))} hat sich etwas geändert (Teile oder „Mein Stil“). Kopiere den Kleiderschrank neu und füge ihn in denselben Chat ein.`;
-    if (zustand !== "aktuell") schrank.open = true;
+    v = vergleich(teile, stand);
+    const alles = el("button", { type: "button", class: v.nie ? "btn primary" : "btn" }, v.nie ? "🖼 Kleiderschrank-Bilder erstellen" : "Alles neu (für einen neuen Chat)");
+    alles.onclick = () => vorbereiten("alles", alles);
+    const aenderung = el("button", { type: "button", class: "btn primary" }, "🖼 Nur die Änderungen vorbereiten");
+    aenderung.onclick = () => vorbereiten("aenderung", aenderung);
+    if (v.nie) status.textContent = `Noch nicht an ChatGPT gegeben. Die App macht aus deinen ${teile.length} Teilen ${Math.max(1, Math.ceil(teile.length / PRO_BILD))} Sammelbild${teile.length > PRO_BILD ? "er" : ""} mit Nummern – so sieht ChatGPT deine echten Sachen.`;
+    else if (v.gleich) status.textContent = `✅ ChatGPT kennt deinen aktuellen Kleiderschrank (gegeben am ${datum(new Date(v.zeit))}).`;
+    else status.textContent = `⚠️ Seit dem ${datum(new Date(v.zeit))}: ${[v.neu.length ? `${v.neu.length} neu oder geändert` : null, v.weg.length ? `${v.weg.length} nicht mehr da` : null].filter(Boolean).join(", ")}. Gib ChatGPT die Änderungen, damit es den aktuellen Stand kennt.`;
+    fill(knoepfe, v.nie || v.gleich ? alles : aenderung, v.nie || v.gleich ? null : alles);
+    if (!teile.length) fill(knoepfe);
   }
-  const knopfSchrank = el("button", { type: "button", class: "btn" }, "📋 Kleiderschrank kopieren");
-  knopfSchrank.onclick = async () => {
-    const mit = stilWahl.get().length > 0, { text, kern, anzahl } = schrankText(items, stil, mit);
-    if (!anzahl) { toast("Im Kleiderschrank ist noch nichts, das ChatGPT vorschlagen könnte."); return; }
-    if (!await kopieren(text)) { vonHand(kopierBox1, text); return; }
-    fill(kopierBox1);
-    try { await setMeta("chatgptStand", { zeit: new Date().toISOString(), fingerabdruck: fingerabdruck(kern), mitStil: mit }); } catch (e) { console.error(e); }
-    toast(`Kleiderschrank kopiert (${anzahl} Teile) – jetzt in ChatGPT einfügen`);
-    pruefen();
-  };
-  fill(s1, status, stilWahl.el, el("div", { class: "actions" }, knopfSchrank), kopierBox1,
-    el("div", { class: "hint" }, "Einmal einfügen genügt. Danach stellst du alle Fragen in diesem Chat. Hast du Teile oder „Mein Stil“ geändert, kopierst du den Kleiderschrank neu."));
-  pruefen();
+  pruefen(); zeigen();
+  return { el: el("div", {}, status, knoepfe, box), zustand: () => v };
+}
+const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+
+/* ---------- Anzeige unter „Outfit finden“ und „Was passt dazu?“ ---------- */
+// frage = { situation: { anlass, schickWahl, temperatur, wetter } } oder { teil }; kachel(t) = kleine Kachel eines Teils
+export function chatgptPanel(items, stil, frage, kachel) {
+  const m = merker(frage), ergebnis = el("div", {}), kopierBox = el("div", {});
+  const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; });
+  const schrank = el("details", { class: "mehr" }, el("summary", {}, "1. Kleiderschrank an ChatGPT geben"), schritt1.el);
+  // Aufklappen, solange ChatGPT den aktuellen Stand nicht kennt
+  getMeta("chatgptStand").then(st => { const v = vergleich(kandidaten(items), st); if (v.nie || !v.gleich) schrank.open = true; }).catch(() => { schrank.open = true; });
 
   const freitext = el("textarea", { class: "notiz", maxLength: 300, rows: 2, value: m.zusatz, placeholder: frage.teil ? "z. B. fürs Büro, eher locker" : "z. B. Italiener, Freitagabend, will nicht frieren", "aria-label": "Noch etwas dazu" });
   freitext.oninput = () => { m.zusatz = freitext.value; };
+  const STIL = "Meinen Stil mitschicken", BILD = "Bild vom Outfit erstellen lassen";
+  const optionen = choice({ options: [STIL, BILD], selected: [stilMit ? STIL : null, bildMit ? BILD : null].filter(Boolean), max: 0,
+    onChange: sel => { stilMit = sel.includes(STIL); bildMit = sel.includes(BILD); } });
+  const q = frage.situation || {}, nichtsAngetippt = !frage.teil && !q.anlass && !q.schickWahl && !q.temperatur && !q.wetter?.length;
   const knopfAnfrage = el("button", { type: "button", class: "btn primary" }, "📋 Anfrage kopieren");
   knopfAnfrage.onclick = async () => {
-    const text = anfrageText(frage, cleanText(freitext.value));
-    if (!await kopieren(text)) { vonHand(kopierBox2, text); return; }
-    fill(kopierBox2);
+    const text = anfrageText(frage, cleanText(freitext.value), stil);
+    if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
+    fill(kopierBox);
     // Ohne aktuellen Kleiderschrank im Chat rät ChatGPT oder nennt alte Nummern
-    if (zustand === "nie") { fill(kopierBox2, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. ChatGPT kennt deinen Kleiderschrank aber noch nicht: Kopiere ihn zuerst (Schritt 1) und füge ihn in den Chat ein, dann die Anfrage.")); schrank.open = true; }
-    else if (zustand === "alt") { fill(kopierBox2, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Kleiderschrank hat sich aber seit dem letzten Kopieren geändert: Am besten erst neu kopieren und einfügen (Schritt 1).")); schrank.open = true; }
+    const v = schritt1.zustand();
+    if (v.nie) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. ChatGPT kennt deinen Kleiderschrank aber noch nicht: Gib ihn zuerst (Schritt 1), dann die Anfrage in denselben Chat.")); schrank.open = true; }
+    else if (!v.gleich) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Kleiderschrank hat sich aber geändert: Am besten erst die Änderungen geben (Schritt 1).")); schrank.open = true; }
     else toast("Anfrage kopiert – jetzt in deinem Kleiderschrank-Chat einfügen");
   };
   const oeffnen = el("a", { class: "btn", href: "https://chatgpt.com/", target: "_blank", rel: "noopener noreferrer" }, "ChatGPT öffnen ↗");
 
   const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort von ChatGPT hier einfügen", "aria-label": "Antwort von ChatGPT" });
   feld.oninput = () => { m.antwort = feld.value; };
-  const zeigen = text => {
+  const anzeigen = text => {
     m.angezeigt = text.slice(0, MAX_ANTWORT);
     if (!m.angezeigt.trim()) { fill(ergebnis); return; }
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
     fill(ergebnis,
-      unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt ChatGPT noch einen alten Stand: Kopiere den Kleiderschrank neu.`) : null,
+      unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt ChatGPT noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
       ...gruppen.map(g => el("div", { class: "panel kombi" },
         g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
         g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
@@ -189,18 +305,21 @@ export function chatgptPanel(items, stil, frage, kachel) {
         el("div", { class: "chatgpt-text" }, g.text))));
   };
   const knopfZeigen = el("button", { type: "button", class: "btn" }, "Outfits anzeigen");
-  knopfZeigen.onclick = () => { zeigen(feld.value); ergebnis.scrollIntoView({ behavior: "smooth" }); };
+  knopfZeigen.onclick = () => { anzeigen(feld.value); ergebnis.scrollIntoView({ behavior: "smooth" }); };
   const leeren = el("button", { type: "button", class: "btn" }, "Leeren");
   leeren.onclick = () => { feld.value = m.antwort = m.angezeigt = ""; fill(ergebnis); };
-  if (m.angezeigt) zeigen(m.angezeigt); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
+  if (m.angezeigt) anzeigen(m.angezeigt); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
 
   return el("div", { class: "panel chatgpt" },
     el("strong", {}, "💬 Mit ChatGPT"),
-    el("div", { class: "hint" }, "ChatGPT kennt Trends und macht kreativere Vorschläge als die festen Regeln der App. Du kopierst Text und fügst ihn selbst in ChatGPT ein – die App schickt nichts."),
-    el("div", { class: "hint" }, "Was du in ChatGPT einfügst, geht an OpenAI: deine Teile als Text (Nummer, Art, Farbe, Material, Notizen …) und, wenn angehakt, „Mein Stil“. Fotos sind nicht dabei. Tipp: In den Einstellungen von ChatGPT unter „Datenkontrollen“ kannst du ausschalten, dass deine Chats zum Verbessern des Modells genutzt werden."),
+    el("div", { class: "hint" }, "ChatGPT sieht deine echten Sachen auf Fotos, kennt Trends und macht kreativere Vorschläge als die festen Regeln der App. Du lädst die Bilder und den Text selbst in ChatGPT hoch – die App schickt nichts."),
+    el("div", { class: "hint" }, "Was du in ChatGPT hochlädst oder einfügst, geht an OpenAI: die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst. Tipp: In den Einstellungen von ChatGPT unter „Datenkontrollen“ kannst du ausschalten, dass deine Chats zum Verbessern des Modells genutzt werden."),
     schrank,
     field(frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen", "Noch etwas dazu? (freiwillig)", freitext),
-    el("div", { class: "actions" }, knopfAnfrage, oeffnen), kopierBox2,
+    nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß ChatGPT, wofür das Outfit ist.") : null,
+    optionen.el,
+    el("p", { class: "hint" }, "Für ein Bild von dir selbst: Häng in ChatGPT ein Foto von dir an die Anfrage an. Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel."),
+    el("div", { class: "actions" }, knopfAnfrage, oeffnen), kopierBox,
     field("3. Antwort einfügen", "Kopiere die Antwort aus ChatGPT und füge sie hier ein. Die App zeigt die Outfits mit deinen Fotos.", feld),
     el("div", { class: "actions" }, leeren, knopfZeigen),
     ergebnis);

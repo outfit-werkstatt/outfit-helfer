@@ -156,7 +156,8 @@ function warum(teile) {
   }
   return `Insgesamt ${schickWort(schnitt)}.`;
 }
-function tipps(teile, extras, s) {
+// ideen = Kaufideen dieses Outfits (dann kein allgemeiner Schmuck-Tipp, die Idee sagt es schon)
+function tipps(teile, extras, s, ideen = []) {
   const o = [];
   const oben = teile.find(t => platzVon(t) === "oben"), unten = teile.find(t => platzVon(t) === "unten"), ganz = teile.find(t => platzVon(t) === "ganz");
   const lage = [...teile, ...extras].find(t => platzVon(t) === "lage"), schmuckTeil = [...teile, ...extras].find(t => platzVon(t) === "schmuck");
@@ -174,8 +175,12 @@ function tipps(teile, extras, s) {
   const bauch = teile.find(t => t.laenge === "bauchfrei");
   if (bauch && hat("bauchfrei", "lieber nicht")) o.push(`${nr(bauch)} ist bauchfrei: Mit hoher Taille oder offener Jacke darüber wirkt es bedeckter.`);
   if (oben?.weite === "figurnah" && hat("oben", "locker") && !hat("oben", "figurnah")) o.push(`${nr(oben)} sitzt figurnah: Eine offene Strickjacke darüber macht es lockerer.`);
-  if (schmuckTeil) { const f = hauptFarbe(schmuckTeil); if (f.name) o.push(`${nr(schmuckTeil)} in ${f.name} setzt einen Akzent.`); }
-  else {
+  if (schmuckTeil) {
+    // „Hellgrau setzt einen Akzent“ war Unsinn: Metall setzt keinen Farbakzent, wichtig ist ein einheitlicher Metallton
+    const m = metallVon(schmuckTeil), f = hauptFarbe(schmuckTeil);
+    if (m) o.push(`${nr(schmuckTeil)}: ${m} passt hier. Bleib bei einem Metallton, auch bei Gürtelschnalle und Tasche.`);
+    else if (f.name && !f.neutral) o.push(`${nr(schmuckTeil)} in ${f.name} setzt einen farbigen Akzent.`);
+  } else if (!ideen.some(i => i.includes("Schmuck"))) {
     const haupt = teile.map(hauptFarbe).filter(f => f.rgb), warmeTeile = haupt.filter(warm).length;
     if (haupt.length && s?.mode !== "Herren" && !hat("schmuck", "wenig Schmuck")) o.push(warmeTeile * 2 >= haupt.length ? "Schmuck in Gold passt gut zu den warmen Farben." : "Schmuck in Silber passt gut zu den kühlen Farben.");
   }
@@ -244,24 +249,55 @@ export function kombinationen(anker, alle, stil = null) {
   // Reihenfolge: Stimmigkeit zuerst, „Mein Stil“ als Bonus
   const gesamt = k => k.stimmig + k.stil * 0.3;
   const sortiert = [...roh].sort((a, b) => gesamt(b) - gesamt(a)), frei = k => k.teile.slice(1);
-  const wahl = verschiedene(sortiert, frei), anders = malWasAnderes(roh, wahl, frei);
+  const wahl = verschiedene(sortiert, frei), anders = malWasAnderes(roh, wahl, frei), benutzt = new Map();
+  // Tasche und Schmuck als Kaufidee pro Kombination (sie hängen vom Outfit ab), alles andere gesammelt unter „Könnte noch fehlen“
   const fertig = k => {
-    const extras = zusaetze(k.teile, nachPlatz, stil);
-    return { teile: k.teile, extras, luecken: k.luecken.map(p => PLATZ_NAME[p]), warum: warum(k.teile), tipps: tipps(k.teile, extras, stil), stimmig: k.stimmig };
+    const { extras, ideen } = zusaetze(k.teile, nachPlatz, stil, null, benutzt);
+    return { teile: k.teile, extras, ideen, luecken: k.luecken.map(p => PLATZ_NAME[p]), warum: warum(k.teile), tipps: tipps(k.teile, extras, stil, ideen), stimmig: k.stimmig };
   };
   const ergebnis = wahl.map(fertig);
   return { kombis: ergebnis, anders: anders && fertig(anders), hinweis: ergebnis[0].stimmig < 1 ? "Für dieses Teil findet die App noch wenig wirklich Passendes." : null };
 }
-// Dazu passt: je höchstens eine Lage, Tasche, Schmuck und ein Gürtel, wenn sie gut passen.
+// Dazu passt: je höchstens eine Lage, Tasche, Schmuck und ein Gürtel – aber nur, wenn sie wirklich etwas beitragen.
+// Seit 0.12 (Rückmeldung vom iPhone): Vorher reichte „beißt sich nicht“, und neutrale Farben beißen sich nie. Darum kamen
+// dieselbe beige Tasche und dieselben Ohrringe in jedes Outfit, nur um etwas angegeben zu haben.
+// Jetzt: Tasche und Gürtel greifen eine Farbe des Outfits auf (z. B. wie die Schuhe) oder setzen zu einem ruhigen Outfit einen
+// farbigen Akzent, und die Schick-Stufe passt. Schmuck hat den passenden Metallton. Dasselbe Extra höchstens zweimal (benutzt).
+// Passt nichts Vorhandenes, bleibt der Platz leer und es gibt eine Kaufidee (ideen).
 // sit (nur bei „Outfit finden“): Wetter und Anlass bestimmen mit, dazu Schal, Mütze, Sonnenbrille usw.
-function zusaetze(teile, nachPlatz, stil, sit = null) {
-  if (sit?.anlass?.ohneExtras) return [];
+const FAST_GLEICH = 30;
+const farbNah = (a, b) => !!(a.rgb && b.rgb && (a.basis === b.basis || Math.hypot(a.rgb[0] - b.rgb[0], a.rgb[1] - b.rgb[1], a.rgb[2] - b.rgb[2]) < FAST_GLEICH));
+function farbeTraegt(extra, teile) {
+  const f = hauptFarbe(extra);
+  if (!f.rgb) return false; // unbekannte oder bunte Farbe: das entscheidet besser ChatGPT mit den Fotos
+  const farben = teile.flatMap(t => (t.farben || []).map(farbe)).filter(x => x.rgb);
+  if (farben.some(x => farbNah(f, x))) return true;
+  return !f.neutral && farben.length > 0 && farben.every(x => x.neutral);
+}
+// Metallton von Schmuck. Hellgrau und Grau zählen als Silber (Teile von vor 0.11, als die KI noch kein Silber kannte)
+const METALL = { Gold: "Gold", Roségold: "Gold", Kupfer: "Gold", Bronze: "Gold", Silber: "Silber", Hellgrau: "Silber", Grau: "Silber" };
+const metallVon = t => (t.farben || []).map(n => METALL[farbe(n).basis || n]).find(Boolean) || null;
+function outfitMetall(teile, stil) {
+  const gern = [...new Set((stil?.schmuck || []).filter(m => METALL[m] && m !== "Hellgrau" && m !== "Grau").map(m => METALL[m]))];
+  if ((stil?.schmuck || []).includes("gemischt")) return ["Gold", "Silber"];
+  if (gern.length) return gern;
+  const haupt = teile.map(hauptFarbe).filter(f => f.rgb);
+  return [haupt.filter(warm).length * 2 >= haupt.length ? "Gold" : "Silber"];
+}
+const TASCHEN_FARBEN = ["Schwarz", "Braun", "Dunkelbraun", "Schoko", "Camel", "Cognac", "Beige", "Taupe", "Bordeaux"];
+function zusaetze(teile, nachPlatz, stil, sit = null, benutzt = new Map()) {
+  if (sit?.anlass?.ohneExtras) return { extras: [], ideen: [] };
   const da = new Set(teile.map(platzVon)), out = [];
+  const kleidung = teile.filter(t => KLEIDUNG.has(platzVon(t))), mitte = kleidung.reduce((s, t) => s + schick(t), 0) / Math.max(1, kleidung.length);
+  const schickOk = t => Math.abs(schick(t) - mitte) <= 1.25;
+  // Liefert "genommen", "verbraucht" (es gäbe ein passendes, aber es kam schon zweimal vor) oder "keins"
   const nimm = (p, passt = () => true, grenze = 1.5) => {
-    const liste = (nachPlatz[p] || []).filter(t => passt(t) && !out.includes(t));
-    if (da.has(p) && p !== "zubehoer" || !liste.length) return;
-    const b = liste.map(t => ({ t, w: teile.reduce((s, z) => s + paar(t, z), 0) / teile.length + stilPunkte(t, stil) * 0.2 })).sort((x, y) => y.w - x.w)[0];
-    if (b.w >= grenze) out.push(b.t);
+    if (da.has(p) && p !== "zubehoer") return "genommen";
+    const wert = t => teile.reduce((s, z) => s + paar(t, z), 0) / teile.length + stilPunkte(t, stil) * 0.2;
+    const gute = (nachPlatz[p] || []).filter(t => passt(t) && !out.includes(t) && wert(t) >= grenze);
+    const frei = gute.filter(t => (benutzt.get(t) || 0) < 2).sort((x, y) => wert(y) - wert(x));
+    if (frei.length) { out.push(frei[0]); return "genommen"; }
+    return gute.length ? "verbraucht" : "keins";
   };
   const art = (...arten) => t => arten.includes(basisArt(t));
   // Bei Kälte zuerst, was warm hält: Es sollen nicht Gürtel und Schmuck den Platz wegnehmen
@@ -269,16 +305,35 @@ function zusaetze(teile, nachPlatz, stil, sit = null) {
     if (teile.some(t => platzVon(t) === "ganz" || basisArt(t) === "Rock")) nimm("zubehoer", art("Strumpfhose"), 0.5);
     nimm("zubehoer", art("Schal / Tuch"), 0.5); nimm("zubehoer", art("Hut / Mütze", "Handschuhe"), 0.5);
   }
-  if (!sit) { if (teile.every(t => !saisonVon(t).includes("Sommer") || saisonVon(t).length > 1)) nimm("lage"); }
+  if (!sit) { if (teile.every(t => !saisonVon(t).includes("Sommer") || saisonVon(t).length > 1)) nimm("lage", schickOk, 2.5); }
   else if (sit.w.nass && !sit.temp?.ohneLage) nimm("lage", art("Jacke", "Mantel"), 0.5);
-  else if (!sit.temp || sit.temp.ideal >= 2.5) nimm("lage");
+  else if (!sit.temp) { if (!sit.anlass?.ohneSchmuck) nimm("lage", schickOk, 2); } // beim Sport ohne Wetterangabe keine Jacke
+  else if (sit.temp.ideal >= 2.5) nimm("lage", schickOk, 2);
   else if (!sit.temp.ohneLage && sit.w.leichteJacke) nimm("lage", t => waerme(t) <= 3.5, 0.5); // warm, aber bewölkt oder windig: z. B. eine Jeansjacke
   else if (!sit.temp.ohneLage && sit.ziel >= 4) nimm("lage", t => waerme(t) <= 3); // warm, aber schick: z. B. ein Blazer
-  if (!sit?.anlass?.ohneSchmuck && teile.some(t => ["unten", "ganz"].includes(platzVon(t)))) nimm("guertel");
-  nimm("tasche");
-  if (!sit?.anlass?.ohneSchmuck && !(stil?.schmuck || []).includes("wenig Schmuck")) nimm("schmuck");
+  const ohneSchmuck = !!sit?.anlass?.ohneSchmuck, wenig = (stil?.schmuck || []).includes("wenig Schmuck"), herren = stil?.mode === "Herren";
+  // Gürtel nur zu Hose, Jeans, Rock, Shorts oder Kleid (nicht zu Jogginghose oder Leggings)
+  const unten = teile.find(t => ["unten", "ganz"].includes(platzVon(t)));
+  if (!ohneSchmuck && unten && !["Jogginghose", "Leggings"].includes(basisArt(unten))) nimm("guertel", t => farbeTraegt(t, teile) && schickOk(t));
+  const tasche = ohneSchmuck ? "genommen" : nimm("tasche", t => farbeTraegt(t, teile) && schickOk(t));
+  const metalle = outfitMetall(teile, stil);
+  const schmuck = ohneSchmuck || wenig ? "genommen" : nimm("schmuck", t => { const m = metallVon(t); return m ? metalle.includes(m) : farbeTraegt(t, teile); });
   if (sit?.w.sonne) nimm("zubehoer", art("Sonnenbrille"), 0.5);
-  return out.slice(0, sit ? 4 : 3);
+  const extras = out.slice(0, sit ? 4 : 3);
+  extras.forEach(t => benutzt.set(t, (benutzt.get(t) || 0) + 1));
+  // Kaufideen nur, wenn im ganzen Kleiderschrank nichts Passendes da ist (nicht, wenn es nur schon zweimal vorkam)
+  const ideen = [], meiden = stil?.nichtFarben || [];
+  if (tasche === "keins" && !herren) {
+    // Tasche wie die Schuhe ist eine klassische Regel, aber nicht bei Sneakern (weiße Tasche zu weißen Sneakern wirkt seltsam)
+    const schuhTeil = teile.find(t => platzVon(t) === "schuh"), sf = schuhTeil && hauptFarbe(schuhTeil);
+    const wie = sf && basisArt(schuhTeil) !== "Sneaker" && TASCHEN_FARBEN.includes(sf.basis) ? sf.name : null;
+    // Keine Farbe vorschlagen, die sie schon als Tasche hat (das wäre ein Widerspruch: „passt nicht, kauf dieselbe“)
+    const hat = new Set((nachPlatz.tasche || []).map(t => hauptFarbe(t).basis));
+    const f = [wie, metalle[0] === "Gold" ? "Camel" : "Schwarz", "Beige", "Schwarz", "Camel"].find(n => n && !meiden.includes(n) && !hat.has(n));
+    if (f) ideen.push(`Tasche in ${f}${f === wie ? ` (wie die Schuhe ${nr(schuhTeil)})` : ""}`);
+  }
+  if (schmuck === "keins" && !herren) ideen.push(`schlichter Schmuck in ${metalle.join(" oder ")}`);
+  return { extras, ideen };
 }
 
 /* ---------- Situation: Anlass und Wetter (Etappe „Outfit finden“) ---------- */
@@ -453,9 +508,10 @@ export function outfitsFuer(wahl, alle, stil = null) {
   const fuer = [sit.anlassName, sit.temperatur, ...sit.wetter].filter(Boolean).join(", ");
   const vorhanden = platzListe(nutzbar);
   const tippStil = sit.anlass?.ohneSchmuck || sit.anlass?.ohneExtras ? { ...stil, schmuck: ["wenig Schmuck"] } : stil; // kein Schmuck-Tipp beim Sport oder zu Hause
+  const benutzt = new Map();
   const fertig = k => {
-    const extras = zusaetze(k.teile, nachPlatz, stil, sit);
-    return { teile: k.teile, extras, stimmig: k.stimmig, tipps: [...wetterTipps(k.teile, extras, sit, stil), ...tipps(k.teile, extras, tippStil)].slice(0, 4),
+    const { extras, ideen } = zusaetze(k.teile, nachPlatz, stil, sit, benutzt);
+    return { teile: k.teile, extras, ideen, stimmig: k.stimmig, tipps: [...wetterTipps(k.teile, extras, sit, stil), ...tipps(k.teile, extras, tippStil, ideen)].slice(0, 4),
       luecken: k.luecken.map(p => (vorhanden[p]?.length ? `passende ${PLATZ_NAME[p]}` : PLATZ_NAME[p])),
       warum: warum(k.teile) + (fuer && !notloesung ? ` Passt zu: ${fuer}.` : "") };
   };
@@ -489,10 +545,6 @@ export function kaufideen(anker, alle, stil = null) {
     dazu(`${art} in ${neutral("Weiß", "Creme", "Weiß")}`, grund("oben", "Oberteile"));
   }
   if (["unten", "ganz"].includes(p) && !andere.some(t => platzVon(t) === "guertel")) dazu(`Gürtel in ${neutral("Camel", "Camel", "Schwarz")}`, "Ein Gürtel gibt dem Outfit eine klare Linie.");
-  if (!herren && !["schmuck", "tasche"].includes(p) && !andere.some(t => platzVon(t) === "schmuck") && !(stil?.schmuck || []).includes("wenig Schmuck")) {
-    const metall = (stil?.schmuck || []).find(m => ["Gold", "Silber", "Roségold"].includes(m)) || (warm(f) ? "Gold" : "Silber");
-    dazu(`Dezente Kette in ${metall}`, "Schmuck rundet das Outfit ab.");
-  }
-  if (!["tasche", "schmuck"].includes(p) && !andere.some(t => platzVon(t) === "tasche")) dazu(`Tasche in ${neutral("Camel", "Camel", "Schwarz")}`, "Eine neutrale Tasche passt zu fast allem.");
+  // Tasche und Schmuck stehen seit 0.12 als Kaufidee bei der einzelnen Kombination (je nachdem, ob etwas Vorhandenes wirklich passt)
   return ideen.slice(0, 3);
 }
