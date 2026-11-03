@@ -1,5 +1,7 @@
 // ChatGPT (Entscheidung 4, unterer Teil). Ablauf seit 0.12 nach Alis Vorstellung (03.11.2026): ChatGPT soll den GANZEN
-// Kleiderschrank sehen, nicht nur Text.
+// Kleiderschrank sehen, nicht nur Text. Seit 0.12.1 heißt es in der App „ChatGPT oder Gemini“: Ist ChatGPT am Limit,
+// soll sie ausweichen können (Ali, 03.11.2026). Texte darum ohne Eigenheiten einer bestimmten KI.
+// Das Bild vom Outfit ist eine eigene zweite Nachricht: Mit dem Bild-Wunsch in der Anfrage lieferte Gemini NUR ein Bild, keinen Text.
 // 1. Einmal den Kleiderschrank an einen eigenen ChatGPT-Chat geben: Sammelbilder (JPG, je bis 28 Teile mit großer Nummer) plus
 //    Text mit Nummer und Angaben. Warum Bilder und keine PDF oder ZIP: ChatGPT liest in PDFs (außer „Enterprise“) nur den Text und
 //    sieht Fotos in einer ZIP nicht an; die kostenlose Version erlaubt nur etwa 3 Uploads pro Tag (Quellen in CLAUDE.md).
@@ -11,16 +13,16 @@
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
 import { el, fill, choice, field, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=12";
 import { nrText, getMeta, setMeta } from "./speicher.js?v=8";
-import { stilAktuell, stilZeilen } from "./stil.js?v=11";
+import { stilAktuell, stilZeilen } from "./stil.js?v=12";
 import { kandidaten } from "./regeln.js?v=7";
 import { GROUPS, GROUP_OF } from "./ki.js?v=6";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
 // damit nichts in die falsche Ansicht wandert.
-let stilMit = true, bildMit = true, vorbereitet = null, vorschauUrls = [];
+let stilMit = true, vorbereitet = null, vorschauUrls = [];
 const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt }
-const merker = frage => { const k = frage.teil ? "teil:" + frage.teil.nr : "situation"; if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "" }); return merk.get(k); };
+const merker = frage => { const k = frage.teil ? "teil:" + frage.teil.nr : "situation"; if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1" }); return merk.get(k); };
 
 /* ---------- Texte ---------- */
 const datum = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -93,10 +95,19 @@ function anfrageText(frage, freitext, stil) {
     "2. Nimm nur dazu, was wirklich passt: lieber keine Tasche und kein Schmuck als etwas Unpassendes.",
     "3. Erklär kurz, warum es passt: Farbkombination, Schnitte, Layering und was davon gerade im Trend ist.",
     "4. Gib konkrete Styling-Tipps (z. B. reinstecken, Ärmel krempeln, welcher Schmuck, welche Tasche, Haare).",
-    `5. ${frage.teil ? "Nenn höchstens 3 allgemeine Kaufideen, die gut dazu passen würden" : "Fehlt etwas Wichtiges, nenn höchstens 3 allgemeine Kaufideen"} (ohne Shops und ohne Links).`,
-    bildMit ? "6. Erstelle danach ein Bild von Outfit 1. Wenn ich dir ein Foto von mir mitschicke, zeig mich darin, sonst ein Model. Bleib dabei so nah wie möglich an meinen echten Teilen." : null
+    `5. ${frage.teil ? "Nenn höchstens 3 allgemeine Kaufideen, die gut dazu passen würden" : "Fehlt etwas Wichtiges, nenn höchstens 3 allgemeine Kaufideen"} (ohne Shops und ohne Links).`, "",
+    "Antworte bitte nur mit Text und erstelle noch kein Bild. Um ein Bild bitte ich dich danach extra."
   ].filter(z => z !== null).join("\n");
 }
+// Zweite Nachricht, erst nach der Antwort mit den Outfits
+const bildText = outfit => [
+  `Danke! Erstelle jetzt bitte ein Bild von ${outfit} aus deiner Antwort.`,
+  "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Muster, Material).",
+  "- Füg nichts dazu, was nicht im Outfit steht, auch keinen Schmuck und keine Tasche.",
+  "- Brauchst du für das Bild trotzdem ein Teil, das nicht aus meinem Kleiderschrank ist (z. B. eine Jacke), dann nimm etwas Schlichtes und schreib es dazu: „Nicht aus deinem Kleiderschrank – Kaufidee“.",
+  "- Schreib unter das Bild, welche Nummern darauf zu sehen sind.",
+  "- Wenn ich ein Foto von mir anhänge, zeig mich darin, sonst ein Model."
+].join("\n");
 
 /* ---------- Sammelbilder ---------- */
 // Je Bild bis zu 28 Teile (4 Spalten × 7 Reihen). Weniger pro Bild wäre schärfer, bräuchte aber mehr der wenigen Uploads.
@@ -199,7 +210,7 @@ export function antwortLesen(text, items) {
       if (!t) { unbekannt.add(n); continue; }
       if (t.geloescht) hinweise.push(`Nr. ${nrText(n)} liegt im Papierkorb.`);
       else if (t.nichtAnziehen) hinweise.push(`Nr. ${nrText(n)} ist als „🚫 Ziehe ich nicht an“ markiert.`);
-      if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ ChatGPT beschreibt Nr. ${nrText(n)} als „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt ChatGPT einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
+      if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ In der Antwort steht bei Nr. ${nrText(n)} „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt der Chat einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
       teile.push(t);
     }
     return { text: lesbar(g.zeilen.join("\n")).trim(), teile, hinweise };
@@ -233,15 +244,15 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
       if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
       fill(kopierBox);
       try { await setMeta("chatgptStand", { zeit: new Date().toISOString(), teile: vorbereitet.stand }); } catch (e) { console.error(e); }
-      toast("Text kopiert – jetzt zusammen mit den Bildern in ChatGPT senden");
+      toast("Text kopiert – jetzt zusammen mit den Bildern im Chat senden");
       vorbereitet = null; nachher(); pruefen();
     };
     const bilder = dateien.map(f => { const u = URL.createObjectURL(f); vorschauUrls.push(u); return el("img", { src: u, alt: f.name, class: "sammelbild" }); });
     fill(box, el("div", { class: "sammelbilder" }, ...bilder),
       el("p", { class: "hint" }, art === "alles"
-        ? `So geht's: ① ${n ? (mobil() ? `„${n === 1 ? "Bild" : n + " Bilder"} sichern“ tippen und im Menü „Bilder sichern“ wählen – sie landen in deinen Fotos.` : "Bilder herunterladen.") : ""} ② „Text kopieren“ tippen. ③ In ChatGPT einen neuen Chat anlegen, mit ＋ die Bilder anhängen, den Text einfügen und senden.`
+        ? `So geht's: ① ${n ? (mobil() ? `„${n === 1 ? "Bild" : n + " Bilder"} sichern“ tippen und im Menü „Bilder sichern“ wählen – sie landen in deinen Fotos.` : "Bilder herunterladen.") : ""} ② „Text kopieren“ tippen. ③ In ChatGPT oder Gemini einen neuen Chat anlegen, mit ＋ die Bilder anhängen, den Text einfügen und senden. Alle weiteren Fragen dann in diesen Chat.`
         : `So geht's: ${n ? `① Bild${n === 1 ? "" : "er"} sichern. ② ` : "① "}„Text kopieren“. ${n ? "③" : "②"} In deinem Kleiderschrank-Chat ${n ? "das Bild anhängen und " : ""}den Text einfügen und senden.`),
-      n > 3 ? el("p", { class: "hint" }, `Die kostenlose Version von ChatGPT erlaubt nur etwa 3 Uploads pro Tag. Schick heute 3 Bilder und die übrigen ${n - 3} morgen nach (einfach mit „Hier sind die weiteren Bilder“).`) : null,
+      n > 3 ? el("p", { class: "hint" }, `Die kostenlosen Versionen erlauben nur wenige Uploads pro Tag (ChatGPT etwa 3). Schick heute 3 Bilder und die übrigen ${n - 3} morgen nach (einfach mit „Hier sind die weiteren Bilder“).`) : null,
       el("div", { class: "actions" }, n ? bilderKnopf : null, textKnopf), kopierBox);
   }
   async function pruefen() {
@@ -251,9 +262,9 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
     alles.onclick = () => vorbereiten("alles", alles);
     const aenderung = el("button", { type: "button", class: "btn primary" }, "🖼 Nur die Änderungen vorbereiten");
     aenderung.onclick = () => vorbereiten("aenderung", aenderung);
-    if (v.nie) status.textContent = `Noch nicht an ChatGPT gegeben. Die App macht aus deinen ${teile.length} Teilen ${Math.max(1, Math.ceil(teile.length / PRO_BILD))} Sammelbild${teile.length > PRO_BILD ? "er" : ""} mit Nummern – so sieht ChatGPT deine echten Sachen.`;
-    else if (v.gleich) status.textContent = `✅ ChatGPT kennt deinen aktuellen Kleiderschrank (gegeben am ${datum(new Date(v.zeit))}).`;
-    else status.textContent = `⚠️ Seit dem ${datum(new Date(v.zeit))}: ${[v.neu.length ? `${v.neu.length} neu oder geändert` : null, v.weg.length ? `${v.weg.length} nicht mehr da` : null].filter(Boolean).join(", ")}. Gib ChatGPT die Änderungen, damit es den aktuellen Stand kennt.`;
+    if (v.nie) status.textContent = `Noch nicht weitergegeben. Die App macht aus deinen ${teile.length} Teilen ${Math.max(1, Math.ceil(teile.length / PRO_BILD))} Sammelbild${teile.length > PRO_BILD ? "er" : ""} mit Nummern – so sieht ChatGPT oder Gemini deine echten Sachen.`;
+    else if (v.gleich) status.textContent = `✅ Dein Chat kennt deinen aktuellen Kleiderschrank (gegeben am ${datum(new Date(v.zeit))}). Nutzt du einen anderen Chat (z. B. Gemini statt ChatGPT), gib ihn dort mit „Alles neu“.`;
+    else status.textContent = `⚠️ Seit dem ${datum(new Date(v.zeit))}: ${[v.neu.length ? `${v.neu.length} neu oder geändert` : null, v.weg.length ? `${v.weg.length} nicht mehr da` : null].filter(Boolean).join(", ")}. Gib deinem Chat die Änderungen, damit er den aktuellen Stand kennt.`;
     fill(knoepfe, v.nie || v.gleich ? alles : aenderung, v.nie || v.gleich ? null : alles);
     if (!teile.length) fill(knoepfe);
   }
@@ -267,37 +278,47 @@ const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigat
 export function chatgptPanel(items, stil, frage, kachel) {
   const m = merker(frage), ergebnis = el("div", {}), kopierBox = el("div", {});
   const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; });
-  const schrank = el("details", { class: "mehr" }, el("summary", {}, "1. Kleiderschrank an ChatGPT geben"), schritt1.el);
-  // Aufklappen, solange ChatGPT den aktuellen Stand nicht kennt
+  const schrank = el("details", { class: "mehr" }, el("summary", {}, "1. Kleiderschrank an den Chat geben"), schritt1.el);
+  // Aufklappen, solange der Chat den aktuellen Stand nicht kennt
   getMeta("chatgptStand").then(st => { const v = vergleich(kandidaten(items), st); if (v.nie || !v.gleich) schrank.open = true; }).catch(() => { schrank.open = true; });
 
   const freitext = el("textarea", { class: "notiz", maxLength: 300, rows: 2, value: m.zusatz, placeholder: frage.teil ? "z. B. fürs Büro, eher locker" : "z. B. Italiener, Freitagabend, will nicht frieren", "aria-label": "Noch etwas dazu" });
   freitext.oninput = () => { m.zusatz = freitext.value; };
-  const STIL = "Meinen Stil mitschicken", BILD = "Bild vom Outfit erstellen lassen";
-  const optionen = choice({ options: [STIL, BILD], selected: [stilMit ? STIL : null, bildMit ? BILD : null].filter(Boolean), max: 0,
-    onChange: sel => { stilMit = sel.includes(STIL); bildMit = sel.includes(BILD); } });
+  const STIL = "Meinen Stil mitschicken";
+  const optionen = choice({ options: [STIL], selected: stilMit ? [STIL] : [], max: 0, onChange: sel => { stilMit = sel.includes(STIL); } });
   const q = frage.situation || {}, nichtsAngetippt = !frage.teil && !q.anlass && !q.schickWahl && !q.temperatur && !q.wetter?.length;
   const knopfAnfrage = el("button", { type: "button", class: "btn primary" }, "📋 Anfrage kopieren");
   knopfAnfrage.onclick = async () => {
     const text = anfrageText(frage, cleanText(freitext.value), stil);
     if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
     fill(kopierBox);
-    // Ohne aktuellen Kleiderschrank im Chat rät ChatGPT oder nennt alte Nummern
+    // Ohne aktuellen Kleiderschrank im Chat rät die KI oder nennt alte Nummern
     const v = schritt1.zustand();
-    if (v.nie) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. ChatGPT kennt deinen Kleiderschrank aber noch nicht: Gib ihn zuerst (Schritt 1), dann die Anfrage in denselben Chat.")); schrank.open = true; }
+    if (v.nie) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Chat kennt deinen Kleiderschrank aber noch nicht: Gib ihn zuerst (Schritt 1), dann die Anfrage in denselben Chat.")); schrank.open = true; }
     else if (!v.gleich) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Kleiderschrank hat sich aber geändert: Am besten erst die Änderungen geben (Schritt 1).")); schrank.open = true; }
     else toast("Anfrage kopiert – jetzt in deinem Kleiderschrank-Chat einfügen");
   };
-  const oeffnen = el("a", { class: "btn", href: "https://chatgpt.com/", target: "_blank", rel: "noopener noreferrer" }, "ChatGPT öffnen ↗");
+  // Kein Knopf „ChatGPT öffnen“: Aus der Home-Bildschirm-App öffnete er nur die Web-Seite, nicht die ChatGPT-App (Ali, 03.11.2026)
 
-  const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort von ChatGPT hier einfügen", "aria-label": "Antwort von ChatGPT" });
+  // Schritt 4: Bild als eigene Nachricht, wenn die Antwort mit den Outfits da ist
+  const bildBox = el("div", {});
+  const bildWahl = choice({ options: ["Outfit 1", "Outfit 2", "Outfit 3"], selected: [m.bildOutfit], onChange: sel => { m.bildOutfit = sel[0] || "Outfit 1"; } });
+  const knopfBild = el("button", { type: "button", class: "btn" }, "📋 Bild-Wunsch kopieren");
+  knopfBild.onclick = async () => {
+    const text = bildText(m.bildOutfit || "Outfit 1");
+    if (!await kopieren(text)) { vonHand(bildBox, text); return; }
+    fill(bildBox); toast("Bild-Wunsch kopiert – im selben Chat einfügen");
+  };
+
+  const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort aus dem Chat hier einfügen", "aria-label": "Antwort aus dem Chat" });
   feld.oninput = () => { m.antwort = feld.value; };
   const anzeigen = text => {
     m.angezeigt = text.slice(0, MAX_ANTWORT);
     if (!m.angezeigt.trim()) { fill(ergebnis); return; }
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
     fill(ergebnis,
-      unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt ChatGPT noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
+      unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
+      !gruppen.some(g => g.teile.length) ? el("p", { class: "hint" }, "In der Antwort stehen keine Nummern von deinen Teilen. Bitte im Chat: „Nenne bitte jedes Teil mit seiner Nummer.“") : null,
       ...gruppen.map(g => el("div", { class: "panel kombi" },
         g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
         g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
@@ -311,16 +332,18 @@ export function chatgptPanel(items, stil, frage, kachel) {
   if (m.angezeigt) anzeigen(m.angezeigt); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
 
   return el("div", { class: "panel chatgpt" },
-    el("strong", {}, "💬 Mit ChatGPT"),
-    el("div", { class: "hint" }, "ChatGPT sieht deine echten Sachen auf Fotos, kennt Trends und macht kreativere Vorschläge als die festen Regeln der App. Du lädst die Bilder und den Text selbst in ChatGPT hoch – die App schickt nichts."),
-    el("div", { class: "hint" }, "Was du in ChatGPT hochlädst oder einfügst, geht an OpenAI: die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst. Tipp: In den Einstellungen von ChatGPT unter „Datenkontrollen“ kannst du ausschalten, dass deine Chats zum Verbessern des Modells genutzt werden."),
+    el("strong", {}, "💬 Mit ChatGPT oder Gemini"),
+    el("div", { class: "hint" }, "Eine Chat-KI wie ChatGPT oder Gemini sieht deine echten Sachen auf Fotos, kennt Trends und macht kreativere Vorschläge als die festen Regeln der App. Du lädst die Bilder und den Text selbst im Chat hoch – die App schickt nichts. Ist eine KI für heute am Limit, nimm die andere."),
+    el("div", { class: "hint" }, "Was du dort hochlädst oder einfügst, geht an den Anbieter (ChatGPT: OpenAI, Gemini: Google): die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst. Tipp: In den Einstellungen kannst du bei beiden ausschalten, dass deine Chats zum Verbessern der KI genutzt werden (ChatGPT: „Datenkontrollen“, Gemini: bei den Aktivitäten)."),
     schrank,
     field(frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen", "Noch etwas dazu? (freiwillig)", freitext),
-    nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß ChatGPT, wofür das Outfit ist.") : null,
+    nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
     optionen.el,
-    el("p", { class: "hint" }, "Für ein Bild von dir selbst: Häng in ChatGPT ein Foto von dir an die Anfrage an. Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel."),
-    el("div", { class: "actions" }, knopfAnfrage, oeffnen), kopierBox,
-    field("3. Antwort einfügen", "Kopiere die Antwort aus ChatGPT und füge sie hier ein. Die App zeigt die Outfits mit deinen Fotos.", feld),
+    el("div", { class: "actions" }, knopfAnfrage), kopierBox,
+    field("3. Antwort einfügen", "Kopiere die Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits mit deinen Fotos.", feld),
     el("div", { class: "actions" }, leeren, knopfZeigen),
-    ergebnis);
+    ergebnis,
+    field("4. Bild vom Outfit (freiwillig)", "Erst wenn die Antwort mit den Outfits da ist. Welches Outfit?", bildWahl.el),
+    el("p", { class: "hint" }, "Für ein Bild von dir selbst: Häng im Chat ein Foto von dir an. Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel."),
+    el("div", { class: "actions" }, knopfBild), bildBox);
 }

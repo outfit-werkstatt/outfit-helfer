@@ -3,9 +3,9 @@
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=12";
 import { nrText } from "./speicher.js?v=8";
-import { stilAktuell } from "./stil.js?v=11";
+import { stilAktuell } from "./stil.js?v=12";
 import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=7";
-import { chatgptPanel } from "./chatgpt.js?v=2";
+import { chatgptPanel } from "./chatgpt.js?v=3";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";
@@ -65,7 +65,7 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
     r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen) : null,
     ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),
       el("ul", { class: "tipps" }, ...ideen.map(x => el("li", {}, el("strong", {}, x.was), ": ", x.warum)))) : null,
-    el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen gibt es über ChatGPT, siehe unten."),
+    el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, siehe unten."),
     chatgptPanel(items, stil, { teil: anker }, t => miniKachel(t, bild, oeffnen)));
   return true;
 }

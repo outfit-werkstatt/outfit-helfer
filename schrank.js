@@ -4,10 +4,10 @@
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
 import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=12";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nummernZuruecksetzen, nrText } from "./speicher.js?v=8";
-import { renderStil, stilKurz } from "./stil.js?v=11";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=9";
-import { renderPasst } from "./passt.js?v=7";
-import { renderOutfit } from "./outfit.js?v=4";
+import { renderStil, stilKurz } from "./stil.js?v=12";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=10";
+import { renderPasst } from "./passt.js?v=8";
+import { renderOutfit } from "./outfit.js?v=5";
 import { GROUPS } from "./ki.js?v=6";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -93,7 +93,7 @@ function nummernKarte(items, naechste) {
   if (items.length) return el("p", { class: "hint" }, "Sobald auch der Papierkorb leer ist, kannst du die Nummern wieder bei 001 beginnen lassen.");
   const knopf = el("button", { type: "button", class: "btn" }, "Nummern wieder bei 001 beginnen");
   knopf.onclick = async () => {
-    if (!confirm("Nummern wieder bei 001 beginnen?\n\nEs sind keine Teile mehr da, es geht also nichts verloren. Ordner, „Mein Stil“ und eigene Knöpfe bleiben.\n\nAlte ChatGPT-Antworten und alte Sicherungen nennen noch die alten Nummern. Dieselbe Nummer kann dann ein anderes Teil bekommen.")) return;
+    if (!confirm("Nummern wieder bei 001 beginnen?\n\nEs sind keine Teile mehr da, es geht also nichts verloren. Ordner, „Mein Stil“ und eigene Knöpfe bleiben.\n\nAlte Antworten von ChatGPT oder Gemini und alte Sicherungen nennen noch die alten Nummern. Dieselbe Nummer kann dann ein anderes Teil bekommen.")) return;
     try {
       toast(await nummernZuruecksetzen() ? "Das nächste Teil bekommt Nr. 001" : "Das geht nur, wenn keine Teile mehr da sind.");
       neuZeichnen();

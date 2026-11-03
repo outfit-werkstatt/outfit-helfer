@@ -131,6 +131,6 @@ export function renderStil(box, kopf, stil) {
     el("details", { class: "panel mehr" }, el("summary", {}, "Lieblingsfarben"),
       farbe("lieblingsfarben", "Farben, die ich gern trage"), farbe("nichtFarben", "Farben, die ich lieber nicht trage")),
     el("div", { class: "panel" }, field("Sonst noch etwas?", null, text)),
-    el("p", { class: "hint" }, "Wird sofort gespeichert und bleibt nur auf diesem Handy. Später kommt es mit in deine Sicherung. An ChatGPT geht es nur, wenn du die Anweisung selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."),
+    el("p", { class: "hint" }, "Wird sofort gespeichert und bleibt nur auf diesem Handy. Später kommt es mit in deine Sicherung. An ChatGPT oder Gemini geht es nur, wenn du die Anfrage selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."),
     el("div", { class: "actions" }, zuruecksetzen));
 }

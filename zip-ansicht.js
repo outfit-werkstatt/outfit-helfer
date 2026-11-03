@@ -8,9 +8,9 @@
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=8";
 import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=12";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=11";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=12";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=6";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=2";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=3";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -336,10 +336,10 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
       offen ? el("p", { class: "hint" }, `Noch ${offen} ${offen === 1 ? "Foto" : "Fotos"} auf der Startseite nicht gespeichert – die kommen nicht mit.`) : null,
       el("div", { class: "actions" }, erstellenKnopf), meldung, weiter,
       el("p", { class: "hint" }, `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“. Die Datei enthält deine Fotos und „Mein Stil“ – nur an Menschen weitergeben, die das sehen dürfen.`)),
-    // Für ChatGPT keine ZIP: Es sieht Fotos darin nicht an. Darum hier dieselben Sammelbilder wie bei „Outfit finden“.
+    // Für ChatGPT/Gemini keine ZIP: ChatGPT sieht Fotos darin nicht an. Darum hier dieselben Sammelbilder wie bei „Outfit finden“.
     el("div", { class: "panel" },
-      el("strong", {}, "💬 Kleiderschrank für ChatGPT"),
-      el("p", { class: "hint" }, "Die ZIP-Datei kann ChatGPT nicht ansehen. Dafür macht die App Sammelbilder mit Nummern und einen Text dazu. Beides geht an OpenAI, sobald du es in ChatGPT hochlädst."),
+      el("strong", {}, "💬 Kleiderschrank für ChatGPT oder Gemini"),
+      el("p", { class: "hint" }, "Die ZIP-Datei kann ChatGPT nicht ansehen. Dafür macht die App Sammelbilder mit Nummern und einen Text dazu. Beides geht an den Anbieter (OpenAI bzw. Google), sobald du es im Chat hochlädst."),
       kleiderschrankSchritt(items, stil).el),
     el("div", { class: "panel" },
       el("strong", {}, "Sicherung laden"),
