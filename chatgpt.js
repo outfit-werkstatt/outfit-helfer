@@ -91,11 +91,11 @@ function anfrageText(frage, freitext, stil) {
     MODE_TEXT[s.mode] ? `- Mode: ${MODE_TEXT[s.mode]}` : null,
     zeilen.length ? "\nMein Stil (Vorlieben, keine Verbote – schlag gern auch mal eine Alternative vor):" : null, ...zeilen.map(z => "- " + z), "",
     "Bitte:",
-    `1. ${frage.teil ? `Zeig mir bis zu 3 Kombinationen mit ${teil}` : "Stell mir bis zu 3 Outfits zusammen"}, nur aus meinen Teilen. Nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“) und schreib jedes als „Outfit 1“, „Outfit 2“ …`,
+    `1. ${frage.teil ? `Zeig mir bis zu 3 Kombinationen mit ${teil}` : "Stell mir bis zu 3 Outfits zusammen"}, nur aus meinen Teilen, so dass ich jedes Outfit genau so aus meinem Kleiderschrank anziehen kann. Nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“) und schreib jedes als „Outfit 1“, „Outfit 2“ …`,
     "2. Nimm nur dazu, was wirklich passt: lieber keine Tasche und kein Schmuck als etwas Unpassendes.",
     "3. Erklär kurz, warum es passt: Farbkombination, Schnitte, Layering und was davon gerade im Trend ist.",
     "4. Gib konkrete Styling-Tipps (z. B. reinstecken, Ärmel krempeln, welcher Schmuck, welche Tasche, Haare).",
-    `5. ${frage.teil ? "Nenn höchstens 3 allgemeine Kaufideen, die gut dazu passen würden" : "Fehlt etwas Wichtiges, nenn höchstens 3 allgemeine Kaufideen"} (ohne Shops und ohne Links).`, "",
+    `5. ${frage.teil ? "Nenn höchstens 3 allgemeine Kaufideen, die gut dazu passen würden" : "Fehlt etwas Wichtiges, nenn höchstens 3 allgemeine Kaufideen"} (ohne Shops und ohne Links). Schreib sie getrennt unter die Überschrift „Kaufideen“ und nie in ein Outfit, z. B. „Mit einem camelfarbenen Gürtel würde Outfit 2 noch besser aussehen“.`, "",
     "Antworte bitte nur mit Text und erstelle noch kein Bild. Um ein Bild bitte ich dich danach extra."
   ].filter(z => z !== null).join("\n");
 }
@@ -103,8 +103,8 @@ function anfrageText(frage, freitext, stil) {
 const bildText = outfit => [
   `Danke! Erstelle jetzt bitte ein Bild von ${outfit} aus deiner Antwort.`,
   "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Muster, Material).",
-  "- Füg nichts dazu, was nicht im Outfit steht, auch keinen Schmuck und keine Tasche.",
-  "- Brauchst du für das Bild trotzdem ein Teil, das nicht aus meinem Kleiderschrank ist (z. B. eine Jacke), dann nimm etwas Schlichtes und schreib es dazu: „Nicht aus deinem Kleiderschrank – Kaufidee“.",
+  "- Zeig nur Teile aus meinem Kleiderschrank. Füg nichts dazu, was nicht im Outfit steht, auch keinen Schmuck, keine Tasche und keine Kaufidee.",
+  "- Fehlt etwas (z. B. eine Jacke), lass es im Bild weg und schreib es nur als Text darunter: „Mit … würde es noch besser aussehen“.",
   "- Schreib unter das Bild, welche Nummern darauf zu sehen sind.",
   "- Wenn ich ein Foto von mir anhänge, zeig mich darin, sonst ein Model."
 ].join("\n");
