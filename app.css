@@ -28,6 +28,20 @@ label.upload{display:block;text-align:center;padding:18px;border:2px dashed var(
 label.upload.disabled{opacity:.45;pointer-events:none}
 label.upload input{display:none}
 .hint{font-size:.85rem;color:var(--muted);margin-top:8px}
+/* ⓘ: kleiner runder Knopf hinter einer Überschrift, Hinweis klappt darunter auf. Die Tippfläche ist größer als der Kreis. */
+.info-zeile{display:flex;align-items:center;gap:8px}
+.info-knopf{position:relative;flex:0 0 auto;width:22px;height:22px;padding:0;border-radius:50%;border:1.5px solid var(--muted);background:transparent;
+  color:var(--muted);font:italic 700 13px/1 Georgia,"Times New Roman",serif;text-transform:none;letter-spacing:0;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center}
+.info-knopf::after{content:"";position:absolute;inset:-11px}
+.info-knopf[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.info-box{background:var(--chip);border-radius:10px;padding:10px 12px;margin:6px 0 10px;font-size:.88rem;color:var(--ink);text-transform:none;letter-spacing:0}
+.info-box p{margin:0 0 6px}
+.info-box p:last-child{margin-bottom:0}
+.info-box ul{margin:4px 0 6px;padding-left:20px}
+/* ⓘ oben rechts in einer Karte ohne Überschrift */
+.mit-ecke{position:relative;padding-right:48px}
+.info-ecke{position:absolute;top:14px;right:14px}
 
 /* Hinweis Home-Bildschirm */
 .hinweis{border-color:var(--accent)}
@@ -170,4 +184,15 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 /* Bild-Paket: ein Outfit groß, als Vorschau */
 .bildpaket-box .actions{flex-wrap:wrap}
 .bildpaket{display:block;width:100%;max-width:360px;height:auto;margin:10px 0;border-radius:8px;border:1px solid var(--line);background:#fff}
+/* Fertige Outfits: Liste und Foto vom Look */
+.outfit-karte{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin-bottom:var(--gap)}
+.outfit-karte .look{flex:0 0 72px;width:72px;height:96px;border-radius:10px;background:var(--chip);overflow:hidden;display:block}
+.outfit-karte .look img{width:100%;height:100%;object-fit:cover;display:block}
+.outfit-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.outfit-info .name{font-weight:600;overflow-wrap:anywhere}
+.outfit-info .anzahl{font-size:.85rem;color:var(--muted)}
+.outfit-mini{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.outfit-mini img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:var(--chip)}
+.look-gross{cursor:zoom-in}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#22201c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}

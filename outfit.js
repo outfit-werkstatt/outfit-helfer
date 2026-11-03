@@ -1,8 +1,8 @@
 // „Outfit finden“: Anlass und Wetter antippen → Outfits aus dem Kleiderschrank (Entscheidung 4, oberer Teil: Vorschlag der App).
 // Die Rechnung steht in regeln.js, darunter die Anfrage an ChatGPT (chatgpt.js).
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
-import { el, fill, field, choice } from "./ui.js?v=12";
-import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=7";
+import { el, fill, field, choice, mitInfo } from "./ui.js?v=13";
+import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=8";
 import { auswahlFelder, kombiKarte, miniKachel } from "./passt.js?v=9";
 import { chatgptPanel } from "./chatgpt.js?v=4";
 
@@ -29,19 +29,18 @@ export function renderOutfit(box, kopf, items, folders, stil, bild, oeffnen, neu
   zuDenVorschlaegen.onclick = () => ergebnis.scrollIntoView({ behavior: "smooth" });
   const fuer = [anlass, schickWahl, temperatur, ...wetter].filter(Boolean).join(" · ");
   fill(ergebnis,
-    el("h2", {}, "Vorschläge"),
+    mitInfo(el("h2", {}, "Vorschläge der App"), "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Wetter, Anlass). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, ganz unten."),
     fuer ? el("p", { class: "hint" }, `Für: ${fuer}`) : el("p", { class: "hint" }, "Tippe oben an, wofür es ist und wie das Wetter wird, dann passen die Vorschläge besser."),
     !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
       : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
-    ...r.kombis.map((k, i) => kombiKarte(k, `Outfit ${i + 1}`, bild, oeffnen)),
-    r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen) : null,
-    el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Wetter, Anlass). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, siehe unten."),
+    ...r.kombis.map((k, i) => kombiKarte(k, `Outfit ${i + 1}`, bild, oeffnen, fuer || "Outfit")),
+    r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, fuer ? `${fuer} (mal anders)` : "Mal was anderes") : null,
     chatgptPanel(items, stil, { situation: { anlass, schickWahl, temperatur, wetter } }, t => miniKachel(t, bild, oeffnen)));
 
   fill(box, kopf,
     el("div", { class: "panel" },
       field("Wofür?", null, anlassWahl.el),
-      field("Wie schick?", "Freiwillig. Sonst richtet es sich nach dem Anlass.", einer(Object.keys(SCHICK_WAHL), schickWahl, x => { schickWahl = x; })),
+      field("Wie schick?", "freiwillig", einer(Object.keys(SCHICK_WAHL), schickWahl, x => { schickWahl = x; }), "Ohne Angabe richtet es sich nach dem Anlass."),
       field("Temperatur", null, einer(Object.keys(TEMPERATUREN), temperatur, x => { temperatur = x; })),
       field("Wetter", "Mehrere möglich.", wetterWahl.el),
       mehr,

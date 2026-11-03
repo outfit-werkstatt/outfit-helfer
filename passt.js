@@ -1,11 +1,12 @@
 // „Was passt dazu?“: ein Teil antippen → Kombinationen aus dem Kleiderschrank + schlichte Kaufideen (Entscheidung 6).
 // Die Rechnung steht in regeln.js, hier nur die Anzeige. Texte immer per textContent/DOM, nie per innerHTML.
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
-import { el, fill, field, choice, beschreibung } from "./ui.js?v=12";
-import { nrText } from "./speicher.js?v=8";
-import { stilAktuell } from "./stil.js?v=12";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=7";
+import { el, fill, field, choice, mitInfo, beschreibung } from "./ui.js?v=13";
+import { nrText } from "./speicher.js?v=9";
+import { stilAktuell } from "./stil.js?v=13";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=8";
 import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=4";
+import { speichernKnopf } from "./fertig.js?v=1";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";
@@ -17,11 +18,13 @@ export function auswahlFelder(items, folders, stil, neuZeichnen) {
   const angehakt = new Set(folders.map(f => f.id).filter(id => !abgewaehlt.has(id)));
   // Ohne eigene Ordner gibt es nichts abzuwählen
   const pool = kandidaten(items, folders.length ? { angehakt, ohneOrdner: ohneOrdnerAn } : null);
-  const ordnerWahl = folders.length ? field("Aus welchen Ordnern?", "Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt.",
+  const ordnerWahl = folders.length ? field("Aus welchen Ordnern?", null,
     choice({ options: [...folders.map(f => f.name), OHNE_ORDNER], selected: [...folders.filter(f => angehakt.has(f.id)).map(f => f.name), ...(ohneOrdnerAn ? [OHNE_ORDNER] : [])], max: 0,
-      onChange: sel => { abgewaehlt = new Set(folders.filter(f => !sel.includes(f.name)).map(f => f.id)); ohneOrdnerAn = sel.includes(OHNE_ORDNER); neuZeichnen(); } }).el) : null;
-  const stilWahl = field("Meinen Stil beachten", "An: Was zu „Mein Stil“ passt, kommt zuerst. Weggelassen wird deswegen nichts.",
-    choice({ options: ["An"], selected: stilAn ? ["An"] : [], onChange: sel => { stilAn = sel.length > 0; neuZeichnen(); } }).el);
+      onChange: sel => { abgewaehlt = new Set(folders.filter(f => !sel.includes(f.name)).map(f => f.id)); ohneOrdnerAn = sel.includes(OHNE_ORDNER); neuZeichnen(); } }).el,
+    "Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt. „Ohne Ordner“ sind die Teile, die in keinem eigenen Ordner liegen.") : null;
+  const stilWahl = field("Meinen Stil beachten", null,
+    choice({ options: ["An"], selected: stilAn ? ["An"] : [], onChange: sel => { stilAn = sel.length > 0; neuZeichnen(); } }).el,
+    "An: Was zu „Mein Stil“ passt, kommt zuerst. Weggelassen wird deswegen nichts.");
   return { ordnerWahl, stilWahl, pool, mitStil };
 }
 
@@ -33,8 +36,8 @@ export function miniKachel(t, bild, oeffnen, klein = false) {
   b.onclick = () => oeffnen(t.nr);
   return b;
 }
-// Eine Kombination mit Nummern, kleinen Fotos, Begründung und Tipps
-export function kombiKarte(k, titel, bild, oeffnen) {
+// Eine Kombination mit Nummern, kleinen Fotos, Begründung und Tipps. name = Vorschlag für den Namen beim Speichern
+export function kombiKarte(k, titel, bild, oeffnen, name = titel) {
   const mini = (t, klein = false) => miniKachel(t, bild, oeffnen, klein);
   // Bild-Paket erst auf Wunsch (die Ansicht wird bei jedem Tippen neu gezeichnet). Nur die Kleidung, nicht „Dazu passt auch“.
   const paketBox = el("div", {}), paketKnopf = el("button", { type: "button", class: "btn" }, "🖼 Bild von diesem Outfit");
@@ -50,7 +53,9 @@ export function kombiKarte(k, titel, bild, oeffnen) {
     // Kein vorhandenes Teil passt wirklich: lieber eine Kaufidee als irgendetwas dazulegen
     k.ideen?.length ? el("p", { class: "hint" }, `🛍 Würde gut dazu passen: ${k.ideen.join(", ")}.`) : null,
     k.tipps.length ? el("ul", { class: "tipps" }, ...k.tipps.map(x => el("li", {}, x))) : null,
-    el("div", { class: "actions" }, paketKnopf), paketBox);
+    el("div", { class: "actions wrap" }, speichernKnopf([...k.teile, ...k.extras], name,
+      [k.warum, k.ideen?.length ? `Würde gut dazu passen: ${k.ideen.join(", ")}.` : null, ...k.tipps.map(x => "• " + x)].filter(Boolean).join("\n"), "app"), paketKnopf),
+    paketBox);
 }
 
 export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, neuZeichnen) {
@@ -63,13 +68,13 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
   fill(box, kopf,
     el("div", { class: "panel" }, ordnerWahl, stilWahl),
     anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
+    mitInfo(el("h2", {}, "Vorschläge der App"), "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, ganz unten."),
     !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
       : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
-    ...r.kombis.map((k, i) => kombiKarte(k, `Kombination ${i + 1}`, bild, oeffnen)),
-    r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen) : null,
+    ...r.kombis.map((k, i) => kombiKarte(k, `Kombination ${i + 1}`, bild, oeffnen, `Mit Nr. ${nrText(anker.nr)} – ${beschreibung(anker)}`)),
+    r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, `Mit Nr. ${nrText(anker.nr)}, mal anders`) : null,
     ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),
       el("ul", { class: "tipps" }, ...ideen.map(x => el("li", {}, el("strong", {}, x.was), ": ", x.warum)))) : null,
-    el("p", { class: "hint" }, "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, siehe unten."),
     chatgptPanel(items, stil, { teil: anker }, t => miniKachel(t, bild, oeffnen)));
   return true;
 }

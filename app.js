@@ -4,8 +4,8 @@
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=6";
-import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=8";
-import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige } from "./ui.js?v=12";
+import { addItem, allItems, askPersist, nrText, getFolders } from "./speicher.js?v=9";
+import { $, el, fill, toast, choice, field, angabenFelder, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige, infoKnoepfeVerbinden } from "./ui.js?v=13";
 import { refresh, initSchrank } from "./schrank.js?v=21";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
@@ -213,6 +213,7 @@ $("version").onclick = () => {
 addEventListener("beforeunload", e => { if ($("pruefen").querySelector(".check")) { e.preventDefault(); e.returnValue = ""; } });
 
 /* ---------- Start ---------- */
+infoKnoepfeVerbinden();
 initSchrank().catch(e => { $("kacheln").replaceChildren(el("p", { class: "hint" }, "Speicher konnte nicht geöffnet werden: " + (e?.message || e))); });
 let queue = Promise.resolve();
 $("files").addEventListener("change", ev => {

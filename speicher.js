@@ -6,6 +6,9 @@
 //        "eigeneWerte" = selbst eingetippte Einträge, "ordner" = eigene Ordner [{ id, name }], "meinStil" = Vorlieben.
 // Am Teil: ordner = [ids] (ein Teil kann in mehreren Ordnern sein, „Mein Kleiderschrank“ = alle Teile, kein Eintrag),
 //          geloescht = Zeitpunkt, wenn es im Papierkorb liegt (sonst fehlt das Feld oder ist null).
+//        "outfits" = fertige Outfits [{ id, name, nrs, text, quelle: "chat"|"app", erstellt, geaendert, foto: true|false }].
+//        Ein Foto vom fertigen Look liegt in „fotos“ unter "outfit:<id>" (groß) und "outfit-klein:<id>" (Vorschau). Die Schlüssel
+//        sind Text, die der Teile Zahlen: So braucht es keinen neuen Speicherbereich und keinen Umbau der Datenbank.
 // Bilder liegen als ArrayBuffer statt als Blob: ältere Safari-Versionen hatten Fehler mit Blobs in IndexedDB.
 const DB_NAME = "outfit-helfer", DB_VERSION = 1;
 let dbPromise = null;
@@ -129,15 +132,16 @@ export async function setFolderItems(id, nrs) {
 }
 // Nummern wieder bei 001 beginnen. Geht nur, wenn es gar keine Teile mehr gibt, auch nicht im Papierkorb: Das wird im selben
 // Schritt geprüft, in dem die Nummer zurückgesetzt wird. Gibt true zurück, wenn es geklappt hat.
-// „letzteSicherung“ fällt weg, weil ihre Nummern sonst mit den neuen Teilen verwechselt würden.
+// „letzteSicherung“ und die fertigen Outfits fallen weg, weil ihre Nummern sonst mit den neuen Teilen verwechselt würden.
 export async function nummernZuruecksetzen() {
   const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
   let ok = false;
   tx.objectStore("teile").count().onsuccess = e => {
     if (e.target.result !== 0) return;
-    tx.objectStore("fotos").clear();
+    tx.objectStore("fotos").clear(); // auch die Fotos der fertigen Outfits
     tx.objectStore("meta").put(1, "naechsteNr");
     tx.objectStore("meta").delete("letzteSicherung");
+    tx.objectStore("meta").delete("outfits");
     ok = true;
   };
   await done(tx);
@@ -146,6 +150,38 @@ export async function nummernZuruecksetzen() {
 // Großes Foto eines Teils (als Blob) oder null
 export async function getPhoto(nr) {
   const buf = await request((await db()).transaction("fotos").objectStore("fotos").get(nr));
+  return buf ? toBlob(buf) : null;
+}
+// Fertige Outfits (neueste zuerst)
+export async function getOutfits() {
+  return (await request((await db()).transaction("meta").objectStore("meta").get("outfits"))) || [];
+}
+const lookSchluessel = (id, klein = false) => (klein ? "outfit-klein:" : "outfit:") + id;
+// Outfit neu anlegen oder ändern (gleiche id), in EINEM Schritt mit seinem Foto.
+// foto: { gross, klein } (ArrayBuffer) = Foto setzen, null = Foto entfernen, weglassen = Foto bleibt, wie es ist
+export async function saveOutfit(o, foto) {
+  const tx = (await db()).transaction(["meta", "fotos"], "readwrite"), M = tx.objectStore("meta"), F = tx.objectStore("fotos");
+  const neu = { ...o, geaendert: new Date().toISOString() };
+  if (foto) { F.put(foto.gross, lookSchluessel(o.id)); F.put(foto.klein, lookSchluessel(o.id, true)); neu.foto = true; }
+  else if (foto === null) { F.delete(lookSchluessel(o.id)); F.delete(lookSchluessel(o.id, true)); neu.foto = false; }
+  M.get("outfits").onsuccess = e => {
+    const alle = e.target.result || [];
+    M.put(alle.some(x => x.id === o.id) ? alle.map(x => x.id === o.id ? neu : x) : [neu, ...alle], "outfits");
+  };
+  merken(M);
+  await done(tx);
+  return neu;
+}
+export async function deleteOutfit(id) {
+  const tx = (await db()).transaction(["meta", "fotos"], "readwrite"), M = tx.objectStore("meta");
+  M.get("outfits").onsuccess = e => M.put((e.target.result || []).filter(x => x.id !== id), "outfits");
+  tx.objectStore("fotos").delete(lookSchluessel(id)); tx.objectStore("fotos").delete(lookSchluessel(id, true));
+  merken(M);
+  await done(tx);
+}
+// Foto vom Look (als Blob) oder null
+export async function getLookFoto(id, klein = false) {
+  const buf = await request((await db()).transaction("fotos").objectStore("fotos").get(lookSchluessel(id, klein)));
   return buf ? toBlob(buf) : null;
 }
 // Selbst eingetippte Einträge („Andere …“), pro Merkmal eine Liste: { Art: [{ wert, gruppe }], Farbe: [{ wert }], … }
@@ -169,7 +205,8 @@ export async function setMeta(key, value) {
 }
 // „Sicherung laden“: alles durch den Stand der Sicherung ersetzen, in EINEM Schritt.
 // Klappt etwas nicht, bleibt der bisherige Stand komplett erhalten.
-// teile: fertige Einträge (mit vorschau als ArrayBuffer), fotos: Map nr → ArrayBuffer, meta: { Schlüssel: Wert }
+// teile: fertige Einträge (mit vorschau als ArrayBuffer), fotos: Map nr → ArrayBuffer (dazu die Fotos der Outfits unter
+// "outfit:<id>" / "outfit-klein:<id>"), meta: { Schlüssel: Wert }
 export async function replaceAll({ teile, fotos, meta }) {
   const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
   const T = tx.objectStore("teile"), F = tx.objectStore("fotos"), M = tx.objectStore("meta");

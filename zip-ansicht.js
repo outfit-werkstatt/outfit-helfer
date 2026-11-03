@@ -1,20 +1,21 @@
 // Etappe 1e: Sicherung als ZIP-Datei speichern und laden („Sicherung vom TT.MM.JJJJ Outfit Helfer.zip“).
-// Inhalt: Fotos als „012 - T-Shirt braun.jpg“, Vorschaubilder, angaben.json (Teile, Ordner, Mein Stil, eigene Knöpfe,
-// nächste Nummer) und „Lies mich.txt“. Teile im Papierkorb kommen nicht mit.
+// Inhalt: Fotos als „012 - T-Shirt braun.jpg“, Vorschaubilder, Fotos der fertigen Outfits unter „Outfits/“, angaben.json
+// (Teile, Ordner, Mein Stil, eigene Knöpfe, fertige Outfits, nächste Nummer) und „Lies mich.txt“. Teile im Papierkorb kommen nicht mit.
 // Laden ERSETZT alles. Die Datei kann von irgendwoher stammen, darum wird sie misstrauisch gelesen: nur erwartete Dateien,
 // Grenzen für Größe und Anzahl, jede Angabe geprüft (nur bekannte Felder, Längen gekürzt), Fotos neu gezeichnet.
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
-import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, replaceAll, askPersist, nrText } from "./speicher.js?v=8";
-import { el, fill, toast, clean, cleanText, teilAngleichen } from "./ui.js?v=12";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=12";
+import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=9";
+import { el, fill, toast, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=13";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=13";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=6";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=4";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
-const MAX_ZIP = 2e9, MAX_TEILE = 3000, MAX_EINTRAEGE = 4 * MAX_TEILE + 100; // pro Teil Foto + Vorschau, ein Mac legt je Datei noch eine „._“-Datei dazu
+// Pro Teil Foto + Vorschau, pro Outfit ein Foto; ein Mac legt je Datei noch eine „._“-Datei dazu
+const MAX_ZIP = 2e9, MAX_TEILE = 3000, MAX_OUTFITS = 1000, MAX_EINTRAEGE = 4 * MAX_TEILE + 2 * MAX_OUTFITS + 100;
 const utf8 = s => new TextEncoder().encode(s);
 const datumText = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const mb = n => (n / 1e6).toFixed(n < 10e6 ? 1 : 0).replace(".", ",") + " MB";
@@ -26,9 +27,11 @@ const nummern = (nrs, max = 12) => nrs.slice(0, max).map(nrText).join(", ") + (n
 const ohneSonderzeichen = s => s.replace(/[^\p{L}\p{N} .,+&()'-]/gu, " ").replace(/\s+/g, " ").trim();
 const fotoName = t => `${nrText(t.nr)} - ${ohneSonderzeichen(`${t.art} ${(t.farben || []).join(" ").toLowerCase()}`).slice(0, 60).trim() || "Teil"}.jpg`;
 const vorschauName = nr => `Vorschaubilder/${nrText(nr)}.jpg`;
+// „Outfits/03 - Modern Smart Casual.jpg“ (Zähler vorn, damit gleiche Namen sich nicht überschreiben)
+const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSonderzeichen(o.name).slice(0, 50).trim() || "Outfit"}.jpg`;
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
   "Zum Wiederherstellen: App öffnen, „Sicherung speichern / laden“ antippen, „Sicherung auswählen“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
-  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). In angaben.json stehen alle Angaben, Ordner, „Mein Stil“ und eigene Knöpfe.\r\n\r\n" +
+  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits und eigene Knöpfe.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 
 // Bild-Vektor (Float32Array) ↔ Text für angaben.json
@@ -54,7 +57,7 @@ export function zipStand(items, letzte, stil, sonst) {
   const neu = da.filter(t => !drin.has(t.nr)).length, weg = letzte.nrs.filter(n => !jetzt.has(n)).length;
   const geaendert = da.filter(t => drin.has(t.nr) && t.geaendert > letzte.zeit).length;
   const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, geaendert && `${geaendert} geändert`,
-    stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner oder eigene Knöpfe geändert"].filter(Boolean);
+    stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits oder eigene Knöpfe geändert"].filter(Boolean);
   // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
   const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
   const tage = Math.max(0, Math.round((tagAnfang(Date.now()) - tagAnfang(letzte.zeit)) / TAG));
@@ -77,7 +80,7 @@ export function zipKarte(items, letzte, stil, sonst, oeffnen) {
 
 /* ---------- Sicherung erstellen ---------- */
 async function erstellen(fortschritt) {
-  const [alle, ordner, stil, eigene, naechste] = await Promise.all([allItems(), getFolders(), getStil(), getCustom(), getMeta("naechsteNr")]);
+  const [alle, ordner, stil, eigene, naechste, outfits] = await Promise.all([allItems(), getFolders(), getStil(), getCustom(), getMeta("naechsteNr"), getOutfits()]);
   const teile = alle.filter(t => !t.geloescht).sort((a, b) => a.nr - b.nr), dateien = [], angaben = [];
   for (const [i, t] of teile.entries()) {
     fortschritt(`Fotos sammeln: ${i + 1} von ${teile.length} …`);
@@ -87,9 +90,16 @@ async function erstellen(fortschritt) {
     const { vorschau, vektor, geloescht, ...rest } = t;
     angaben.push({ ...rest, foto: name, vorschau: vorschauName(t.nr), vektor: vektor ? zuB64(vektor) : null });
   }
+  // Fertige Outfits mit ihrem Foto vom Look (nur das große; die Vorschau entsteht beim Laden neu)
+  const outfitAngaben = [];
+  for (const [i, o] of outfits.entries()) {
+    const { foto, ...rest } = o, bild = foto ? await getLookFoto(o.id) : null;
+    if (bild) dateien.push({ name: lookName(o, i), data: bild });
+    outfitAngaben.push({ ...rest, foto: bild ? lookName(o, i) : null });
+  }
   const jetzt = new Date();
   const json = { app: APP, format: FORMAT, erstellt: jetzt.toISOString(), naechsteNr: Math.max(naechste || 1, ...alle.map(t => t.nr + 1)), // auch Nummern aus dem Papierkorb nie wieder vergeben
-    teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene };
+    teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits: outfitAngaben };
   dateien.unshift({ name: "angaben.json", data: utf8(JSON.stringify(json)) }, { name: "Lies mich.txt", data: utf8(LIES_MICH) });
   const blob = await zipErstellen(dateien, jetzt, (i, n) => fortschritt(`Sicherung packen: ${Math.round(100 * i / n)} % …`));
   return { blob, name: `Sicherung vom ${datumText(jetzt)} Outfit Helfer.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length };
@@ -165,8 +175,18 @@ function pruefen(j) {
       .filter(x => x.wert && !gesehen.has(x.wert.toLowerCase()) && gesehen.add(x.wert.toLowerCase()))
       .map(x => ({ wert: x.wert, ...(x.gruppe ? { gruppe: x.gruppe } : {}), ...(x.wie ? { wie: x.wie } : {}) }));
   }
+  // Fertige Outfits: nur Nummern, die es in der Sicherung gibt; ohne ein einziges Teil fällt das Outfit weg
+  const outfits = [];
+  for (const o of Array.isArray(j.outfits) ? j.outfits.slice(0, MAX_OUTFITS) : []) {
+    const id = typeof o?.id === "string" && /^f[a-z0-9]{1,40}$/.test(o.id) ? o.id : null, name = text(o?.name, 40);
+    const onrs = Array.isArray(o?.nrs) ? [...new Set(o.nrs.filter(n => Number.isInteger(n) && nrs.has(n)))].slice(0, 12) : [];
+    if (!id || !name || !onrs.length || outfits.some(x => x.id === id)) continue;
+    outfits.push({ id, name, nrs: onrs, text: typeof o.text === "string" ? cleanText(o.text).slice(0, 4000) || null : null,
+      quelle: o.quelle === "app" ? "app" : "chat", erstellt: zeit(o.erstellt) || new Date().toISOString(),
+      ...(zeit(o.geaendert) ? { geaendert: zeit(o.geaendert) } : {}), _foto: typeof o.foto === "string" ? o.foto : null });
+  }
   const naechsteNr = Number.isInteger(j.naechsteNr) && j.naechsteNr > 0 && j.naechsteNr <= 1e6 ? j.naechsteNr : 1;
-  return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, naechsteNr, ausgelassen };
+  return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, ausgelassen };
 }
 // Nur echte JPG-Bilder mit vernünftiger Größe annehmen (Größe steht im Kopf der Datei, vor dem Entschlüsseln prüfbar).
 // Fotos der App haben höchstens etwa 1,5 Megapixel; 16 sind großzügig und für das Handy noch gut zu entpacken.
@@ -209,7 +229,8 @@ function inhalt(alle) {
     const m = /^(\d{1,6})\b[^/]*\.jpe?g$/i.exec(name);
     if (m) nachNummer.set(Number(m[1]), nachNummer.has(Number(m[1])) ? null : x);
   }
-  return { angaben: a, foto: (name, nr) => dateien.get(name) || nachNummer.get(nr) || null,
+  return { angaben: a, datei: name => (typeof name === "string" && dateien.get(name)) || null,
+    foto: (name, nr) => dateien.get(name) || nachNummer.get(nr) || null,
     vorschau: (name, nr) => dateien.get(name) || dateien.get(vorschauName(nr)) || null };
 }
 // Bildschirm „Bitte warten“: Während des Ladens darf nichts anderes gespeichert werden, sonst würde es überschrieben
@@ -246,25 +267,41 @@ async function laden(datei) {
       } catch (e) { console.error(e); fehlen.push(teil.nr); }
     }
     if (s.teile.length && !teile.length) throw new Error("Keins der Fotos in der Sicherung ließ sich lesen. Es wurde nichts geändert.");
+    // Fertige Outfits: nur mit Teilen, die übernommen werden; ihr Foto vom Look ebenfalls neu gezeichnet (fehlt es, bleibt das Outfit ohne Foto)
+    const kommtNr = new Set(teile.map(t => t.nr)), outfits = [];
+    for (const [i, o] of s.outfits.entries()) {
+      sp.text(`Outfits prüfen: ${i + 1} von ${s.outfits.length} …`);
+      const { _foto, ...outfit } = o, onrs = outfit.nrs.filter(n => kommtNr.has(n));
+      if (!onrs.length) continue;
+      let foto = false;
+      const f = z.datei(_foto);
+      if (f) try {
+        const roh = await f.lesen();
+        fotos.set("outfit:" + outfit.id, await fotoNeuZeichnen(roh, 1200)); fotos.set("outfit-klein:" + outfit.id, await fotoNeuZeichnen(roh, 400));
+        foto = true;
+      } catch (e) { console.error(e); }
+      outfits.push({ ...outfit, nrs: onrs, foto });
+    }
     // 2. Ehrlich fragen: was kommt, was fehlt, was ginge verloren
     const jetzt = await allItems(), kommt = new Set(teile.map(t => t.nr));
     const verloren = jetzt.filter(t => !t.geloescht && !kommt.has(t.nr)).map(t => t.nr).sort((a, b) => a - b);
     const imKorb = jetzt.filter(t => t.geloescht).length, unlesbar = fehlen.length + s.ausgelassen;
     const frage = [
       `Sicherung${s.erstellt ? " vom " + datumText(new Date(s.erstellt)) : ""}: ${anzahl(teile.length)}, ${s.ordner.length} Ordner` +
+        `${outfits.length ? `, ${outfits.length} fertige ${outfits.length === 1 ? "Outfit" : "Outfits"}` : ""}` +
         `${Object.keys(s.meinStil).some(k => k !== "geaendert") ? ", „Mein Stil“" : ""}.`,
       unlesbar ? `⚠️ ${unlesbar === 1 ? "1 Teil" : unlesbar + " Teile"} aus der Sicherung ${unlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${unlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
         (fehlen.length ? `: Nr. ${nummern(fehlen)}` : "") + (s.ausgelassen ? `${fehlen.length ? " und " : ": "}${s.ausgelassen} ohne gültige Nummer oder Art` : "") + "." : null,
       verloren.length ? `⚠️ ${verloren.length === 1 ? "Dieses Teil ist" : `Diese ${verloren.length} Teile sind`} jetzt in der App, aber nicht in der Sicherung und ${verloren.length === 1 ? "wäre" : "wären"} danach weg: Nr. ${nummern(verloren)}.` : null,
       imKorb ? `Der Papierkorb (${anzahl(imKorb)}) wird geleert.` : null,
-      "Das ERSETZT alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, eigene Knöpfe).",
+      "Das ERSETZT alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, eigene Knöpfe).",
       verloren.length ? "Tipp: Willst du den jetzigen Stand behalten, tippe auf „Abbrechen“ und erstelle zuerst eine Sicherung davon." : null,
       "Wiederherstellen?"].filter(Boolean).join("\n\n");
     if (!confirm(frage)) return "Abgebrochen – es wurde nichts geändert.";
     // 3. Alles in EINEM Schritt ersetzen. Nummern nie doppelt: weiter nach der höchsten aus Sicherung, App und bisherigem Zähler
     sp.text("Wird gespeichert …");
     const naechsteNr = Math.max(s.naechsteNr, ...s.teile.map(t => t.nr + 1), ...jetzt.map(t => t.nr + 1), (await getMeta("naechsteNr")) || 1);
-    await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte,
+    await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits,
       letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr) } } });
     await askPersist(); // auf einem neuen Handy gleich um dauerhaften Speicher bitten
     sp.weg();
@@ -311,7 +348,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
         } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); }
       };
       fill(weiter, el("div", { class: "actions" }, sichern), mobil()
-        ? el("div", { class: "hint" }, "Im Teilen-Menü „In Dateien sichern“ wählen und dann den Ort:",
+        ? mitInfo(el("p", { class: "hint" }, "Im Teilen-Menü „In Dateien sichern“ wählen und einen Ort aussuchen. iCloud Drive liegt auch bei Apple."),
             el("ul", {}, el("li", {}, el("strong", {}, "iCloud Drive:"), " bleibt erhalten, auch wenn das Handy verloren geht oder kaputtgeht. Die Datei liegt dann aber auch auf Apples Servern (in deinem iCloud-Konto)."),
               el("li", {}, el("strong", {}, "Auf meinem iPhone:"), " bleibt nur auf dem Handy. Ist das Handy weg, ist auch die Sicherung weg.")),
             "Die ZIP in der Dateien-App nicht antippen – sonst packt das iPhone sie aus (schadet nicht, die ZIP bleibt).")
@@ -330,20 +367,23 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
   };
   fill(box, kopf,
     el("div", { class: "panel" },
-      el("strong", {}, "Sicherung speichern"),
-      el("p", { class: "hint" }, "Packt alle Teile mit Fotos, Ordner, „Mein Stil“ und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit."),
+      mitInfo(el("strong", {}, "Sicherung speichern"),
+        "Packt alle Teile mit Fotos, Ordner, „Mein Stil“, fertige Outfits und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit.",
+        `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“ (nach Name käme der 01.11. vor dem 25.10.).`),
       el("p", { class: "hint" }, stand),
       offen ? el("p", { class: "hint" }, `Noch ${offen} ${offen === 1 ? "Foto" : "Fotos"} auf der Startseite nicht gespeichert – die kommen nicht mit.`) : null,
       el("div", { class: "actions" }, erstellenKnopf), meldung, weiter,
-      el("p", { class: "hint" }, `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“. Die Datei enthält deine Fotos und „Mein Stil“ – nur an Menschen weitergeben, die das sehen dürfen.`)),
+      el("p", { class: "hint" }, "Die Datei enthält deine Fotos und „Mein Stil“ – nur an Menschen weitergeben, die das sehen dürfen.")),
     // Für ChatGPT/Gemini keine ZIP: ChatGPT sieht Fotos darin nicht an. Darum hier dieselben Sammelbilder wie bei „Outfit finden“.
     el("div", { class: "panel" },
-      el("strong", {}, "💬 Kleiderschrank für ChatGPT oder Gemini"),
-      el("p", { class: "hint" }, "Die ZIP-Datei kann ChatGPT nicht ansehen. Dafür macht die App Sammelbilder mit Nummern und einen Text dazu. Beides geht an den Anbieter (OpenAI bzw. Google), sobald du es im Chat hochlädst."),
+      mitInfo(el("strong", {}, "💬 Kleiderschrank für ChatGPT oder Gemini"),
+        "Die ZIP-Datei kann ChatGPT nicht ansehen. Dafür macht die App Sammelbilder mit Nummern und einen Text dazu."),
+      el("p", { class: "hint" }, "Geht an OpenAI bzw. Google, sobald du es im Chat hochlädst."),
       kleiderschrankSchritt(items, stil).el),
     el("div", { class: "panel" },
-      el("strong", {}, "Sicherung laden"),
-      el("p", { class: "hint" }, "Holt den Stand aus einer Sicherung zurück, z. B. auf einem neuen Handy. ",
-        el("strong", {}, "Achtung:"), " Das ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, Papierkorb). Vorher prüft die App die Datei und sagt dir genau, was übernommen wird und was verloren ginge."),
+      mitInfo(el("strong", {}, "Sicherung laden"),
+        "Holt den Stand aus einer Sicherung zurück, z. B. auf einem neuen Handy.",
+        "Vorher prüft die App die Datei und sagt dir genau, was übernommen wird und was verloren ginge."),
+      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, Papierkorb)."),
       el("label", { class: "btn datei" }, "Sicherung auswählen …", eingabe), ladenStatus));
 }

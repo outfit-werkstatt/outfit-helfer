@@ -2,12 +2,14 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=12";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, nummernZuruecksetzen, nrText } from "./speicher.js?v=8";
-import { renderStil, stilKurz } from "./stil.js?v=12";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, mitInfo, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=13";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=9";
+import { renderStil, stilKurz } from "./stil.js?v=13";
 import { renderZip, zipKarte } from "./zip-ansicht.js?v=11";
-import { renderPasst } from "./passt.js?v=9";
+import { renderPasst, miniKachel } from "./passt.js?v=9";
 import { renderOutfit } from "./outfit.js?v=6";
+import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=1";
+import { bildPaketBereich } from "./chatgpt.js?v=4";
 import { GROUPS } from "./ki.js?v=6";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -46,7 +48,7 @@ async function show(y) {
 // Dieselbe Ansicht neu zeichnen, ohne zu springen
 async function neuZeichnen() { const y = scrollY; await render(); scrollTo(0, y); }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
-export async function refresh() { if (current.v !== "stil" && current.v !== "sicherung" && !bearbeitet) await neuZeichnen(); }
+export async function refresh() { if (current.v !== "stil" && current.v !== "sicherung" && current.v !== "fertigEins" && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
@@ -56,7 +58,7 @@ async function render() {
   const [items, folders, stil, letzte, foto] = await Promise.all([
     s.v === "teil" ? getItem(s.nr).then(t => t ? [t] : []) : allItems(),
     getFolders(), getStil(), getMeta("letzteSicherung"), s.v === "teil" ? getPhoto(s.nr) : null]);
-  const [sonst, naechste] = await Promise.all([getMeta("sonstGeaendert"), getMeta("naechsteNr")]);
+  const [sonst, naechste, outfits] = await Promise.all([getMeta("sonstGeaendert"), getMeta("naechsteNr"), getOutfits()]);
   if (nr !== zeichnung) return;
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
   // Auswahl-Felder der vorigen Ansicht abmelden (sie hören sonst weiter auf neue eigene Einträge)
@@ -72,7 +74,13 @@ async function render() {
   }
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden"), items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
-  renderStart(items, folders, stil, letzte, sonst, naechste);
+  if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }));
+  if (s.v === "fertigEins") {
+    const o = outfits.find(x => x.id === s.id);
+    if (!o) return back();
+    return renderFertig(box, kopf(o.name), o, items, url, t => miniKachel(t, url, n => go({ v: "teil", nr: n })), bildPaketBereich, back, neuZeichnen);
+  }
+  renderStart(items, folders, stil, letzte, sonst, naechste, outfits);
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
@@ -93,7 +101,7 @@ function nummernKarte(items, naechste) {
   if (items.length) return el("p", { class: "hint" }, "Sobald auch der Papierkorb leer ist, kannst du die Nummern wieder bei 001 beginnen lassen.");
   const knopf = el("button", { type: "button", class: "btn" }, "Nummern wieder bei 001 beginnen");
   knopf.onclick = async () => {
-    if (!confirm("Nummern wieder bei 001 beginnen?\n\nEs sind keine Teile mehr da, es geht also nichts verloren. Ordner, „Mein Stil“ und eigene Knöpfe bleiben.\n\nAlte Antworten von ChatGPT oder Gemini und alte Sicherungen nennen noch die alten Nummern. Dieselbe Nummer kann dann ein anderes Teil bekommen.")) return;
+    if (!confirm("Nummern wieder bei 001 beginnen?\n\nEs sind keine Teile mehr da. Ordner, „Mein Stil“ und eigene Knöpfe bleiben. Fertige Outfits werden gelöscht, weil ihre Nummern sonst zu den neuen Teilen passen würden.\n\nAlte Antworten von ChatGPT oder Gemini und alte Sicherungen nennen noch die alten Nummern. Dieselbe Nummer kann dann ein anderes Teil bekommen.")) return;
     try {
       toast(await nummernZuruecksetzen() ? "Das nächste Teil bekommt Nr. 001" : "Das geht nur, wenn keine Teile mehr da sind.");
       neuZeichnen();
@@ -103,7 +111,7 @@ function nummernKarte(items, naechste) {
     el("div", { class: "hint" }, `Dein Kleiderschrank ist leer, das nächste Teil bekäme aber Nr. ${nrText(naechste)}.`),
     el("div", { class: "actions" }, knopf));
 }
-function renderStart(items, folders, stil, letzte, sonst, naechste) {
+function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
   // „Mein Stil“: Kurzfassung (höchstens 3 Angaben, alles Weitere steht in „Mein Stil“) oder Bitte, es einmal einzustellen
   const kurz = stilKurz(stil);
@@ -115,9 +123,9 @@ function renderStart(items, folders, stil, letzte, sonst, naechste) {
     el("div", { class: "hint" }, zeigen.length ? zeigen.join(" · ") : "Noch nicht eingestellt. Sag einmal, was du gern trägst und was lieber nicht – die Vorschläge halten sich daran."),
     el("div", { class: "actions" }, stilKnopf)));
   fill($("outfitKarte"), el("div", { class: "panel stil-karte" },
-    el("div", { class: "titel" }, "👗 Outfit finden"),
-    el("div", { class: "hint" }, da.length ? "Sag, wofür es ist und wie das Wetter wird. Die App stellt aus deinem Kleiderschrank Outfits zusammen."
-      : "Sobald du Kleidung gespeichert hast, stellt die App hier Outfits für Anlass und Wetter zusammen."),
+    mitInfo(el("div", { class: "titel" }, "👗 Outfit finden"),
+      "Sag, wofür es ist und wie das Wetter wird. Die App stellt aus deinem Kleiderschrank Outfits zusammen, und auf Wunsch fragst du zusätzlich ChatGPT oder Gemini."),
+    da.length ? null : el("div", { class: "hint" }, "Sobald du Kleidung gespeichert hast, geht es hier los."),
     da.length ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "outfit" }) }, "Outfit finden")) : null));
   fill($("zipKarte"), zipKarte(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
@@ -132,6 +140,7 @@ function renderStart(items, folders, stil, letzte, sonst, naechste) {
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
     nicht.length ? kachel(NICHT_NAME, nicht, () => go({ v: "liste", id: NICHT })) : null,
+    da.length || outfits.length ? fertigKachel(outfits, items, url, () => go({ v: "fertig" })) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
   fill($("korbLink"), el("span", { "aria-hidden": "true" }, "🗑"), el("span", { class: "u" }, korb ? `Papierkorb (${anzahl(korb)})` : "Papierkorb (leer)"));
@@ -146,7 +155,7 @@ function nameEditor(box, start, folders, onOk, selfId = null) {
   ok.onclick = async () => {
     const name = clean(input.value), lower = name.toLowerCase();
     if (!name) { msg.textContent = "Bitte einen Namen eintippen."; return; }
-    if ([HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME, "Ohne Ordner"].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
+    if ([HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME, "Ohne Ordner", "Fertige Outfits", "⭐ Fertige Outfits"].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
       msg.textContent = "Diesen Namen gibt es schon."; return;
     }
     ok.disabled = true;
@@ -377,15 +386,15 @@ function renderTeil(items, folders, nr, foto) {
           try { await updateItem(nr, { ordner: folders.filter(f => sel.includes(f.name)).map(f => f.id) }); toast("Gespeichert"); }
           catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); refresh(); }
         } }).el)
-    : field("Ordner", `Liegt in „${HAUPT}“. Eigene Ordner (z. B. „Sommer“) legst du auf der Startseite mit „+ Neuer Ordner“ an.`, null);
+    : field("Ordner", `Liegt in „${HAUPT}“.`, null, "Eigene Ordner (z. B. „Sommer“) legst du auf der Startseite mit „+ Neuer Ordner“ an.");
   // „Ziehe ich nicht an“ mit einem Tippen an/aus, ohne „Angaben ändern“
-  const nichtFeld = field("Vorschläge", "Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.", choice({
+  const nichtFeld = field("Vorschläge", null, choice({
     options: [NICHT_NAME], selected: t.nichtAnziehen ? [NICHT_NAME] : [],
     onChange: async sel => {
       try { await updateItem(nr, { nichtAnziehen: sel.length > 0 }); toast(sel.length ? "Kommt nicht mehr in Vorschläge" : "Kommt wieder in Vorschläge"); }
       catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); }
       neuZeichnen();
-    } }).el);
+    } }).el, "Das Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.");
 
   const aendern = el("button", { type: "button", class: "btn" }, "Angaben ändern");
   aendern.onclick = () => {

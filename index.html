@@ -15,14 +15,14 @@
 <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=16">
+<link rel="stylesheet" href="app.css?v=17">
 </head>
 <body>
 <main>
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
   <div id="ansichtStart">
   <h1>Outfit-Helfer</h1>
-  <div class="version" id="version">Version 0.13.1 (Bild-Anweisung) · 03.11.2026</div>
+  <div class="version" id="version">Version 0.14 (Fertige Outfits, ⓘ) · 03.11.2026</div>
 
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
@@ -54,11 +54,16 @@
     <div class="actions"><button type="button" class="btn" id="kiRetry" hidden>Nochmal versuchen</button></div>
   </div>
 
-  <div class="panel">
+  <div class="panel mit-ecke">
     <label class="upload disabled" id="uploadLabel">📷 Kleidung hinzufügen
       <input type="file" id="files" accept="image/*" multiple>
     </label>
-    <div class="hint">Ein Teil pro Foto, glatt hingelegt oder auf dem Bügel, auf einem Untergrund, der sich vom Teil abhebt. Die Fotos bleiben auf diesem Gerät.</div>
+    <button type="button" class="info-knopf info-ecke" data-info="fotoTipp" aria-label="Tipps zum Fotografieren">i</button>
+    <div class="info-box" id="fotoTipp" hidden>
+      <p>Ein Teil pro Foto, glatt hingelegt oder auf dem Bügel.</p>
+      <p>Am besten auf einem Untergrund, der sich vom Teil abhebt (weiße Teile nicht auf hellem Boden).</p>
+      <p>Die Fotos bleiben auf diesem Gerät.</p>
+    </div>
   </div>
 
   <div class="panel" id="fortschritt" hidden>

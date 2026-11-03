@@ -2,8 +2,8 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=12";
-import { setStil } from "./speicher.js?v=8";
+import { el, fill, toast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=13";
+import { setStil } from "./speicher.js?v=9";
 import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=6";
 
 // Abschnitte mit Fragen. Bei jeder Frage beliebig viele Knöpfe (nichts angetippt = egal) und „Andere …“ zum Eintippen.
@@ -124,13 +124,14 @@ export function renderStil(box, kopf, stil) {
   box.dispose?.(); box.dispose = () => widgets.forEach(w => w.dispose());
   fill(box, kopf,
     el("div", { class: "panel" },
-      field("Kombinationen für", "Bestimmt, welche Arten und Styling-Tipps die Vorschläge nutzen.", modus.el)),
-    el("p", { class: "hint" }, "Tippe an, was zu dir passt – auch mehreres. Nichts angetippt heißt: egal. Passt keine Antwort, nimm „Andere …“ und schreib es selbst. ",
-      el("strong", {}, "Das sind Vorlieben, keine Verbote:"), " Passendes kommt in den Vorschlägen zuerst, aber nichts wird ganz weggelassen. Was du wirklich nie tragen willst, markierst du am Teil mit 🚫."),
+      field("Kombinationen für", null, modus.el, "Bestimmt, welche Arten und Styling-Tipps die Vorschläge nutzen.")),
+    mitInfo(el("p", { class: "hint" }, el("strong", {}, "Vorlieben, keine Verbote."), " Tippe an, was zu dir passt."),
+      "Auch mehreres geht. Nichts angetippt heißt: egal. Passt keine Antwort, nimm „Andere …“ und schreib es selbst.",
+      "Passendes kommt in den Vorschlägen zuerst, aber nichts wird ganz weggelassen. Was du wirklich nie tragen willst, markierst du am Teil mit 🚫.",
+      "Alles wird sofort gespeichert und bleibt nur auf diesem Handy (und in deiner Sicherung). An ChatGPT oder Gemini geht es nur, wenn du die Anfrage selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."),
     ...STIL_ABSCHNITTE.map(a => el("details", { class: "panel mehr", open: !!a.offen }, el("summary", {}, a.titel), ...a.fragen.map(f => feldVon.get(f)))),
     el("details", { class: "panel mehr" }, el("summary", {}, "Lieblingsfarben"),
       farbe("lieblingsfarben", "Farben, die ich gern trage"), farbe("nichtFarben", "Farben, die ich lieber nicht trage")),
     el("div", { class: "panel" }, field("Sonst noch etwas?", null, text)),
-    el("p", { class: "hint" }, "Wird sofort gespeichert und bleibt nur auf diesem Handy. Später kommt es mit in deine Sicherung. An ChatGPT oder Gemini geht es nur, wenn du die Anfrage selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."),
     el("div", { class: "actions" }, zuruecksetzen));
 }

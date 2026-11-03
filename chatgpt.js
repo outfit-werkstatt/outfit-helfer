@@ -12,11 +12,12 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=12";
-import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=8";
-import { stilAktuell, stilZeilen } from "./stil.js?v=12";
-import { kandidaten } from "./regeln.js?v=7";
+import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=13";
+import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=9";
+import { stilAktuell, stilZeilen } from "./stil.js?v=13";
+import { kandidaten } from "./regeln.js?v=8";
 import { GROUPS, GROUP_OF } from "./ki.js?v=6";
+import { speichernKnopf } from "./fertig.js?v=1";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -122,8 +123,10 @@ const bildText = (wovon, teile = null) => [
   "- Schreib unter das Bild, welche Nummern darauf zu sehen sind."
 ].join("\n");
 // Knöpfe „Wer soll es tragen?“ (in Schritt 4 und bei den Vorschlägen der App)
-const traegtWahl = () => field("Wer soll das Outfit tragen?", "Für dich selbst: Häng im Chat zusätzlich ein Foto von dir an (ganzer Körper, gutes Licht). Das Foto geht an den Anbieter.",
-  choice({ options: Object.values(TRAEGT), selected: [traegt], onChange: sel => { traegt = sel[0] || TRAEGT.model; } }).el);
+const traegtWahl = () => field("Wer soll das Outfit tragen?", null,
+  choice({ options: Object.values(TRAEGT), selected: [traegt], onChange: sel => { traegt = sel[0] || TRAEGT.model; } }).el,
+  ["Bei „Ich“: Häng im Chat zusätzlich ein Foto von dir an, am besten ganzer Körper und gutes Licht. Das Foto geht an den Anbieter.",
+    "Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel: Farben, Muster und Details können abweichen."]);
 
 /* ---------- Sammelbilder ---------- */
 // Je Bild bis zu 28 Teile (4 Spalten × 7 Reihen). Weniger pro Bild wäre schärfer, bräuchte aber mehr der wenigen Uploads.
@@ -231,8 +234,10 @@ export function bildPaketBereich(alle, wovon) {
     fill(box, el("img", { src: url, alt: "Bild-Paket: " + teile.map(t => "Nr. " + nrText(t.nr)).join(" + "), class: "bildpaket" }),
       teile.length > PAKET_MAX ? el("p", { class: "hint" }, `Im Bild-Paket sind die ersten ${PAKET_MAX} Teile.`) : null,
       traegtWahl(),
-      el("p", { class: "hint" }, `So geht's: ① ${mobil() ? "„Bild-Paket sichern“ tippen und „Bild sichern“ wählen." : "Bild-Paket herunterladen."} ② „Anweisung fürs Bild kopieren“. ③ In ChatGPT oder Gemini mit ＋ das Bild-Paket anhängen (und für „Ich“ ein Foto von dir), die Anweisung einfügen und senden.`),
-      el("p", { class: "hint" }, "Gut zu wissen: Das Bild-Paket zeigt deine Originalfotos, also auch den Hintergrund (Boden, Zimmer). Schau kurz drüber, bevor du es hochlädst – es geht an den Anbieter. In den Gratis-Versionen zählt jedes angehängte Bild zu den wenigen Uploads pro Tag."),
+      mitInfo(el("p", { class: "hint" }, `① ${mobil() ? "Bild-Paket sichern" : "Bild-Paket herunterladen"} ② Anweisung kopieren ③ im Chat beides senden. Die Fotos gehen dabei an den Anbieter.`),
+        `${mobil() ? "„Bild-Paket sichern“ tippen und im Menü „Bild sichern“ wählen, dann liegt es in deinen Fotos." : "Das Bild-Paket landet im Download-Ordner."} Danach „Anweisung fürs Bild kopieren“. In ChatGPT oder Gemini mit ＋ das Bild-Paket anhängen (und bei „Ich“ ein Foto von dir), die Anweisung einfügen und senden.`,
+        "Das Bild-Paket zeigt deine Originalfotos, also auch den Hintergrund (Boden, Zimmer). Schau kurz drüber, bevor du es hochlädst.",
+        "In den Gratis-Versionen zählt jedes angehängte Bild zu den wenigen Uploads pro Tag."),
       el("div", { class: "actions" }, teilen, wunsch), kopierBox);
   }
   knopf.onclick = erstellen;
@@ -328,11 +333,14 @@ function outfitsAus(gruppen) {
   const namen = new Set(), kopf = g => g.text.split("\n")[0].trim();
   let liste = gruppen.filter(g => g.teile.length && !/^[^\p{L}]*kaufidee/iu.test(g.text));
   if (liste.some(g => KOPF.test(kopf(g)))) liste = liste.filter(g => KOPF.test(kopf(g)));
+  const ohneZeichen = s => s.replace(/^[^\p{L}\d]+/u, "").replace(/[\s–—|-]+$/u, "");
   return liste.map(g => {
-    let name = KOPF.test(kopf(g)) ? kopf(g).split(/[:|]/)[0].replace(/^[^\p{L}\d]+/u, "").replace(/[\s–—-]+$/u, "").slice(0, 30) : "";
+    let name = KOPF.test(kopf(g)) ? ohneZeichen(kopf(g).split(/[:|]/)[0]).slice(0, 30) : "";
     for (let k = 1; !name || namen.has(name); k++) name = `Vorschlag ${k}`; // Namen müssen eindeutig sein (Auswahl-Knöpfe)
     namen.add(name);
-    return { name, teile: g.teile };
+    // Name beim Speichern: was nach dem Doppelpunkt steht („Outfit 1: Modern Smart Casual“ → „Modern Smart Casual“)
+    const danach = KOPF.test(kopf(g)) && kopf(g).includes(":") ? ohneZeichen(kopf(g).slice(kopf(g).indexOf(":") + 1)) : "";
+    return { name, titel: danach || name, teile: g.teile, gruppe: g };
   });
 }
 
@@ -432,8 +440,8 @@ export function chatgptPanel(items, stil, frage, kachel) {
         if (!await kopieren(text)) { vonHand(bildBox, text); return; }
         fill(bildBox); toast("Anweisung kopiert – im selben Chat einfügen");
       };
-      fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Erst wenn die Antwort mit den Outfits da ist. Welches Outfit?", wahl.el),
-        el("p", { class: "hint" }, "Tipp: Füg die Antwort zuerst bei Schritt 3 ein. Dann macht die App ein Bild-Paket mit genau diesen Teilen in groß, und das Bild wird deinen echten Sachen ähnlicher."),
+      fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Welches Outfit?", wahl.el,
+          "Erst, wenn die Antwort mit den Outfits da ist. Tipp: Füg die Antwort zuerst bei Schritt 3 ein. Dann macht die App ein Bild-Paket mit genau diesen Teilen in groß, und das Bild wird deinen echten Sachen ähnlicher."),
         traegtWahl(),
         el("div", { class: "actions" }, knopfBild), bildBox);
       return;
@@ -444,7 +452,8 @@ export function chatgptPanel(items, stil, frage, kachel) {
       onChange: sel => { m.bildOutfit = sel[0] || ""; const o = outfits.find(o => o.name === sel[0]); if (o) zeigen(o, true); else fill(paketBox); } });
     const gewaehlt = outfits.find(o => o.name === m.bildOutfit);
     if (gewaehlt) zeigen(gewaehlt, false);
-    fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Welches Outfit aus der Antwort? Die App legt seine Teile groß in ein Bild-Paket.", wahl.el), paketBox);
+    fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Welches Outfit?", wahl.el,
+      "Die App legt die Teile des Outfits groß in ein Bild-Paket. Das hängst du im Chat zusammen mit der Anweisung an, dann bleibt das Bild näher an deinen echten Sachen."), paketBox);
   }
 
   const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort aus dem Chat hier einfügen", "aria-label": "Antwort aus dem Chat" });
@@ -456,6 +465,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
     if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); return; }
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
     bildSchritt(gruppen);
+    const outfitVon = new Map(outfitsAus(gruppen).map(o => [o.gruppe, o]));
     fill(ergebnis,
       unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
       !gruppen.some(g => g.teile.length) ? el("p", { class: "hint" }, "In der Antwort stehen keine Nummern von deinen Teilen. Bitte im Chat: „Nenne bitte jedes Teil mit seiner Nummer.“") : null,
@@ -463,7 +473,8 @@ export function chatgptPanel(items, stil, frage, kachel) {
         g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
         g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
         ...g.hinweise.map(h => el("p", { class: "hint" }, h)),
-        el("div", { class: "chatgpt-text" }, g.text))));
+        el("div", { class: "chatgpt-text" }, g.text),
+        outfitVon.has(g) ? el("div", { class: "actions" }, speichernKnopf(g.teile, outfitVon.get(g).titel, g.text, "chat")) : null)));
   };
   const knopfZeigen = el("button", { type: "button", class: "btn" }, "Outfits anzeigen");
   knopfZeigen.onclick = () => { anzeigen(feld.value); ergebnis.scrollIntoView({ behavior: "smooth" }); };
@@ -472,17 +483,18 @@ export function chatgptPanel(items, stil, frage, kachel) {
   anzeigen(m.angezeigt); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
 
   return el("div", { class: "panel chatgpt" },
-    el("strong", {}, "💬 Mit ChatGPT oder Gemini"),
-    el("div", { class: "hint" }, "Eine Chat-KI wie ChatGPT oder Gemini sieht deine echten Sachen auf Fotos, kennt Trends und macht kreativere Vorschläge als die festen Regeln der App. Du lädst die Bilder und den Text selbst im Chat hoch – die App schickt nichts. Ist eine KI für heute am Limit, nimm die andere."),
-    el("div", { class: "hint" }, "Was du dort hochlädst oder einfügst, geht an den Anbieter (ChatGPT: OpenAI, Gemini: Google): die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst. Tipp: In den Einstellungen kannst du ausschalten, dass deine Chats zum Verbessern der KI genutzt werden. ChatGPT: „Datenkontrollen“, der Chat bleibt erhalten. Gemini: „Gemini-Apps-Aktivität“ bzw. „Aktivität speichern“; ist sie aus, bleibt ein Chat dort aber nur wenige Tage, danach den Kleiderschrank neu geben."),
+    mitInfo(el("strong", {}, "💬 Mit ChatGPT oder Gemini"),
+      "Eine Chat-KI wie ChatGPT oder Gemini sieht deine echten Sachen auf Fotos, kennt Trends und macht kreativere Vorschläge als die festen Regeln der App. Du lädst die Bilder und den Text selbst im Chat hoch – die App schickt nichts. Ist eine KI für heute am Limit, nimm die andere.",
+      "Was an den Anbieter geht: die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst.",
+      "In den Einstellungen kannst du ausschalten, dass deine Chats zum Verbessern der KI genutzt werden. ChatGPT: „Datenkontrollen“, der Chat bleibt erhalten. Gemini: „Gemini-Apps-Aktivität“ bzw. „Aktivität speichern“; ist sie aus, bleibt ein Chat dort aber nur wenige Tage, danach den Kleiderschrank neu geben."),
+    el("div", { class: "hint" }, "Was du dort hochlädst, geht an OpenAI (ChatGPT) bzw. Google (Gemini)."),
     schrank,
     field(frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen", "Noch etwas dazu? (freiwillig)", freitext),
     nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
     optionen.el,
     el("div", { class: "actions" }, knopfAnfrage), kopierBox,
-    field("3. Antwort einfügen", "Kopiere die Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits mit deinen Fotos.", feld),
+    field("3. Antwort einfügen", null, feld, "Kopiere die ganze Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits dann mit deinen Fotos. Übernommen werden nur die Nummern, der Text bleibt nur hier zum Lesen."),
     el("div", { class: "actions" }, leeren, knopfZeigen),
     ergebnis,
-    schritt4,
-    el("p", { class: "hint" }, "Gratis sind nur wenige Bilder pro Tag möglich, und das Bild ist eine Vorschau, kein Spiegel."));
+    schritt4);
 }

@@ -2,7 +2,7 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
 import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=6";
-import { getCustom, setCustom } from "./speicher.js?v=8";
+import { getCustom, setCustom } from "./speicher.js?v=9";
 
 export const $ = id => document.getElementById(id);
 // Farben: die der KI plus weitere nur zum Antippen. Die KI kennt nur ihre gemessenen Farben und wählt die anderen nie vor
@@ -224,7 +224,37 @@ export function choice({ field = null, options, more = [], selected = [], max = 
   if (field) widgets.add(w);
   return w;
 }
-export const field = (label, note, body) => el("div", { class: "field" }, el("div", { class: "k" }, label), note ? el("div", { class: "note" }, note) : null, body);
+// mehr = Erklärung hinter einem ⓘ neben der Überschrift (Text oder Liste von Texten/Elementen)
+export function field(label, note, body, mehr = null) {
+  const i = mehr ? info(...[].concat(mehr)) : null;
+  return el("div", { class: "field" }, el("div", { class: i ? "k info-zeile" : "k" }, label, i?.knopf), i?.box,
+    note ? el("div", { class: "note" }, note) : null, body);
+}
+// ⓘ hinter einer Überschrift (Alis Wunsch 03.11.2026: weniger Text auf einmal). Antippen klappt den Hinweis direkt
+// darunter auf, nochmal antippen schließt ihn. Aufklappen statt schwebendem Fenster: verdeckt nichts und klappt sicher
+// auf dem iPhone. Hinter ⓘ gehören Erklärungen, Anleitungen und Tipps. Sichtbar bleiben Warnungen, Fehler, Stand-Anzeigen
+// und je ein kurzer Satz, wo Fotos das Handy verlassen (Sicherheitsregel „deutlich hinweisen“).
+export function info(...inhalt) {
+  const box = el("div", { class: "info-box", hidden: true }, ...inhalt.map(x => typeof x === "string" ? el("p", {}, x) : x));
+  const knopf = el("button", { type: "button", class: "info-knopf", "aria-label": "Mehr dazu", "aria-expanded": "false" }, "i");
+  // preventDefault: Steht das ⓘ in einer aufklappbaren Überschrift (<summary>), soll nur der Hinweis aufgehen
+  knopf.onclick = e => { e.preventDefault(); e.stopPropagation(); box.hidden = !box.hidden; knopf.setAttribute("aria-expanded", String(!box.hidden)); };
+  return { knopf, box };
+}
+// Überschrift (oder eine andere Zeile) mit ⓘ dahinter und dem Hinweis darunter
+export function mitInfo(kopf, ...inhalt) {
+  const i = info(...inhalt);
+  return el("div", { class: "mit-info" }, el("div", { class: "info-zeile" }, kopf, i.knopf), i.box);
+}
+// Für feste Stellen in index.html: <button class="info-knopf" data-info="id"> klappt <div class="info-box" id="id" hidden> auf
+export function infoKnoepfeVerbinden(wurzel = document) {
+  for (const knopf of wurzel.querySelectorAll("button.info-knopf[data-info]")) {
+    const box = document.getElementById(knopf.dataset.info);
+    if (!box) continue;
+    knopf.setAttribute("aria-expanded", "false");
+    knopf.onclick = e => { e.preventDefault(); box.hidden = !box.hidden; knopf.setAttribute("aria-expanded", String(!box.hidden)); };
+  }
+}
 
 /* ---------- Angaben eines Teils als Auswahl-Felder ----------
    Beim Hinzufügen mit den Vorschlägen der KI, beim Ändern mit den gespeicherten Werten.
@@ -288,7 +318,7 @@ export function angabenFelder(opt, onChange = () => {}) {
   const nicht = choice({ options: [NICHT_ANZIEHEN], selected: opt.nichtAnziehen ? [NICHT_ANZIEHEN] : [] });
   const mehr = el("details", { class: "mehr", open: !!opt.mehrOffen }, el("summary", {}, "Mehr Angaben (freiwillig): Passform, Länge, Stil, Saison, Notiz"),
     ...Object.values(extra).map(x => x.f), field("Notiz", null, notiz),
-    field("Vorschläge", "Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.", nicht.el));
+    field("Vorschläge", null, nicht.el, "Das Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge."));
   const visible = () => {
     const a = art.get()[0], g = groupOf(a);
     fArmel.hidden = !HAS_SLEEVES.has(g); fSchnitt.hidden = !HAS_LEGS.has(a); fMuster.hidden = g === "Schmuck";
