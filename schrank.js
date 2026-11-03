@@ -2,14 +2,14 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, mitInfo, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, testAnzeige } from "./ui.js?v=13";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=9";
-import { renderStil, stilKurz } from "./stil.js?v=13";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=12";
-import { renderPasst, miniKachel } from "./passt.js?v=9";
-import { renderOutfit } from "./outfit.js?v=6";
-import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=1";
-import { bildPaketBereich } from "./chatgpt.js?v=4";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, mitInfo, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=14";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
+import { renderStil, stilKurz } from "./stil.js?v=14";
+import { renderZip, zipKarte } from "./zip-ansicht.js?v=13";
+import { renderPasst, miniKachel } from "./passt.js?v=10";
+import { renderOutfit } from "./outfit.js?v=7";
+import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=2";
+import { bildPaketBereich } from "./chatgpt.js?v=5";
 import { GROUPS } from "./ki.js?v=6";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -375,9 +375,7 @@ function renderTeil(items, folders, nr, foto) {
     ...zeile("Ärmel", t.aermel), ...zeile("Hosenschnitt", t.schnitt),
     ...zeile("Weite", t.weite), ...zeile("Länge", t.laenge), ...zeile("Bund", t.bund),
     ...zeile("Stil", t.stil?.join(", ")), ...zeile("Saison", t.saison?.join(", ")), ...zeile("Notiz", t.notiz),
-    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null), ...zeile("Hinzugefügt", datum(t.erstellt)),
-    // Testanzeige: hat das Teil Prüfdaten für die Doppel-Prüfung? (Teile von vor Version 0.7 nicht)
-    ...(testAnzeige() ? zeile("Test", `${t.vektor ? "Bild-Vektor ✓" : "kein Bild-Vektor"}, ${t.hash ? "Fingerabdruck ✓" : "kein Fingerabdruck"}`) : []));
+    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null), ...zeile("Hinzugefügt", datum(t.erstellt)));
   const inhalt = el("div", { class: "panel" }, angaben);
 
   // Ordner: Änderungen werden sofort gespeichert

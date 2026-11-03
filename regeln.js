@@ -4,7 +4,7 @@
 // Anlass und Wetter dürfen Teile für diese eine Situation weglassen (kein Mantel bei 30 Grad), außer es gibt gar nichts anderes.
 // Selbst eingetippte Einträge zählen über ihr „Ähnlich wie“; ohne das gelten sie als „passt zu vielem“.
 import { GROUP_OF } from "./ki.js?v=6";
-import { farbeRgb, wieVon, saisonVorschlag, groupOf } from "./ui.js?v=13";
+import { farbeRgb, wieVon, saisonVorschlag, groupOf } from "./ui.js?v=14";
 
 /* ---------- Was ist das für ein Teil? ---------- */
 // Art → [Platz im Outfit, Schick-Stufe 1 (sehr lässig) bis 5 (sehr schick)]

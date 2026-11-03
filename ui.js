@@ -2,7 +2,7 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
 import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=6";
-import { getCustom, setCustom } from "./speicher.js?v=9";
+import { getCustom, setCustom } from "./speicher.js?v=10";
 
 export const $ = id => document.getElementById(id);
 // Farben: die der KI plus weitere nur zum Antippen. Die KI kennt nur ihre gemessenen Farben und wählt die anderen nie vor
@@ -63,9 +63,6 @@ export const clean = s => s.replace(/\s+/g, " ").trim();
 // Wie clean, aber Zeilenumbrüche bleiben (höchstens eine Leerzeile) – für Notizen und „Sonst noch etwas?“
 export const cleanText = s => s.split("\n").map(clean).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 export const names = list => list.map(([n]) => n);
-// Testanzeige (5× auf die Versionsnummer tippen): zeigt Messwerte der Doppel-Prüfung. Nur für dieses Gerät gemerkt.
-export const testAnzeige = () => { try { return localStorage.getItem("testAnzeige") === "1"; } catch { return false; } };
-export const setTestAnzeige = an => { try { an ? localStorage.setItem("testAnzeige", "1") : localStorage.removeItem("testAnzeige"); } catch {} };
 // Kurzbeschreibung eines Teils: „Bluse, braun / terrakotta“
 export const beschreibung = t => `${t.art}${t.farben?.length ? ", " + t.farben.join(" / ").toLowerCase() : ""}`;
 

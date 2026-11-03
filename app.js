@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, alsJpg, kiInfo } from "./ki.js?v=6";
-import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwuerfe } from "./speicher.js?v=9";
-import { $, el, fill, toast, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, testAnzeige, setTestAnzeige, infoKnoepfeVerbinden } from "./ui.js?v=13";
-import { refresh, initSchrank } from "./schrank.js?v=23";
+import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=6";
+import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwuerfe } from "./speicher.js?v=10";
+import { $, el, fill, toast, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden } from "./ui.js?v=14";
+import { refresh, initSchrank } from "./schrank.js?v=24";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -46,19 +46,17 @@ async function fingerabdruck(file) {
   try { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join(""); }
   catch { return null; }
 }
-// Liefert den Treffer (oder null) und für die Testanzeige das ähnlichste Teil überhaupt und wie viele Teile Prüfdaten haben
+// Liefert das ähnlichste Teil oder die ähnlichste offene Karte über der Grenze (oder null)
 async function findeDoppelt(vektor, hash) {
-  let best = null, naechster = null;
+  let best = null;
   const pruefe = (v, h, quelle) => {
     if (!v && !h) return; // Teile von vor Version 0.7 haben keine Prüfdaten
     const gleich = !!hash && h === hash, sim = gleich ? 1 : v?.length === vektor.length ? dot(v, vektor) : 0;
-    if (!naechster || sim > naechster.sim) naechster = { ...quelle, gleich, sim };
     if ((gleich || sim >= GRENZE) && (!best || sim > best.sim)) best = { ...quelle, gleich, sim };
   };
-  const teile = await allItems();
-  for (const t of teile) pruefe(t.vektor, t.hash, { teil: t });
+  for (const t of await allItems()) pruefe(t.vektor, t.hash, { teil: t });
   for (const x of offene.values()) pruefe(x.vektor, x.hash, { karte: x });
-  return { treffer: best, naechster, mitDaten: teile.filter(t => t.vektor || t.hash).length, alle: teile.length };
+  return best;
 }
 
 /* ---------- Entwürfe ----------
@@ -119,11 +117,7 @@ async function addPhoto(e, card) {
     }
     const { r, hash, foto, vorschau } = e;
     const vorschauUrl = URL.createObjectURL(vorschau);
-    const pruefung = await findeDoppelt(r.vektor, hash), doppelt = e.doppeltOk ? null : pruefung.treffer;
-    // Testanzeige: Messwerte der Doppel-Prüfung, um die Grenze an echten Handy-Fotos zu prüfen
-    const n = pruefung.naechster, testZeile = testAnzeige() ? el("div", { class: "note" }, `Test: ${pruefung.mitDaten} von ${pruefung.alle} gespeicherten Teilen haben Prüfdaten. ` +
-      (n ? `Ähnlichstes: ${n.teil ? "Nr. " + nrText(n.teil.nr) : "offene Karte"}, ${n.sim.toFixed(3).replace(".", ",")} (Grenze ${String(GRENZE).replace(".", ",")}), Fingerabdruck ${n.gleich ? "gleich" : "anders"}${hash ? "" : " (keiner berechnet)"}.`
-        : "Nichts zum Vergleichen.") + ` KI rechnet: ${kiInfo.weg}${kiInfo.grund ? ` (${kiInfo.grund})` : ""}, ${kiInfo.sekunden.toFixed(1).replace(".", ",")} s.`) : null;
+    const doppelt = e.doppeltOk ? null : await findeDoppelt(r.vektor, hash);
 
     const top = (list, n) => list.slice(0, n).map(c => c.label);
     const vorschlag = {
@@ -237,7 +231,7 @@ async function addPhoto(e, card) {
     lupe.onclick = () => { const u = URL.createObjectURL(foto); zeigeGross(u, "", () => URL.revokeObjectURL(u)); };
     fill(card,
       el("div", { class: "top" }, lupe, titel),
-      doppeltBox, testZeile,
+      doppeltBox,
       ...form.elements,
       ordnerBox,
       el("div", { class: "actions" }, drop, save)
@@ -270,25 +264,6 @@ $("alleSpeichern").onclick = async () => {
   if (nrs.length) nachSpeichern();
   updateProgress();
 };
-// Testanzeige an/aus: 5× innerhalb von 3 Sekunden auf die Versionsnummer tippen
-let taps = [];
-$("version").onclick = () => {
-  const jetzt = Date.now(); taps = [...taps.filter(t => jetzt - t < 3000), jetzt];
-  if (taps.length < 5) return;
-  taps = []; const an = !testAnzeige(); setTestAnzeige(an);
-  toast(an ? "Testanzeige an" : "Testanzeige aus"); refresh(); testInfo();
-};
-
-// Testanzeige: Werte zu Uhrzeit und Akku (Statusleiste), falls der Inhalt auf einem Gerät wieder darunter läuft
-function testInfo() {
-  const box = $("testInfo"); box.hidden = !testAnzeige();
-  if (box.hidden) return;
-  const p = el("div", { style: "position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none" });
-  document.body.append(p); const env = p.getBoundingClientRect().height; p.remove();
-  box.textContent = `Test Statusleiste: gemeldet ${Math.round(env)} px, Home-Bildschirm-App ${navigator.standalone ? "ja" : "nein"}, ` +
-    `Scroll-Bereich beginnt bei ${Math.round($("rahmen").getBoundingClientRect().top)} px, Fenster ${innerWidth}×${innerHeight}, Bildschirm ${screen.width}×${screen.height}.`;
-}
-testInfo();
 // Offene Karten sind als Entwurf gespeichert. Nur solange Originale noch geschrieben werden, beim Schließen nachfragen (am PC).
 addEventListener("beforeunload", e => { if (ablagen > 0) { e.preventDefault(); e.returnValue = ""; } });
 

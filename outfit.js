@@ -1,10 +1,10 @@
 // „Outfit finden“: Anlass und Wetter antippen → Outfits aus dem Kleiderschrank (Entscheidung 4, oberer Teil: Vorschlag der App).
 // Die Rechnung steht in regeln.js, darunter die Anfrage an ChatGPT (chatgpt.js).
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
-import { el, fill, field, choice, mitInfo } from "./ui.js?v=13";
-import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=8";
-import { auswahlFelder, kombiKarte, miniKachel } from "./passt.js?v=9";
-import { chatgptPanel } from "./chatgpt.js?v=4";
+import { el, fill, field, choice, mitInfo } from "./ui.js?v=14";
+import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=9";
+import { auswahlFelder, kombiKarte, miniKachel } from "./passt.js?v=10";
+import { chatgptPanel } from "./chatgpt.js?v=5";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
 let anlass = null, schickWahl = null, temperatur = null, wetter = [], mehrOffen = false;

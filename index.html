@@ -18,7 +18,7 @@
 <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=19">
+<link rel="stylesheet" href="app.css?v=20">
 </head>
 <body>
 <!-- Eigener Scroll-Bereich: Inhalt läuft auf dem iPhone sonst beim Scrollen unter Uhrzeit und Akku (siehe app.css) -->
@@ -27,9 +27,7 @@
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
   <div id="ansichtStart">
   <h1>Outfit-Helfer</h1>
-  <div class="version" id="version">Version 0.14.3 (Symbol für den Home-Bildschirm) · 03.11.2026</div>
-  <div class="note" id="testInfo" hidden></div>
-
+  <div class="version" id="version">Version 0.15 (Entwürfe beim Hinzufügen, bessere Regeln) · 03.11.2026</div>
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
     <button type="button" class="link" id="warnMehr">Wie geht es sicherer?</button>
@@ -102,6 +100,6 @@
 </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=26"></script>
+<script type="module" src="app.js?v=27"></script>
 </body>
 </html>
