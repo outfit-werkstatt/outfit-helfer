@@ -4,12 +4,12 @@
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
 import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=15";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
-import { renderStil, stilKurz } from "./stil.js?v=15";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=14";
-import { renderPasst, miniKachel } from "./passt.js?v=12";
-import { renderOutfit } from "./outfit.js?v=9";
+import { renderStil, stilKurz } from "./stil.js?v=16";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=15";
+import { renderPasst, miniKachel } from "./passt.js?v=13";
+import { renderOutfit } from "./outfit.js?v=10";
 import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=3";
-import { bildPaketBereich } from "./chatgpt.js?v=6";
+import { bildPaketBereich } from "./chatgpt.js?v=7";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)

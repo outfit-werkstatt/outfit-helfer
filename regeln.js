@@ -500,8 +500,11 @@ function wetterTipps(teile, extras, sit, stil) {
 
 /* ---------- Outfits für eine Situation ---------- */
 // wahl = { anlass, schickWahl, temperatur, wetter }. Liefert wie kombinationen: { kombis, anders, hinweis }.
-export function outfitsFuer(wahl, alle, stil = null) {
+export function outfitsFuer(wahl, alle, meinStil = null) {
   const sit = situation(wahl), nutzbar = alle.filter(t => platzVon(t) !== "bade");
+  // Der Moment geht vor (seit 0.18): Ist ein Anlass oder „Wie schick?“ gewählt, zählt die Stilrichtung aus „Mein Stil“ (lässig,
+  // elegant …) nicht mit, sonst zöge „lässig“ bei „schick“ in die andere Richtung. Passform, Farben, Schuhe usw. zählen weiter.
+  const stil = sit.ziel != null && meinStil?.richtung?.length ? { ...meinStil, richtung: [] } : meinStil;
   const platzListe = liste => { const m = {}; for (const t of liste) (m[platzVon(t)] ||= []).push(t); return m; };
   const schuh = sit.anlass?.ohneSchuhe ? [] : ["schuh"], jacke = sit.temp?.jacke ? ["lage"] : [];
   // Alle sinnvollen Kombinationen durchrechnen. Schuhe und Jacke dürfen fehlen, das wird als Lücke gemeldet.

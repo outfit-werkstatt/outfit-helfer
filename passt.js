@@ -3,9 +3,9 @@
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=15";
 import { nrText } from "./speicher.js?v=10";
-import { stilAktuell } from "./stil.js?v=15";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=10";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=6";
+import { stilAktuell } from "./stil.js?v=16";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=11";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=7";
 import { speichernKnopf } from "./fertig.js?v=3";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,

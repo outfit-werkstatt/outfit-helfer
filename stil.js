@@ -15,7 +15,8 @@ const SCHUHE = GROUPS.find(([g]) => g === "Schuhe")[1].map(([n]) => n);
 export const STIL_ABSCHNITTE = [
   { titel: "Stilrichtung", offen: true, fragen: [
     { k: "richtung", label: "Welcher Stil passt zu dir?", werte: STILRICHTUNGEN, liste: "Stil" },
-    { k: "wichtig", label: "Wichtig ist mir", werte: ["bequem", "praktisch", "schick", "auffallen", "eher unauffällig", "warm genug", "wenig bügeln"], beispiel: "z. B. nachhaltig" }
+    // „schick“ steht hier seit 0.18 nicht mehr: Wie schick es sein soll, regelt der Anlass bei „Outfit finden“
+    { k: "wichtig", label: "Wichtig ist mir", werte: ["bequem", "praktisch", "auffallen", "eher unauffällig", "warm genug", "wenig bügeln"], beispiel: "z. B. nachhaltig" }
   ] },
   { titel: "Passform", offen: true, fragen: [
     { k: "oben", label: "Oberteile", werte: MERKMALE.weite.werte, liste: "Weite" },
@@ -56,6 +57,8 @@ export function stilAktuell(s) {
   const n = { ...s };
   if (n.absatz) { n.schuhe = [...liste(n.schuhe), n.absatz]; delete n.absatz; }
   for (const f of FRAGEN) if (n[f.k] != null) n[f.k] = [...new Set(liste(n[f.k]).map(v => ALT[v] || v))];
+  // „Wichtig ist mir: schick“ gab es bis 0.17; es widersprach dem Anlass bei „Outfit finden“ und fällt darum weg
+  if (n.wichtig) n.wichtig = n.wichtig.filter(v => v !== "schick");
   return n;
 }
 const passt = (f, mode) => !f.nur || !mode || f.nur.includes(mode);
@@ -125,6 +128,8 @@ export function renderStil(box, kopf, stil) {
   fill(box, kopf,
     el("div", { class: "panel" },
       field("Kombinationen für", null, modus.el, "Bestimmt, welche Arten und Styling-Tipps die Vorschläge nutzen.")),
+    // Seit 0.18 (Ali, 04.11.2026): „Mein Stil“ = was allgemein gefällt und steht. Wie schick es sein soll, kommt jedes Mal aus „Outfit finden“.
+    el("p", { class: "hint" }, "Hier stellst du ein, was dir allgemein gefällt und steht. Wie schick es sein soll, wählst du jedes Mal bei „Outfit finden“, und das geht vor."),
     mitInfo(el("p", { class: "hint" }, el("strong", {}, "Vorlieben, keine Verbote."), " Tippe an, was zu dir passt."),
       "Auch mehreres geht. Nichts angetippt heißt: egal. Passt keine Antwort, nimm „Andere …“ und schreib es selbst.",
       "Passendes kommt in den Vorschlägen zuerst, aber nichts wird ganz weggelassen. Was du wirklich nie tragen willst, markierst du am Teil mit 🚫.",

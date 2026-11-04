@@ -14,8 +14,8 @@
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
 import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=15";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
-import { stilAktuell, stilZeilen } from "./stil.js?v=15";
-import { kandidaten } from "./regeln.js?v=10";
+import { stilAktuell, stilZeilen } from "./stil.js?v=16";
+import { kandidaten } from "./regeln.js?v=11";
 import { GROUPS, GROUP_OF } from "./ki.js?v=7";
 import { speichernKnopf } from "./fertig.js?v=3";
 
@@ -92,7 +92,10 @@ function anfrageText(frage, freitext, stil) {
     !frage.teil && !angaben.length && !freitext ? "- Ich habe nichts Besonderes angegeben: Schlag mir etwas Schönes für den Alltag vor." : null,
     frage.teil && !freitext ? "- Sonst nichts Besonderes, gern alltagstauglich." : null,
     MODE_TEXT[s.mode] ? `- Mode: ${MODE_TEXT[s.mode]}` : null,
-    zeilen.length ? "\nMein Stil (Vorlieben, keine Verbote – schlag gern auch mal eine Alternative vor):" : null, ...zeilen.map(z => "- " + z), "",
+    // Der Moment geht vor (seit 0.18): Mit Anlass oder „Wie schick“ sagt die Anfrage, dass „Mein Stil“ nur allgemeine Vorlieben sind
+    zeilen.length ? (q.anlass || q.schickWahl
+      ? "\nMein Stil (was ich allgemein mag – Anlass und „Wie schick“ oben gehen vor; Vorlieben, keine Verbote, schlag gern auch mal eine Alternative vor):"
+      : "\nMein Stil (Vorlieben, keine Verbote – schlag gern auch mal eine Alternative vor):") : null, ...zeilen.map(z => "- " + z), "",
     "Bitte:",
     `1. ${frage.teil ? `Zeig mir bis zu 3 Kombinationen mit ${teil}` : "Stell mir bis zu 3 Outfits zusammen"}, nur aus meinen Teilen, so dass ich jedes Outfit genau so aus meinem Kleiderschrank anziehen kann. Nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“) und schreib jedes als „Outfit 1“, „Outfit 2“ …`,
     "2. Nimm nur dazu, was wirklich passt: lieber keine Tasche und kein Schmuck als etwas Unpassendes.",
