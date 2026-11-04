@@ -1,13 +1,13 @@
-// „Outfit finden“: Anlass und Wetter antippen → Outfits aus dem Kleiderschrank (Entscheidung 4, oberer Teil: Vorschlag der App).
-// Die Rechnung steht in regeln.js, darunter die Anfrage an ChatGPT (chatgpt.js).
+// „Outfit finden“: Anlass und Wetter antippen → erst die Anfrage an ChatGPT/Gemini (chatgpt.js), darunter eingeklappt die
+// Outfits der App aus festen Regeln (regeln.js). Reihenfolge seit 0.17, siehe appKlappe in passt.js.
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
-import { el, fill, field, choice, mitInfo } from "./ui.js?v=15";
+import { el, fill, field, choice } from "./ui.js?v=15";
 import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=10";
-import { auswahlFelder, kombiKarte, miniKachel } from "./passt.js?v=11";
+import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=12";
 import { chatgptPanel } from "./chatgpt.js?v=6";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
-let anlass = null, schickWahl = null, temperatur = null, wetter = [], mehrOffen = false;
+let anlass = null, schickWahl = null, temperatur = null, wetter = [], einstellOffen = false, appOffen = false;
 
 // bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen wieder frei), oeffnen(nr) = Teil ansehen
 export function renderOutfit(box, kopf, items, folders, stil, bild, oeffnen, neuZeichnen) {
@@ -20,22 +20,21 @@ export function renderOutfit(box, kopf, items, folders, stil, bild, oeffnen, neu
     onChange: sel => { anlass = sel[0] || null; neuZeichnen(); } });
   box.dispose = () => anlassWahl.dispose();
   const wetterWahl = choice({ options: WETTER, selected: wetter, max: 0, onChange: sel => { wetter = sel; neuZeichnen(); } });
-  const mehr = el("details", { class: "mehr" }, el("summary", {}, "Ordner und „Mein Stil“"), ordnerWahl, stilWahl);
-  mehr.open = mehrOffen;
-  mehr.ontoggle = () => { mehrOffen = mehr.open; };
 
   const ergebnis = el("div", {});
   const zuDenVorschlaegen = el("button", { type: "button", class: "link" }, "Zu den Vorschlägen ↓");
   zuDenVorschlaegen.onclick = () => ergebnis.scrollIntoView({ behavior: "smooth" });
   const fuer = [anlass, schickWahl, temperatur, ...wetter].filter(Boolean).join(" · ");
   fill(ergebnis,
-    mitInfo(el("h2", {}, "Vorschläge der App"), "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Wetter, Anlass). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, ganz unten."),
+    el("h2", {}, "Vorschläge"),
     fuer ? el("p", { class: "hint" }, `Für: ${fuer}`) : el("p", { class: "hint" }, "Tippe oben an, wofür es ist und wie das Wetter wird, dann passen die Vorschläge besser."),
-    !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
-      : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
-    ...r.kombis.map((k, i) => kombiKarte(k, `Outfit ${i + 1}`, bild, oeffnen, fuer || "Outfit")),
-    r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, fuer ? `${fuer} (mal anders)` : "Mal was anderes") : null,
-    chatgptPanel(items, stil, { situation: { anlass, schickWahl, temperatur, wetter } }, t => miniKachel(t, bild, oeffnen)));
+    chatgptPanel(items, stil, { situation: { anlass, schickWahl, temperatur, wetter } }, t => miniKachel(t, bild, oeffnen)),
+    appKlappe({ anzahl: r.kombis.length + (r.anders ? 1 : 0), art: ["Outfit", "Outfits"], offen: appOffen, umschalten: x => { appOffen = x; },
+      einstellungen: [ordnerWahl, stilWahl], einstellOffen, einstellUmschalten: x => { einstellOffen = x; } },
+      !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
+        : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
+      ...r.kombis.map((k, i) => kombiKarte(k, `Outfit ${i + 1}`, bild, oeffnen, fuer || "Outfit")),
+      r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, fuer ? `${fuer} (mal anders)` : "Mal was anderes") : null));
 
   fill(box, kopf,
     el("div", { class: "panel" },
@@ -43,7 +42,6 @@ export function renderOutfit(box, kopf, items, folders, stil, bild, oeffnen, neu
       field("Wie schick?", "freiwillig", einer(Object.keys(SCHICK_WAHL), schickWahl, x => { schickWahl = x; }), "Ohne Angabe richtet es sich nach dem Anlass."),
       field("Temperatur", null, einer(Object.keys(TEMPERATUREN), temperatur, x => { temperatur = x; })),
       field("Wetter", "Mehrere möglich.", wetterWahl.el),
-      mehr,
       el("div", { class: "actions" }, zuDenVorschlaegen)),
     ergebnis);
 }

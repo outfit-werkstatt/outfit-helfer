@@ -6,8 +6,8 @@ import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angaben
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
 import { renderStil, stilKurz } from "./stil.js?v=15";
 import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=14";
-import { renderPasst, miniKachel } from "./passt.js?v=11";
-import { renderOutfit } from "./outfit.js?v=8";
+import { renderPasst, miniKachel } from "./passt.js?v=12";
+import { renderOutfit } from "./outfit.js?v=9";
 import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=3";
 import { bildPaketBereich } from "./chatgpt.js?v=6";
 import { GROUPS } from "./ki.js?v=7";

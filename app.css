@@ -177,6 +177,18 @@ details.panel.mehr{padding-top:12px}
 .kopf{margin-bottom:12px}
 .kopf-zeile{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .kopf-knopf{background:none;border:0;padding:8px 0;color:var(--link);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+/* Vorschläge der App: eingeklappt unter ChatGPT/Gemini, die Zeile zum Aufklappen sieht aus wie eine Karte */
+.klappe{margin:0 0 16px}
+.klappe > summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;min-height:56px;padding:14px 16px;font-weight:700;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--schatten)}
+.klappe > summary::-webkit-details-marker{display:none}
+.klappe > summary::after{content:"▾";margin-left:4px;color:var(--link);font-size:1.1rem;transition:transform .2s}
+.klappe[open] > summary::after{transform:rotate(180deg)}
+.klappe[open] > summary{margin-bottom:6px}
+.klappe-zahl{margin-left:auto;flex:0 0 auto;white-space:nowrap;background:var(--chip);color:var(--muted);border-radius:999px;padding:2px 10px;font-size:.8rem;font-weight:600}
+.klappe > .hint{margin:4px 4px 12px}
+.klappe > .mehr{margin-bottom:12px}
+
 /* „Was passt dazu?“ */
 .kombi-titel{font-weight:700;margin-bottom:2px}
 .kombi-nummern{font-size:.9rem;color:var(--muted);margin-bottom:10px}

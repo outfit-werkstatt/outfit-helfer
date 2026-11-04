@@ -1,16 +1,33 @@
 // „Was passt dazu?“: ein Teil antippen → Kombinationen aus dem Kleiderschrank + schlichte Kaufideen (Entscheidung 6).
 // Die Rechnung steht in regeln.js, hier nur die Anzeige. Texte immer per textContent/DOM, nie per innerHTML.
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
-import { el, fill, field, choice, mitInfo, beschreibung } from "./ui.js?v=15";
+import { el, fill, field, choice, beschreibung } from "./ui.js?v=15";
 import { nrText } from "./speicher.js?v=10";
 import { stilAktuell } from "./stil.js?v=15";
 import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=10";
 import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=6";
 import { speichernKnopf } from "./fertig.js?v=3";
 
-// Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
+// Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
+// dazu hier in „Was passt dazu?“, ob die Vorschläge der App und „Ordner und Mein Stil“ aufgeklappt sind
 const OHNE_ORDNER = "Ohne Ordner";
-let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = true;
+let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = true, appOffen = false, einstellOffen = false;
+
+// Seit 0.17 (Ali, iPhone-Test 04.11.2026): Die Vorschläge der App stehen eingeklappt UNTER ChatGPT/Gemini. Die App kennt nur die
+// Angaben, nicht die Fotos (z. B. fehlt fast immer das Material), darum passten sie oft nicht zum Anlass; der Chat sieht die Fotos.
+// Ordner und „Mein Stil beachten“ wirken nur hier, darum stehen sie mit in der Klappe. offen/umschalten: Zustand, der das
+// Neuzeichnen (bei jedem Tippen) überlebt. art = [Einzahl, Mehrzahl], z. B. ["Outfit", "Outfits"].
+export function appKlappe({ anzahl, art, offen, umschalten, einstellungen, einstellOffen, einstellUmschalten }, ...inhalt) {
+  const einstell = einstellungen.some(Boolean) ? el("details", { class: "mehr" }, el("summary", {}, "Ordner und „Mein Stil“"), ...einstellungen) : null;
+  if (einstell) { einstell.open = einstellOffen; einstell.ontoggle = () => einstellUmschalten(einstell.open); }
+  const d = el("details", { class: "klappe" },
+    el("summary", {}, el("span", {}, "Vorschläge der App"), el("span", { class: "klappe-zahl" }, anzahl ? `${anzahl} ${anzahl === 1 ? art[0] : art[1]}` : "keine")),
+    el("p", { class: "hint" }, "Sofort da, auch ohne Internet oder wenn der Chat für heute am Limit ist. Die App kennt aber nur die Angaben zu deinen Teilen, nicht die Fotos. Darum sind diese Vorschläge schlichter und passen nicht immer zum Anlass."),
+    einstell, ...inhalt);
+  d.open = offen;
+  d.ontoggle = () => umschalten(d.open);
+  return d;
+}
 
 // Knöpfe „Aus welchen Ordnern?“ und „Meinen Stil beachten“. Liefert die Felder, die infrage kommenden Teile und „Mein Stil“ zum Rechnen.
 export function auswahlFelder(items, folders, stil, neuZeichnen) {
@@ -65,16 +82,17 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
   // Kaufideen rechnen immer mit dem ganzen Schrank: Was nur gerade abgewählt ist, fehlt ja nicht wirklich.
   const r = kombinationen(anker, pool, mitStil), ideen = kaufideen(anker, kandidaten(items), mitStil);
 
+  // Erst ChatGPT/Gemini (sieht die Fotos), darunter eingeklappt die Vorschläge der App
   fill(box, kopf,
-    el("div", { class: "panel" }, ordnerWahl, stilWahl),
     anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
-    mitInfo(el("h2", {}, "Vorschläge der App"), "Diese Vorschläge kommen aus festen Grundregeln der App (Farben, Schick-Stufe, Saison). Trends und kreativere Ideen gibt es über ChatGPT oder Gemini, ganz unten."),
-    !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
-      : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
-    ...r.kombis.map((k, i) => kombiKarte(k, `Kombination ${i + 1}`, bild, oeffnen, `Mit Nr. ${nrText(anker.nr)} – ${beschreibung(anker)}`)),
-    r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, `Mit Nr. ${nrText(anker.nr)}, mal anders`) : null,
-    ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),
-      el("ul", { class: "tipps" }, ...ideen.map(x => el("li", {}, el("strong", {}, x.was), ": ", x.warum)))) : null,
-    chatgptPanel(items, stil, { teil: anker }, t => miniKachel(t, bild, oeffnen)));
+    chatgptPanel(items, stil, { teil: anker }, t => miniKachel(t, bild, oeffnen)),
+    appKlappe({ anzahl: r.kombis.length + (r.anders ? 1 : 0), art: ["Kombination", "Kombinationen"], offen: appOffen, umschalten: x => { appOffen = x; },
+      einstellungen: [ordnerWahl, stilWahl], einstellOffen, einstellUmschalten: x => { einstellOffen = x; } },
+      !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
+        : r.hinweis ? el("p", { class: "hint" }, r.hinweis) : null,
+      ...r.kombis.map((k, i) => kombiKarte(k, `Kombination ${i + 1}`, bild, oeffnen, `Mit Nr. ${nrText(anker.nr)} – ${beschreibung(anker)}`)),
+      r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, `Mit Nr. ${nrText(anker.nr)}, mal anders`) : null,
+      ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),
+        el("ul", { class: "tipps" }, ...ideen.map(x => el("li", {}, el("strong", {}, x.was), ": ", x.warum)))) : null));
   return true;
 }
