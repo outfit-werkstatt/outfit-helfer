@@ -286,7 +286,9 @@ const NUMMER = /\bNr\.?\s*0*(\d{1,6})\b([^\n]*?)(?=\bNr\.?\s*\d|$)/gi;
 // Teile eines Outfits stehen in eigenen Zeilen („- Nr. 009 – Hemd“, „Oberteil: Nr. 040“, „1. Nr. 009“, „| Nr. 009 |“,
 // „Outfit 1: Nr. 009 + Nr. 008“). Nummern mitten im Text gehören nicht dazu (Styling-Tipp „mit einer Haarklammer,
 // z. B. Nr. 062“, Gemini 03.11.2026) – außer die Gruppe hat gar keine solche Zeile („Kombiniere das Hemd (Nr. 009) mit …“).
-const TEIL_ZEILE = /^[^\p{L}\d]*(\d+[.)]\s*)?([\p{L}][\p{L}\d &/+-]{0,24}:[^\p{L}\d]*)?Nr\.?\s*\d/iu;
+// Klammern im Wort vor dem Doppelpunkt sind erlaubt („Oberteil (Basis): Nr. 004“, „Jacke (für draußen): Nr. 018“); ohne das
+// fehlten diese Teile im Bild-Paket (Gemini 04.11.2026).
+const TEIL_ZEILE = /^[^\p{L}\d]*(\d+[.)]\s*)?([\p{L}][\p{L}\d &/+(),.-]{0,30}:[^\p{L}\d]*)?Nr\.?\s*\d/iu;
 const lesbar = s => s.replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "");
 // Arten in einfacher Form („Ohrringe“ → „ohrring“), um zu sehen, ob ChatGPT bei einer Nummer ein ganz anderes Teil beschreibt
 const stamm = w => w.toLowerCase().replace(/(en|e|n|s)$/, "");

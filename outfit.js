@@ -3,8 +3,8 @@
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
 import { el, fill, field, choice } from "./ui.js?v=15";
 import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=11";
-import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=13";
-import { chatgptPanel } from "./chatgpt.js?v=7";
+import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=14";
+import { chatgptPanel } from "./chatgpt.js?v=8";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
 let anlass = null, schickWahl = null, temperatur = null, wetter = [], einstellOffen = false, appOffen = false;
