@@ -236,7 +236,8 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .doppelt img{width:64px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0;background:var(--card)}
 .doppelt .btn{margin-top:8px}
 /* ChatGPT/Gemini: eingefügte Antwort als Text mit ihren Zeilenumbrüchen */
-.chatgpt .actions{flex-wrap:wrap}
+/* Abstand unter den Knöpfen, sonst klebt die Trennlinie zum nächsten Schritt direkt darunter (iPhone, 04.11.2026) */
+.chatgpt .actions{flex-wrap:wrap;margin-bottom:14px}
 .chatgpt-text{white-space:pre-line;overflow-wrap:anywhere;font-size:.95rem;margin-top:8px}
 /* Sammelbilder für ChatGPT als kleine Vorschau */
 .sammelbilder{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin:10px 0}
