@@ -5,11 +5,11 @@
 import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=16";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
 import { renderStil, stilKurz } from "./stil.js?v=17";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=17";
-import { renderPasst, miniKachel } from "./passt.js?v=15";
-import { renderOutfit } from "./outfit.js?v=12";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=18";
+import { renderPasst, miniKachel } from "./passt.js?v=16";
+import { renderOutfit } from "./outfit.js?v=13";
 import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=4";
-import { bildPaketBereich } from "./chatgpt.js?v=9";
+import { bildPaketBereich } from "./chatgpt.js?v=10";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)

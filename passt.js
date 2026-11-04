@@ -5,7 +5,7 @@ import { el, fill, field, choice, beschreibung } from "./ui.js?v=16";
 import { nrText } from "./speicher.js?v=10";
 import { stilAktuell } from "./stil.js?v=17";
 import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=12";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=9";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=10";
 import { speichernKnopf } from "./fertig.js?v=4";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,

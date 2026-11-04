@@ -511,10 +511,17 @@ export function chatgptPanel(items, stil, frage, kachel) {
       "Die App legt die Teile des Outfits groß in ein Bild-Paket. Das hängst du im Chat zusammen mit der Anweisung an, dann bleibt das Bild näher an deinen echten Sachen."), paketBox);
   }
 
+  // Eingeklappter Text einer Antwort-Karte; was aufgeklappt ist, merkt sich m.textAuf (übersteht das Neuzeichnen)
+  const textKlappe = (i, titel, text) => {
+    const d = el("details", { class: "mehr antwort-text" }, el("summary", {}, titel), el("div", { class: "chatgpt-text" }, text));
+    d.open = !!m.textAuf?.[i];
+    d.ontoggle = () => { (m.textAuf ||= {})[i] = d.open; };
+    return d;
+  };
   // weiter = gerade eingefügt oder „Outfits anzeigen“ getippt: Schritt 3 zu, Schritt 4 auf
   const anzeigen = (text, weiter = false) => {
     const neu = text.slice(0, MAX_ANTWORT);
-    if (neu !== m.angezeigt) { m.bildKopiert = false; stand4(); } // andere Antwort → Bild noch nicht gemacht
+    if (neu !== m.angezeigt) { m.bildKopiert = false; m.textAuf = {}; stand4(); } // andere Antwort → Bild noch nicht gemacht, Texte zu
     m.angezeigt = neu;
     if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); s3.stand.textContent = ""; return; }
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
@@ -524,14 +531,23 @@ export function chatgptPanel(items, stil, frage, kachel) {
     fill(ergebnis,
       unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
       !gruppen.some(g => g.teile.length) ? el("p", { class: "hint" }, "In der Antwort stehen keine Nummern von deinen Teilen. Bitte im Chat: „Nenne bitte jedes Teil mit seiner Nummer.“") : null,
-      ...gruppen.map(g => el("div", { class: "panel kombi" },
-        g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
-        g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
-        ...g.hinweise.map(h => el("p", { class: "hint" }, h)),
-        el("div", { class: "chatgpt-text" }, g.ohneIdeen),
-        // Kaufideen gehören zum Outfit (seit 0.19), hervorgehoben darunter; gespeichert wird der ganze Text samt Kaufideen
-        g.kaufideen.length ? el("div", { class: "kaufidee" }, ...g.kaufideen.map(k => el("p", {}, "🛍 Kaufidee: " + k))) : null,
-        outfitVon.has(g) ? el("div", { class: "actions" }, speichernKnopf(g.teile, outfitVon.get(g).titel, g.text, "chat")) : null)));
+      ...gruppen.map((g, i) => {
+        // Der lange Text aus dem Chat steht eingeklappt (seit 0.20, Wunsch 04.11.2026); sichtbar bleiben Titel, Fotos,
+        // Kaufideen und „Outfit speichern“. Ein Sammelblock „Kaufideen“ bleibt offen sichtbar.
+        const o = outfitVon.get(g), zeilen = g.ohneIdeen.split("\n"), mitKopf = !!o && KOPF.test(zeilen[0]);
+        const titel = o ? (mitKopf ? zeilen[0].replace(/^[^\p{L}\d]+/u, "").trim() : o.name) : null;
+        const rest = (mitKopf ? zeilen.slice(1).join("\n") : g.ohneIdeen).trim();
+        if (!o && /^[^\p{L}]*kaufideen?/iu.test(g.ohneIdeen)) return el("div", { class: "kaufidee" }, el("p", {}, "🛍 " + g.ohneIdeen));
+        return el("div", { class: "panel kombi" },
+          titel ? el("div", { class: "kombi-titel" }, titel) : null,
+          g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
+          g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
+          ...g.hinweise.map(h => el("p", { class: "hint" }, h)),
+          // Kaufideen gehören zum Outfit (seit 0.19), hervorgehoben; gespeichert wird der ganze Text samt Kaufideen
+          g.kaufideen.length ? el("div", { class: "kaufidee" }, ...g.kaufideen.map(k => el("p", {}, "🛍 Kaufidee: " + k))) : null,
+          rest ? textKlappe(i, o ? "Erklärung und Styling-Tipps" : zeilen[0].replace(/^[^\p{L}\d]+/u, "").slice(0, 50) + (zeilen[0].length > 50 ? " …" : ""), rest) : null,
+          o ? el("div", { class: "actions" }, speichernKnopf(g.teile, o.titel, g.text, "chat")) : null);
+      }));
     if (weiter) { s3.auf(false); if (outfits.length) s4.auf(true); }
   };
   // Eingefügt → gleich anzeigen (der Knopf „Outfits anzeigen“ bleibt für selbst getippte Änderungen)
