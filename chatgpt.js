@@ -7,7 +7,7 @@
 //    sieht Fotos in einer ZIP nicht an; die kostenlose Version erlaubt nur etwa 3 Uploads pro Tag (Quellen in CLAUDE.md).
 // 2. Später nur die Änderungen geben (neue oder geänderte Teile als Bild, entfernte als Text). Das spart Uploads.
 // 3. Pro Situation oder Teil eine ausführliche Anfrage: worum es geht, alle angetippten Angaben, „Mein Stil“, der Auftrag
-//    (Outfits nur aus ihren Teilen, Farben, Layering, Trends, Styling-Tipps, Kaufideen getrennt und nur als Text).
+//    (Outfits nur aus ihren Teilen, Farben, Layering, Trends, Styling-Tipps, Kaufideen als eigene Zeile beim Outfit, nur als Text).
 // 4. Antwort einfügen → die App zeigt die Outfits mit den eigenen Fotos.
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
@@ -23,8 +23,13 @@ const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
 // damit nichts in die falsche Ansicht wandert.
 let stilMit = true, vorbereitet = null, vorschauUrls = [];
-const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt }
-const merker = frage => { const k = frage.teil ? "teil:" + frage.teil.nr : "situation"; if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1" }); return merk.get(k); };
+// offen = welche Schritte 2–4 aufgeklappt sind, anfrageFuer = wofür die Anfrage zuletzt kopiert wurde, bildKopiert = Schritt 4 erledigt
+const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt, bildOutfit, offen, anfrageFuer, bildKopiert }
+const merker = frage => {
+  const k = frage.teil ? "teil:" + frage.teil.nr : "situation";
+  if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1", offen: { 2: true, 3: false, 4: false }, anfrageFuer: null, bildKopiert: false });
+  return merk.get(k);
+};
 
 /* ---------- Texte ---------- */
 const datum = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -101,7 +106,8 @@ function anfrageText(frage, freitext, stil) {
     "2. Nimm nur dazu, was wirklich passt: lieber keine Tasche und kein Schmuck als etwas Unpassendes.",
     "3. Erklär kurz, warum es passt: Farbkombination, Schnitte, Layering und was davon gerade im Trend ist.",
     "4. Gib konkrete Styling-Tipps (z. B. reinstecken, Ärmel krempeln, welcher Schmuck und welche Tasche aus meinem Kleiderschrank, Haare).",
-    `5. ${frage.teil ? "Nenn höchstens 3 allgemeine Kaufideen, die gut dazu passen würden" : "Fehlt etwas Wichtiges, nenn höchstens 3 allgemeine Kaufideen"} (ohne Shops und ohne Links). Schreib sie getrennt unter die Überschrift „Kaufideen“ und nie in ein Outfit, z. B. „Mit einem camelfarbenen Gürtel würde Outfit 2 noch besser aussehen“.`, "",
+    // Seit 0.19 (Wunsch 04.11.2026): Kaufideen beim jeweiligen Outfit statt gesammelt am Ende, aber nie in der Liste der Teile
+    `5. Kaufideen gehören zum jeweiligen ${frage.teil ? "Vorschlag" : "Outfit"}: Schreib bei jedem ganz unten eine eigene Zeile „Kaufidee: …“, wenn etwas Wichtiges fehlt oder ein Teil es noch besser machen würde (höchstens 2 pro ${frage.teil ? "Vorschlag" : "Outfit"}, ohne Nummer, ohne Shops und ohne Links), z. B. „Kaufidee: ein camelfarbener Gürtel, der die Taille betont“. Schreib Kaufideen nie in die Liste der Teile: Dort steht nur, was ich wirklich habe.`, "",
     "Antworte bitte nur mit Text und erstelle noch kein Bild. Um ein Bild bitte ich dich danach extra."
   ].filter(z => z !== null).join("\n");
 }
@@ -211,7 +217,8 @@ async function bildPaket(teile) {
 let paketOffen = null, lauf = 0;
 // Bild-Paket + Bild-Wunsch für ein Outfit (Schritt 4 und die Vorschläge der App). erstellen() muss nicht im Antippen
 // laufen; „sichern / teilen“ und „kopieren“ sind eigene Knöpfe, weil Teilen und Zwischenablage ein frisches Tippen brauchen.
-export function bildPaketBereich(alle, wovon) {
+// kopiert() = nach dem Kopieren der Anweisung (Schritt 4 klappt dann zu)
+export function bildPaketBereich(alle, wovon, kopiert = () => {}) {
   const teile = sortiert(alle); // Oberteile, Jacken, Unterteile, Schuhe … wie im Kleiderschrank
   const box = el("div", { class: "bildpaket-box" }), knopf = el("button", { type: "button", class: "btn primary" });
   const bereit = () => { knopf.disabled = false; knopf.textContent = "🖼 Bild-Paket erstellen"; fill(box, knopf); };
@@ -232,7 +239,7 @@ export function bildPaketBereich(alle, wovon) {
     wunsch.onclick = async () => {
       const text = bildText(wovon, teile.slice(0, PAKET_MAX));
       if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
-      fill(kopierBox); toast("Anweisung kopiert – mit den Bildern im Chat senden");
+      fill(kopierBox); toast("Anweisung kopiert – mit den Bildern im Chat senden"); kopiert();
     };
     fill(box, el("img", { src: url, alt: "Bild-Paket: " + teile.map(t => "Nr. " + nrText(t.nr)).join(" + "), class: "bildpaket" }),
       teile.length > PAKET_MAX ? el("p", { class: "hint" }, `Im Bild-Paket sind die ersten ${PAKET_MAX} Teile.`) : null,
@@ -275,11 +282,14 @@ const vonHand = (box, text) => fill(box, el("div", { class: "hint" }, "Kopieren 
   el("textarea", { class: "notiz", readOnly: true, rows: 6, value: text, "aria-label": "Text zum Kopieren" }));
 
 /* ---------- Antwort lesen ---------- */
-// Neue Gruppe bei Zeilen wie „Outfit 2“, „**Kombination 1:**“, „### Option 3“, „👗 Outfit 1“, „1. Outfit“, „1️⃣ Look“, „| Outfit 2 |“, „Kaufideen“.
+// Neue Gruppe bei Zeilen wie „Outfit 2“, „**Kombination 1:**“, „### Option 3“, „👗 Outfit 1“, „1. Outfit“, „1️⃣ Look“, „| Outfit 2 |“, „### Kaufideen“.
 // Vor dem Wort darf alles stehen, was kein Buchstabe ist (Zeichen, Emojis, Tabellenstriche). Eine Nummer muss dabei sein,
-// sonst würde z. B. „Look: lässig“ mitten im Outfit eine neue Gruppe anfangen.
+// sonst würde z. B. „Look: lässig“ mitten im Outfit eine neue Gruppe anfangen. „Kaufideen“ nur als reine Überschrift:
+// Eine Zeile „Kaufidee: ein Gürtel …“ gehört seit 0.19 zum Outfit darüber.
 const WORT = "outfit|kombination|kombi|option|look|vorschlag|variante|idee";
-const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*(nr\\.?\\s*)?\\d+|kaufideen?\\b)`, "iu");
+const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*(nr\\.?\\s*)?\\d+|kaufideen?[^\\p{L}\\d]*$)`, "iu");
+// Kaufidee beim Outfit: „Kaufidee: …“, „**Kaufideen:** …“, „🛍 Kaufidee (optional): …“ → der Text nach dem Doppelpunkt
+const KAUFIDEE = /^[^\p{L}]*kaufideen?\b[^:\n]{0,20}:[^\p{L}\d]*(.+)$/iu;
 // „Outfit Nr. 2“ ist die Nummer des Outfits, nicht die eines Teils
 const OUTFIT_NR = new RegExp(`\\b(${WORT})\\s*Nr\\.?\\s*\\d+`, "gi");
 const NUMMER = /\bNr\.?\s*0*(\d{1,6})\b([^\n]*?)(?=\bNr\.?\s*\d|$)/gi;
@@ -303,7 +313,10 @@ export function antwortLesen(text, items) {
   const gruppen = [];
   let akt = null;
   for (const zeile of text.split(/\r?\n/)) {
-    if (!akt || KOPF.test(zeile)) { akt = { zeilen: [], nrs: [], imText: [], beschr: new Map() }; gruppen.push(akt); }
+    if (!akt || KOPF.test(zeile)) { akt = { zeilen: [], nrs: [], imText: [], beschr: new Map(), kaufideen: [] }; gruppen.push(akt); }
+    // Kaufidee-Zeilen getrennt merken (die App zeigt sie hervorgehoben beim Outfit); Nummern darin zählen nie als Teil
+    const idee = lesbar(zeile).match(KAUFIDEE);
+    if (idee) { akt.kaufideen.push(idee[1].trim().slice(0, 200)); akt.zeilen.push(zeile); continue; }
     akt.zeilen.push(zeile);
     const ohne = zeile.replace(OUTFIT_NR, ""), liste = TEIL_ZEILE.test(ohne) ? akt.nrs : akt.imText;
     for (const m of ohne.matchAll(NUMMER)) {
@@ -325,7 +338,8 @@ export function antwortLesen(text, items) {
       if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ In der Antwort steht bei Nr. ${nrText(n)} „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt der Chat einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
       teile.push(t);
     }
-    return { text: lesbar(g.zeilen.join("\n")).trim(), teile, hinweise };
+    // ohneIdeen = der Text ohne die Kaufidee-Zeilen (die stehen in der Anzeige eigens darunter); text = alles, z. B. zum Speichern
+    return { text: lesbar(g.zeilen.join("\n")).trim(), ohneIdeen: lesbar(g.zeilen.filter(z => !KAUFIDEE.test(lesbar(z))).join("\n")).trim(), teile, hinweise, kaufideen: g.kaufideen };
   }).filter(g => g.text || g.teile.length);
   return { gruppen: out, unbekannt: [...unbekannt].sort((a, b) => a - b) };
 }
@@ -406,34 +420,70 @@ const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigat
 
 /* ---------- Anzeige unter „Outfit finden“ und „Was passt dazu?“ ---------- */
 // frage = { situation: { anlass, schickWahl, temperatur, wetter } } oder { teil }; kachel(t) = kleine Kachel eines Teils
+// Geführte Schritte (seit 0.19, Wunsch 04.11.2026): Jeder Schritt klappt auf und zu wie Schritt 1. Erledigt → zu mit ✓,
+// der nächste geht auf. Klappt etwas nicht (Kopieren, Chat kennt den Kleiderschrank nicht), bleibt der Schritt offen.
 export function chatgptPanel(items, stil, frage, kachel) {
   const m = merker(frage), ergebnis = el("div", {}), kopierBox = el("div", {});
-  const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; });
-  const schrank = el("details", { class: "mehr" }, el("summary", {}, "1. Kleiderschrank an den Chat geben"), schritt1.el);
-  // Aufklappen, solange der Chat den aktuellen Stand nicht kennt
-  getMeta("chatgptStand").then(st => { const v = vergleich(kandidaten(items), st); if (v.nie || !v.gleich) schrank.open = true; }).catch(() => { schrank.open = true; });
+  // m.offen merkt sich, was auf ist (auch von Hand auf- oder zugeklappt), damit es das Neuzeichnen bei jedem Tippen übersteht
+  const schritt = (nr, titel, ...inhalt) => {
+    const stand = el("span", { class: "schritt-stand" });
+    const d = el("details", { class: "mehr schritt" }, el("summary", {}, titel, stand), ...inhalt);
+    d.open = !!m.offen[nr];
+    d.ontoggle = () => { m.offen[nr] = d.open; };
+    return { d, stand, auf: offen => { m.offen[nr] = offen; d.open = offen; } };
+  };
 
-  const freitext = el("textarea", { class: "notiz", maxLength: 300, rows: 2, value: m.zusatz, placeholder: frage.teil ? "z. B. fürs Büro, eher locker" : "z. B. Italiener, Freitagabend, will nicht frieren", "aria-label": "Noch etwas dazu" });
-  freitext.oninput = () => { m.zusatz = freitext.value; };
-  const STIL = "Meinen Stil mitschicken";
-  const optionen = choice({ options: [STIL], selected: stilMit ? [STIL] : [], max: 0, onChange: sel => { stilMit = sel.includes(STIL); } });
+  // Schritt 1: Kleiderschrank (auch in „Sicherung“). Aufklappen, solange der Chat den aktuellen Stand nicht kennt.
+  const stand1 = el("span", { class: "schritt-stand" });
+  const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; stand1.textContent = "✓ aktuell"; });
+  const schrank = el("details", { class: "mehr schritt" }, el("summary", {}, "1. Kleiderschrank an den Chat geben", stand1), schritt1.el);
+  getMeta("chatgptStand").then(st => { const v = vergleich(kandidaten(items), st); if (v.nie || !v.gleich) schrank.open = true; else stand1.textContent = "✓ aktuell"; })
+    .catch(() => { schrank.open = true; });
+
+  // Schritt 2: Anfrage. Was gerade gefragt würde; ändert es sich nach dem Kopieren (z. B. anderes Wetter oben), ist die
+  // kopierte Anfrage veraltet und Schritt 2 geht wieder auf.
   const q = frage.situation || {}, nichtsAngetippt = !frage.teil && !q.anlass && !q.schickWahl && !q.temperatur && !q.wetter?.length;
+  const schluessel = () => JSON.stringify([frage.teil?.nr ?? null, q.anlass, q.schickWahl, q.temperatur, q.wetter, cleanText(m.zusatz), stilMit]);
+  if (m.anfrageFuer && m.anfrageFuer !== schluessel()) m.offen[2] = true;
+  const freitext = el("textarea", { class: "notiz", maxLength: 300, rows: 2, value: m.zusatz, placeholder: frage.teil ? "z. B. fürs Büro, eher locker" : "z. B. Italiener, Freitagabend, will nicht frieren", "aria-label": "Noch etwas dazu" });
+  const STIL = "Meinen Stil mitschicken";
+  const optionen = choice({ options: [STIL], selected: stilMit ? [STIL] : [], max: 0, onChange: sel => { stilMit = sel.includes(STIL); stand2(); } });
   const knopfAnfrage = el("button", { type: "button", class: "btn primary" }, "📋 Anfrage kopieren");
+  const s2 = schritt(2, frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen",
+    field("Noch etwas dazu?", "freiwillig", freitext),
+    nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
+    optionen.el,
+    el("div", { class: "actions" }, knopfAnfrage), kopierBox);
+  const stand2 = () => { s2.stand.textContent = m.anfrageFuer === schluessel() ? "✓ kopiert" : m.anfrageFuer ? "neu kopieren" : ""; };
+  freitext.oninput = () => { m.zusatz = freitext.value; stand2(); };
   knopfAnfrage.onclick = async () => {
     const text = anfrageText(frage, cleanText(freitext.value), stil);
     if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
-    fill(kopierBox);
-    // Ohne aktuellen Kleiderschrank im Chat rät die KI oder nennt alte Nummern
+    fill(kopierBox); m.anfrageFuer = schluessel(); stand2();
+    // Ohne aktuellen Kleiderschrank im Chat rät die KI oder nennt alte Nummern. Dann bleibt Schritt 2 offen, damit der Hinweis zu sehen ist.
     const v = schritt1.zustand();
-    if (v.nie) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Chat kennt deinen Kleiderschrank aber noch nicht: Gib ihn zuerst (Schritt 1), dann die Anfrage in denselben Chat.")); schrank.open = true; }
-    else if (!v.gleich) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Kleiderschrank hat sich aber geändert: Am besten erst die Änderungen geben (Schritt 1).")); schrank.open = true; }
-    else toast("Anfrage kopiert – jetzt in deinem Kleiderschrank-Chat einfügen");
+    if (v.nie) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Chat kennt deinen Kleiderschrank aber noch nicht: Gib ihn zuerst (Schritt 1), dann die Anfrage in denselben Chat.")); schrank.open = true; return; }
+    if (!v.gleich) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Kleiderschrank hat sich aber geändert: Am besten erst die Änderungen geben (Schritt 1).")); schrank.open = true; return; }
+    toast("Anfrage kopiert – jetzt in deinem Kleiderschrank-Chat einfügen");
+    s2.auf(false); s3.auf(true);
   };
   // Kein Knopf „ChatGPT öffnen“: Aus der Home-Bildschirm-App öffnete er nur die Web-Seite, nicht die ChatGPT-App (Ali, 03.11.2026)
+
+  // Schritt 3: Antwort einfügen. Die Outfits stehen darunter außerhalb des Schritts, damit sie zugeklappt sichtbar bleiben.
+  const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort aus dem Chat hier einfügen", "aria-label": "Antwort aus dem Chat" });
+  feld.oninput = () => { m.antwort = feld.value; };
+  const knopfZeigen = el("button", { type: "button", class: "btn" }, "Outfits anzeigen");
+  const leeren = el("button", { type: "button", class: "btn" }, "Leeren");
+  const s3 = schritt(3, "3. Antwort einfügen",
+    field("Ganze Antwort einfügen", null, feld, "Kopiere die ganze Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits dann mit deinen Fotos. Übernommen werden nur die Nummern, der Text bleibt nur hier zum Lesen."),
+    el("div", { class: "actions" }, leeren, knopfZeigen));
 
   // Schritt 4: Bild als eigene Nachricht, wenn die Antwort mit den Outfits da ist. Ist sie eingefügt, wählt sie ein Outfit
   // daraus und bekommt ein Bild-Paket mit genau diesen Teilen; sonst nur den Bild-Wunsch (Outfit 1/2/3, Sammelbilder).
   const schritt4 = el("div", {});
+  const s4 = schritt(4, "4. Bild vom Outfit (freiwillig)", schritt4);
+  const stand4 = () => { s4.stand.textContent = m.bildKopiert ? "✓ kopiert" : ""; };
+  const bildFertig = () => { m.bildKopiert = true; stand4(); s4.auf(false); };
   function bildSchritt(gruppen) {
     const outfits = gruppen ? outfitsAus(gruppen) : [];
     if (!outfits.length) {
@@ -443,34 +493,34 @@ export function chatgptPanel(items, stil, frage, kachel) {
       knopfBild.onclick = async () => {
         const text = bildText(`${OUTFITS.includes(m.bildOutfit) ? m.bildOutfit : "Outfit 1"} aus deiner Antwort`);
         if (!await kopieren(text)) { vonHand(bildBox, text); return; }
-        fill(bildBox); toast("Anweisung kopiert – im selben Chat einfügen");
+        fill(bildBox); toast("Anweisung kopiert – im selben Chat einfügen"); bildFertig();
       };
-      fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Welches Outfit?", wahl.el,
+      fill(schritt4, field("Welches Outfit?", null, wahl.el,
           "Erst, wenn die Antwort mit den Outfits da ist. Tipp: Füg die Antwort zuerst bei Schritt 3 ein. Dann macht die App ein Bild-Paket mit genau diesen Teilen in groß, und das Bild wird deinen echten Sachen ähnlicher."),
         traegtWahl(),
         el("div", { class: "actions" }, knopfBild), bildBox);
       return;
     }
     const paketBox = el("div", {});
-    const zeigen = (o, sofort) => { const b = bildPaketBereich(o.teile, `„${o.name}“ aus deiner Antwort`); fill(paketBox, b.el); if (sofort) b.erstellen(); };
+    const zeigen = (o, sofort) => { const b = bildPaketBereich(o.teile, `„${o.name}“ aus deiner Antwort`, bildFertig); fill(paketBox, b.el); if (sofort) b.erstellen(); };
     const wahl = choice({ options: outfits.map(o => o.name), selected: outfits.some(o => o.name === m.bildOutfit) ? [m.bildOutfit] : [],
       onChange: sel => { m.bildOutfit = sel[0] || ""; const o = outfits.find(o => o.name === sel[0]); if (o) zeigen(o, true); else fill(paketBox); } });
     const gewaehlt = outfits.find(o => o.name === m.bildOutfit);
     if (gewaehlt) zeigen(gewaehlt, false);
-    fill(schritt4, field("4. Bild vom Outfit (freiwillig)", "Welches Outfit?", wahl.el,
+    fill(schritt4, field("Welches Outfit?", null, wahl.el,
       "Die App legt die Teile des Outfits groß in ein Bild-Paket. Das hängst du im Chat zusammen mit der Anweisung an, dann bleibt das Bild näher an deinen echten Sachen."), paketBox);
   }
 
-  const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort aus dem Chat hier einfügen", "aria-label": "Antwort aus dem Chat" });
-  feld.oninput = () => { m.antwort = feld.value; };
-  // Eingefügt → gleich anzeigen (der Knopf „Outfits anzeigen“ bleibt für selbst getippte Änderungen)
-  feld.onpaste = () => setTimeout(() => { m.antwort = feld.value; anzeigen(feld.value); }, 0);
-  const anzeigen = text => {
-    m.angezeigt = text.slice(0, MAX_ANTWORT);
-    if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); return; }
+  // weiter = gerade eingefügt oder „Outfits anzeigen“ getippt: Schritt 3 zu, Schritt 4 auf
+  const anzeigen = (text, weiter = false) => {
+    const neu = text.slice(0, MAX_ANTWORT);
+    if (neu !== m.angezeigt) { m.bildKopiert = false; stand4(); } // andere Antwort → Bild noch nicht gemacht
+    m.angezeigt = neu;
+    if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); s3.stand.textContent = ""; return; }
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
     bildSchritt(gruppen);
-    const outfitVon = new Map(outfitsAus(gruppen).map(o => [o.gruppe, o]));
+    const outfits = outfitsAus(gruppen), outfitVon = new Map(outfits.map(o => [o.gruppe, o]));
+    s3.stand.textContent = outfits.length ? `✓ ${outfits.length} ${outfits.length === 1 ? "Outfit" : "Outfits"}` : "✓ eingefügt";
     fill(ergebnis,
       unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
       !gruppen.some(g => g.teile.length) ? el("p", { class: "hint" }, "In der Antwort stehen keine Nummern von deinen Teilen. Bitte im Chat: „Nenne bitte jedes Teil mit seiner Nummer.“") : null,
@@ -478,14 +528,17 @@ export function chatgptPanel(items, stil, frage, kachel) {
         g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
         g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
         ...g.hinweise.map(h => el("p", { class: "hint" }, h)),
-        el("div", { class: "chatgpt-text" }, g.text),
+        el("div", { class: "chatgpt-text" }, g.ohneIdeen),
+        // Kaufideen gehören zum Outfit (seit 0.19), hervorgehoben darunter; gespeichert wird der ganze Text samt Kaufideen
+        g.kaufideen.length ? el("div", { class: "kaufidee" }, ...g.kaufideen.map(k => el("p", {}, "🛍 Kaufidee: " + k))) : null,
         outfitVon.has(g) ? el("div", { class: "actions" }, speichernKnopf(g.teile, outfitVon.get(g).titel, g.text, "chat")) : null)));
+    if (weiter) { s3.auf(false); if (outfits.length) s4.auf(true); }
   };
-  const knopfZeigen = el("button", { type: "button", class: "btn" }, "Outfits anzeigen");
-  knopfZeigen.onclick = () => { anzeigen(feld.value); ergebnis.scrollIntoView({ behavior: "smooth" }); };
-  const leeren = el("button", { type: "button", class: "btn" }, "Leeren");
-  leeren.onclick = () => { feld.value = m.antwort = m.angezeigt = ""; fill(ergebnis); bildSchritt(null); };
-  anzeigen(m.angezeigt); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
+  // Eingefügt → gleich anzeigen (der Knopf „Outfits anzeigen“ bleibt für selbst getippte Änderungen)
+  feld.onpaste = () => setTimeout(() => { m.antwort = feld.value; anzeigen(feld.value, true); }, 0);
+  knopfZeigen.onclick = () => { anzeigen(feld.value, true); ergebnis.scrollIntoView({ behavior: "smooth" }); };
+  leeren.onclick = () => { feld.value = m.antwort = ""; anzeigen(""); s4.auf(false); s3.auf(true); };
+  anzeigen(m.angezeigt); stand2(); stand4(); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
 
   return el("div", { class: "panel chatgpt" },
     mitInfo(el("strong", {}, "💬 Mit ChatGPT oder Gemini"),
@@ -493,13 +546,5 @@ export function chatgptPanel(items, stil, frage, kachel) {
       "Was an den Anbieter geht: die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst.",
       "In den Einstellungen kannst du ausschalten, dass deine Chats zum Verbessern der KI genutzt werden. ChatGPT: „Datenkontrollen“, der Chat bleibt erhalten. Gemini: „Gemini-Apps-Aktivität“ bzw. „Aktivität speichern“; ist sie aus, bleibt ein Chat dort aber nur wenige Tage, danach den Kleiderschrank neu geben."),
     el("div", { class: "hint" }, "Was du dort hochlädst, geht an OpenAI (ChatGPT) bzw. Google (Gemini)."),
-    schrank,
-    field(frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen", "Noch etwas dazu? (freiwillig)", freitext),
-    nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
-    optionen.el,
-    el("div", { class: "actions" }, knopfAnfrage), kopierBox,
-    field("3. Antwort einfügen", null, feld, "Kopiere die ganze Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits dann mit deinen Fotos. Übernommen werden nur die Nummern, der Text bleibt nur hier zum Lesen."),
-    el("div", { class: "actions" }, leeren, knopfZeigen),
-    ergebnis,
-    schritt4);
+    schrank, s2.d, s3.d, ergebnis, s4.d);
 }
