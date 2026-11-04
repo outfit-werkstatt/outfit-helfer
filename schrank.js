@@ -2,14 +2,14 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=16";
+import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=17";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
-import { renderStil, stilKurz } from "./stil.js?v=17";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=18";
-import { renderPasst, miniKachel } from "./passt.js?v=16";
-import { renderOutfit } from "./outfit.js?v=13";
-import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=4";
-import { bildPaketBereich } from "./chatgpt.js?v=10";
+import { renderStil, stilKurz } from "./stil.js?v=18";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=19";
+import { renderPasst, miniKachel } from "./passt.js?v=17";
+import { renderOutfit } from "./outfit.js?v=14";
+import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=5";
+import { bildPaketBereich } from "./chatgpt.js?v=11";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -44,7 +44,7 @@ history.scrollRestoration = "manual"; // die Stelle merken wir uns selbst (y im 
 async function show(y) {
   auswahl = null; bearbeitet = false; mehrfach = null; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
   $("ansichtStart").hidden = current.v !== "start"; $("ansicht").hidden = current.v === "start";
-  try { await render(); } catch (e) { toast("Anzeigen hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+  try { await render(); } catch (e) { fehlerToast("Anzeigen hat nicht geklappt", e); console.error(e); }
   scrollen(y);
 }
 // Dieselbe Ansicht neu zeichnen, ohne zu springen
@@ -107,7 +107,7 @@ function nummernKarte(items, naechste) {
     try {
       toast(await nummernZuruecksetzen() ? "Das nächste Teil bekommt Nr. 001" : "Das geht nur, wenn keine Teile mehr da sind.");
       neuZeichnen();
-    } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+    } catch (e) { fehlerToast("Hat nicht geklappt", e); }
   };
   return el("div", { class: "panel" }, el("strong", {}, "🔢 Nummern"),
     el("div", { class: "hint" }, `Dein Kleiderschrank ist leer, das nächste Teil bekäme aber Nr. ${nrText(naechste)}.`),
@@ -158,7 +158,7 @@ function nameEditor(box, start, folders, onOk, selfId = null) {
       msg.textContent = "Diesen Namen gibt es schon."; return;
     }
     ok.disabled = true;
-    try { await onOk(name); } catch (e) { msg.textContent = "Hat nicht geklappt: " + (e?.message || e); ok.disabled = false; }
+    try { await onOk(name); } catch (e) { msg.textContent = "Hat nicht geklappt: " + fehlerText(e); ok.disabled = false; }
   };
   input.onkeydown = e => { if (e.key === "Enter") ok.click(); };
   box.replaceChildren(el("div", { class: "eigen-edit" }, input, msg,
@@ -190,7 +190,7 @@ function auswahlLeiste(kacheln, aktionen) {
     const b = el("button", { type: "button", class: "btn klein" }, a.text);
     b.onclick = async () => {
       if (!mehrfach?.size) return;
-      try { await a.los([...mehrfach]); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+      try { await a.los([...mehrfach]); } catch (e) { fehlerToast("Hat nicht geklappt", e); console.error(e); }
     };
     return b;
   });
@@ -259,7 +259,7 @@ function renderListe(items, folders, id) {
     fertig.onclick = async () => {
       fertig.disabled = true;
       try { await setFolderItems(id, auswahl); auswahl = null; toast("Ordner gespeichert"); neuZeichnen(); }
-      catch (e) { fertig.disabled = false; toast("Speichern hat nicht geklappt: " + (e?.message || e)); }
+      catch (e) { fertig.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
     };
     aktionen = el("div", {}, el("div", { class: "hint" }, `Tippe die Teile an, die in „${ordner.name}“ sein sollen. In „${HAUPT}“ bleiben sie immer.`),
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => { auswahl = null; neuZeichnen(); } }, "Abbrechen"), fertig));
@@ -273,7 +273,7 @@ function renderListe(items, folders, id) {
     loeschen.onclick = async () => {
       const teile = drin.length === 1 ? "Das 1 Teil darin wird NICHT gelöscht, es bleibt" : `Die ${anzahl(drin.length)} darin werden NICHT gelöscht, sie bleiben`;
       if (!confirm(`Ordner „${ordner.name}“ löschen?\n\n${teile} in „${HAUPT}“.`)) return;
-      try { await deleteFolder(id); ordnerMelden(); toast("Ordner gelöscht"); back(); } catch (e) { toast("Löschen hat nicht geklappt: " + (e?.message || e)); }
+      try { await deleteFolder(id); ordnerMelden(); toast("Ordner gelöscht"); back(); } catch (e) { fehlerToast("Löschen hat nicht geklappt", e); }
     };
     aktionen = el("div", { class: "actions wrap" }, waehlen, umbenennen, loeschen);
   }
@@ -306,7 +306,7 @@ function renderListe(items, folders, id) {
       const ziele = folders.filter(f => f.id !== id);
       if (!ziele.length) return toast("Lege zuerst auf der Startseite einen Ordner an („+ Neuer Ordner“).");
       fill(leiste.extra, el("div", { class: "note" }, frage),
-        el("div", { class: "chips" }, ...ziele.map(f => el("button", { type: "button", class: "chip", onclick: () => los(f).catch(e => toast("Hat nicht geklappt: " + (e?.message || e))) }, f.name)),
+        el("div", { class: "chips" }, ...ziele.map(f => el("button", { type: "button", class: "chip", onclick: () => los(f).catch(e => fehlerToast("Hat nicht geklappt", e)) }, f.name)),
           el("button", { type: "button", class: "chip", onclick: () => { leiste.extra.hidden = true; } }, "Abbrechen")));
       leiste.extra.hidden = false;
     };
@@ -381,7 +381,7 @@ function renderTeil(items, folders, nr, foto) {
         options: folders.map(f => f.name), selected: folders.filter(f => t.ordner?.includes(f.id)).map(f => f.name), max: 0,
         onChange: async sel => {
           try { await updateItem(nr, { ordner: folders.filter(f => sel.includes(f.name)).map(f => f.id) }); toast("Gespeichert"); }
-          catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); refresh(); }
+          catch (e) { fehlerToast("Speichern hat nicht geklappt", e); refresh(); }
         } }).el)
     : field("Ordner", `Liegt in „${HAUPT}“.`, null, "Eigene Ordner (z. B. „Sommer“) legst du auf der Startseite mit „+ Neuer Ordner“ an.");
   // „Ziehe ich nicht an“ mit einem Tippen an/aus, ohne „Angaben ändern“
@@ -389,7 +389,7 @@ function renderTeil(items, folders, nr, foto) {
     options: [NICHT_NAME], selected: t.nichtAnziehen ? [NICHT_NAME] : [],
     onChange: async sel => {
       try { await updateItem(nr, { nichtAnziehen: sel.length > 0 }); toast(sel.length ? "Kommt nicht mehr in Vorschläge" : "Kommt wieder in Vorschläge"); }
-      catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); }
+      catch (e) { fehlerToast("Speichern hat nicht geklappt", e); }
       neuZeichnen();
     } }).el, "Das Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.");
 
@@ -404,7 +404,7 @@ function renderTeil(items, folders, nr, foto) {
     speichern.onclick = async () => {
       speichern.disabled = true;
       try { await updateItem(nr, form.get()); toast("Gespeichert"); fertig(); }
-      catch (e) { speichern.disabled = false; toast("Speichern hat nicht geklappt: " + (e?.message || e)); }
+      catch (e) { speichern.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
     };
     inhalt.replaceChildren(...form.elements, el("div", { class: "actions" }, abbrechen, speichern));
     // 🚫 steht jetzt im Formular unter „Mehr Angaben“; ein zweiter Schalter würde das Formular verwerfen
@@ -415,9 +415,10 @@ function renderTeil(items, folders, nr, foto) {
     try {
       if (t.geloescht) { await restoreItem(nr); toast(`Nr. ${nrText(nr)} ist wieder da`); neuZeichnen(); }
       else { await trashItem(nr); toast(`Nr. ${nrText(nr)} liegt jetzt im Papierkorb`); back(); }
-    } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+    } catch (e) { fehlerToast("Hat nicht geklappt", e); }
   };
-  const aktionen = el("div", { class: "actions" }, t.geloescht ? null : aendern, korb);
+  // wrap: Bei 320 px Breite stehen die zwei Knöpfe untereinander statt zweizeilig beschriftet (seit 0.21)
+  const aktionen = el("div", { class: "actions wrap" }, t.geloescht ? null : aendern, korb);
   const passt = t.geloescht ? null : el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"));
   fill($("ansicht"),
     kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : null),
@@ -430,7 +431,7 @@ function renderKorb(items, naechste) {
   const leeren = el("button", { type: "button", class: "btn" }, "Papierkorb leeren");
   leeren.onclick = async () => {
     if (!confirm(`${anzahl(weg.length)} endgültig löschen?\n\nDas kann man nicht rückgängig machen. Die Nummern werden nicht neu vergeben.`)) return;
-    try { await purgeItems(weg.map(t => t.nr)); toast("Papierkorb geleert"); neuZeichnen(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+    try { await purgeItems(weg.map(t => t.nr)); toast("Papierkorb geleert"); neuZeichnen(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
   };
   // „Auswählen“: mehrere auf einmal wiederherstellen oder endgültig löschen
   const waehlenKnopf = weg.length ? el("button", { type: "button", class: "kopf-knopf" }, mehrfach ? "Fertig" : "Auswählen") : null;
@@ -446,7 +447,7 @@ function renderKorb(items, naechste) {
     const zurueck = el("button", { type: "button", class: "btn klein" }, "Wiederherstellen");
     zurueck.onclick = async ev => {
       ev.stopPropagation();
-      try { await restoreItem(t.nr); toast(`Nr. ${nrText(t.nr)} ist wieder da`); neuZeichnen(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+      try { await restoreItem(t.nr); toast(`Nr. ${nrText(t.nr)} ist wieder da`); neuZeichnen(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
     };
     return el("div", { class: "korb-teil" }, teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }), extra: rest }), zurueck);
   });

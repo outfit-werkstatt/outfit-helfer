@@ -5,8 +5,8 @@
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=7";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwuerfe } from "./speicher.js?v=10";
-import { $, el, fill, toast, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden } from "./ui.js?v=16";
-import { refresh, initSchrank } from "./schrank.js?v=30";
+import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden } from "./ui.js?v=17";
+import { refresh, initSchrank } from "./schrank.js?v=31";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -46,8 +46,8 @@ async function fingerabdruck(file) {
   try { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join(""); }
   catch { return null; }
 }
-// Liefert das ähnlichste Teil oder die ähnlichste offene Karte über der Grenze (oder null)
-async function findeDoppelt(vektor, hash) {
+// Liefert das ähnlichste Teil oder die ähnlichste offene Karte über der Grenze (oder null). selbst = diese Karte nicht mitzählen
+async function findeDoppelt(vektor, hash, selbst = null) {
   let best = null;
   const pruefe = (v, h, quelle) => {
     if (!v && !h) return; // Teile von vor Version 0.7 haben keine Prüfdaten
@@ -55,7 +55,7 @@ async function findeDoppelt(vektor, hash) {
     if ((gleich || sim >= GRENZE) && (!best || sim > best.sim)) best = { ...quelle, gleich, sim };
   };
   for (const t of await allItems()) pruefe(t.vektor, t.hash, { teil: t });
-  for (const x of offene.values()) pruefe(x.vektor, x.hash, { karte: x });
+  for (const [k, x] of offene) if (k !== selbst) pruefe(x.vektor, x.hash, { karte: x });
   return best;
 }
 
@@ -168,22 +168,33 @@ async function addPhoto(e, card) {
     }
     // „Vielleicht doppelt“: Hinweis mit dem Foto des anderen Teils. „Alle speichern“ lässt die Karte aus,
     // bis sie verworfen oder mit „Ist ein anderes Teil“ bestätigt wird.
-    let doppeltOffen = !!doppelt, doppeltUrl = null, doppeltBox = null;
-    if (doppelt) {
-      doppeltUrl = doppelt.teil ? URL.createObjectURL(doppelt.teil.vorschau) : null;
-      const wer = doppelt.teil ? `Nr. ${nrText(doppelt.teil.nr)} – ${beschreibung(doppelt.teil)}${doppelt.teil.geloescht ? " (liegt im Papierkorb)" : ""}`
-        : `„${doppelt.karte.titel()}“ weiter oben`;
-      const text = doppelt.gleich ? (doppelt.teil ? `Dieses Foto ist schon gespeichert: ${wer}.` : `Dieses Foto ist zweimal ausgewählt, siehe ${wer}.`)
+    // Wird die andere Karte gespeichert oder verworfen, prüft diese Karte neu (seit 0.21, Durchsicht 04.11.2026): Sonst stand
+    // noch „siehe … weiter oben“ da, obwohl es die Karte nicht mehr gab. Gespeichert → „schon gespeichert: Nr. …“, verworfen → weg.
+    let doppeltOffen = false, doppeltUrl = null, doppeltKarte = null, bestaetigt = false, merkTimer = null, weg = false;
+    const doppeltPlatz = el("div");
+    function zeigeDoppelt(d) {
+      if (doppeltUrl) { URL.revokeObjectURL(doppeltUrl); doppeltUrl = null; }
+      doppeltOffen = !!d; doppeltKarte = d?.karte || null;
+      if (!d) { doppeltPlatz.replaceChildren(); return; }
+      doppeltUrl = d.teil ? URL.createObjectURL(d.teil.vorschau) : null;
+      const wer = d.teil ? `Nr. ${nrText(d.teil.nr)} – ${beschreibung(d.teil)}${d.teil.geloescht ? " (liegt im Papierkorb)" : ""}`
+        : `„${d.karte.titel()}“ weiter oben`;
+      const text = d.gleich ? (d.teil ? `Dieses Foto ist schon gespeichert: ${wer}.` : `Dieses Foto ist zweimal ausgewählt, siehe ${wer}.`)
         : `Sieht aus wie ${wer}. Ist es dasselbe Teil?`;
       const behalten = el("button", { type: "button", class: "btn klein" }, "Ist ein anderes Teil – behalten");
-      behalten.onclick = () => { doppeltOffen = false; doppeltBox.remove(); updateProgress(); merken(); };
-      doppeltBox = el("div", { class: "doppelt" }, el("img", { src: doppeltUrl || doppelt.karte.url, alt: "" }),
+      behalten.onclick = () => { bestaetigt = true; zeigeDoppelt(null); updateProgress(); merken(); };
+      doppeltPlatz.replaceChildren(el("div", { class: "doppelt" }, el("img", { src: doppeltUrl || d.karte.url, alt: "" }),
         el("div", {}, el("strong", {}, "⚠️ Vielleicht doppelt"), el("div", {}, text),
-          el("div", { class: "note" }, "Wenn ja: unten „Verwerfen“."), behalten));
+          el("div", { class: "note" }, "Wenn ja: unten „Verwerfen“."), behalten)));
     }
-    offene.set(card, { vektor: r.vektor, hash, titel: () => titel.textContent, url: vorschauUrl });
+    zeigeDoppelt(doppelt);
+    const neuPruefen = async () => {
+      if (bestaetigt || weg) return;
+      try { const d = await findeDoppelt(r.vektor, hash, card); if (!bestaetigt && !weg) { zeigeDoppelt(d); updateProgress(); merken(); } }
+      catch (x) { console.error(x); }
+    };
+    offene.set(card, { vektor: r.vektor, hash, titel: () => titel.textContent, url: vorschauUrl, verweis: () => doppeltKarte, neuPruefen });
     // Was angetippt ist, kurz nach jeder Änderung im Entwurf merken (Klicks, Auswahlfelder und die Notiz landen alle hier)
-    let merkTimer = null, weg = false;
     function merken() {
       clearTimeout(merkTimer);
       merkTimer = setTimeout(() => {
@@ -195,9 +206,12 @@ async function addPhoto(e, card) {
     for (const ereignis of ["click", "change", "input"]) card.addEventListener(ereignis, merken);
     const removeCard = () => {
       weg = true; clearTimeout(merkTimer);
+      const ich = offene.get(card);
       karten.delete(card); offene.delete(card); document.removeEventListener("ordner-geaendert", onOrdner);
       URL.revokeObjectURL(vorschauUrl); if (doppeltUrl) URL.revokeObjectURL(doppeltUrl);
       form.dispose(); card.remove(); updateProgress();
+      // Karten, die auf diese Karte als „Vielleicht doppelt“ verwiesen haben, prüfen neu (das Teil ist jetzt gespeichert oder weg)
+      for (const x of offene.values()) if (x.verweis() === ich) x.neuPruefen();
     };
     // Speichert die Karte so, wie sie gerade angetippt ist; gibt die neue Nummer zurück (bei Fehler bleibt die Karte stehen)
     async function speichern() {
@@ -218,7 +232,7 @@ async function addPhoto(e, card) {
     }
     save.onclick = async () => {
       try { const nr = await speichern(); toast(`Gespeichert als Nr. ${nrText(nr)}`); nachSpeichern(); }
-      catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+      catch (e) { fehlerToast("Speichern hat nicht geklappt", e); console.error(e); }
     };
     drop.onclick = () => {
       if (!confirm("Dieses Foto verwerfen?\n\nEs wird nicht gespeichert.")) return;
@@ -231,7 +245,7 @@ async function addPhoto(e, card) {
     lupe.onclick = () => { const u = URL.createObjectURL(foto); zeigeGross(u, "", () => URL.revokeObjectURL(u)); };
     fill(card,
       el("div", { class: "top" }, lupe, titel),
-      doppeltBox,
+      doppeltPlatz,
       ...form.elements,
       ordnerBox,
       el("div", { class: "actions" }, drop, save)
@@ -240,7 +254,7 @@ async function addPhoto(e, card) {
   } catch (x) {
     karten.delete(card); offene.delete(card);
     const entfernen = () => { card.remove(); updateProgress(); erstSicherung.then(() => entwurfLoeschen(e.id)).catch(y => console.error(y)); };
-    card.replaceChildren(el("div", { class: "wait" }, `❌ ${e.datei?.name || "Foto"}: ${x?.message || x}`),
+    card.replaceChildren(el("div", { class: "wait" }, `❌ ${e.datei?.name || "Foto"}: ${fehlerText(x)}`),
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: entfernen }, "Entfernen")));
     console.error(x);
   } finally {
@@ -269,7 +283,7 @@ addEventListener("beforeunload", e => { if (ablagen > 0) { e.preventDefault(); e
 
 /* ---------- Start ---------- */
 infoKnoepfeVerbinden();
-initSchrank().catch(e => { $("kacheln").replaceChildren(el("p", { class: "hint" }, "Speicher konnte nicht geöffnet werden: " + (e?.message || e))); });
+initSchrank().catch(e => { $("kacheln").replaceChildren(el("p", { class: "hint" }, "Speicher konnte nicht geöffnet werden: " + fehlerText(e))); });
 let queue = Promise.resolve(), wartend = 0;
 // Fotos nacheinander erkennen (spart Speicher auf dem Handy); fertige Karten kann man schon speichern.
 // Eine Karte erscheint erst, wenn das Foto erkannt ist. Was noch wartet (auch das gerade laufende), zählt das Kästchen darunter.

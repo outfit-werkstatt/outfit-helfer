@@ -42,10 +42,24 @@ export function el(tag, props = {}, ...kids) {
 }
 // Inhalt ersetzen; leere Teile (null) weglassen – replaceChildren würde sonst „null“ als Text anzeigen
 export const fill = (node, ...kids) => node.replaceChildren(...kids.filter(k => k != null));
-export function toast(text) {
+export function toast(text, ms = 2500) {
   const t = $("toast"); t.textContent = text; t.hidden = false;
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 2500);
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, ms);
 }
+// Fehler verständlich auf Deutsch (seit 0.21, Durchsicht 04.11.2026): Die Meldungen des Browsers sind englisch und technisch
+// („QuotaExceededError …“). Eigene Fehler der App sind schon deutsch und bleiben, wie sie sind.
+const SPEICHER_FEHLER = ["AbortError", "UnknownError", "InvalidStateError", "TransactionInactiveError", "DataError", "DataCloneError", "NotFoundError", "ConstraintError", "VersionError"];
+export function fehlerText(e) {
+  const name = e?.name || "", text = String(e?.message || e || "").trim();
+  if (name === "QuotaExceededError" || /quota/i.test(text)) return "Der Speicher auf dem Handy ist voll. Bitte Platz schaffen (z. B. alte Videos oder Apps löschen) und danach eine Sicherung erstellen.";
+  if (SPEICHER_FEHLER.includes(name)) return "Der Speicher hat einen Fehler gemeldet. Bitte die App schließen, neu öffnen und nochmal versuchen.";
+  if (/load failed|failed to fetch|networkerror/i.test(text)) return "Die Verbindung ist abgebrochen. Bitte nochmal versuchen, am besten im WLAN.";
+  // Fehler im Programm selbst: kurz erklären, die technische Meldung in Klammern hilft beim Suchen
+  if (e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError) return `In der App ist etwas schiefgegangen (${text}). Bitte die App schließen, neu öffnen und nochmal versuchen.`;
+  return text || "Unbekannter Fehler.";
+}
+// Fehler als Meldung, länger sichtbar als die kurzen Bestätigungen: „Speichern hat nicht geklappt: …“
+export const fehlerToast = (was, e) => toast(`${was}: ${fehlerText(e)}`, 7000);
 // Foto bildschirmfüllend zeigen; Tippen irgendwo oder Esc schließt. onClose z. B. zum Freigeben der Bild-Adresse.
 export function zeigeGross(url, alt = "", onClose = () => {}) {
   const box = el("div", { class: "gross-ansicht", role: "dialog", "aria-label": "Foto groß" },
@@ -162,7 +176,7 @@ export function choice({ field = null, options, more = [], selected = [], max = 
       if (same) { addButton(same, customValues(field).includes(same)); if (!sel.has(same)) toggle(same); close(); return; }
       ok.disabled = true;
       try { await addCustom(field, v, wie?.value || null); }
-      catch (e) { msg.textContent = "Konnte nicht gespeichert werden: " + (e?.message || e); ok.disabled = false; return; }
+      catch (e) { msg.textContent = "Konnte nicht gespeichert werden: " + fehlerText(e); ok.disabled = false; return; }
       if (!sel.has(v)) toggle(v);
       close();
     };
@@ -181,7 +195,7 @@ export function choice({ field = null, options, more = [], selected = [], max = 
         const b = el("button", { type: "button", class: "btn" }, "Löschen"), row = el("div", { class: "eigen-row" }, el("span", {}, v), b);
         b.onclick = async () => {
           b.disabled = true;
-          try { await removeCustom(field, v); row.remove(); } catch (e) { b.disabled = false; toast("Löschen hat nicht geklappt: " + (e?.message || e)); }
+          try { await removeCustom(field, v); row.remove(); } catch (e) { b.disabled = false; fehlerToast("Löschen hat nicht geklappt", e); }
         };
         return row;
       }),

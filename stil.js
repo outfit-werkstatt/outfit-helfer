@@ -2,7 +2,7 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=16";
+import { el, fill, toast, fehlerToast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=17";
 import { setStil } from "./speicher.js?v=10";
 import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=7";
 
@@ -94,7 +94,7 @@ export function renderStil(box, kopf, stil) {
   async function speichern(neu, melden = true) {
     s = { ...s, ...neu, geaendert: new Date().toISOString() };
     try { await setStil(s); if (melden && !gemeldet) { toast("Gespeichert – ab jetzt automatisch"); gemeldet = true; } }
-    catch (e) { toast("Speichern hat nicht geklappt: " + (e?.message || e)); }
+    catch (e) { fehlerToast("Speichern hat nicht geklappt", e); }
   }
   const widgets = [];
   const fragen = FRAGEN.map(f => {
@@ -121,7 +121,7 @@ export function renderStil(box, kopf, stil) {
     clearTimeout(timer);
     const leer = { geaendert: new Date().toISOString() };
     try { await setStil(leer); toast("Mein Stil ist zurückgesetzt"); renderStil(box, kopf, leer); }
-    catch (e) { toast("Zurücksetzen hat nicht geklappt: " + (e?.message || e)); }
+    catch (e) { fehlerToast("Zurücksetzen hat nicht geklappt", e); }
   };
   // Beim Verlassen der Ansicht die Auswahl-Felder abmelden (sie hören sonst auf neue eigene Einträge)
   box.dispose?.(); box.dispose = () => widgets.forEach(w => w.dispose());

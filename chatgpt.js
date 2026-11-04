@@ -12,12 +12,12 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=16";
+import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=17";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
-import { stilAktuell, stilZeilen } from "./stil.js?v=17";
-import { kandidaten } from "./regeln.js?v=12";
+import { stilAktuell, stilZeilen } from "./stil.js?v=18";
+import { kandidaten } from "./regeln.js?v=13";
 import { GROUPS, GROUP_OF } from "./ki.js?v=7";
-import { speichernKnopf } from "./fertig.js?v=4";
+import { speichernKnopf } from "./fertig.js?v=5";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -227,7 +227,7 @@ export function bildPaketBereich(alle, wovon, kopiert = () => {}) {
     const meins = ++lauf;
     knopf.disabled = true; knopf.textContent = "Bild-Paket wird erstellt …";
     let datei;
-    try { datei = await bildPaket(teile); } catch (e) { if (meins === lauf) toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); bereit(); return; }
+    try { datei = await bildPaket(teile); } catch (e) { if (meins === lauf) fehlerToast("Hat nicht geklappt", e); console.error(e); bereit(); return; }
     if (meins !== lauf) { bereit(); return; }
     const url = URL.createObjectURL(datei);
     const zu = () => { URL.revokeObjectURL(url); bereit(); if (paketOffen?.zu === zu) paketOffen = null; };
@@ -286,8 +286,12 @@ const vonHand = (box, text) => fill(box, el("div", { class: "hint" }, "Kopieren 
 // Vor dem Wort darf alles stehen, was kein Buchstabe ist (Zeichen, Emojis, Tabellenstriche). Eine Nummer muss dabei sein,
 // sonst würde z. B. „Look: lässig“ mitten im Outfit eine neue Gruppe anfangen. „Kaufideen“ nur als reine Überschrift:
 // Eine Zeile „Kaufidee: ein Gürtel …“ gehört seit 0.19 zum Outfit darüber.
+// Seit 0.21 (Durchsicht 04.11.2026) auch „Outfit #2“, „Outfit Nummer 2“, „Option zwei“, „Outfit B:“ und „Zweites Outfit“: Vorher
+// landeten solche Outfits alle in EINER Karte, und Bild-Paket und „Outfit speichern“ mischten ihre Teile.
+// Ein Buchstabe zählt nur allein („Outfit A“, „Look B –“), nicht als Wortanfang („Outfit am Abend“, „Look an“).
 const WORT = "outfit|kombination|kombi|option|look|vorschlag|variante|idee";
-const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*(nr\\.?\\s*)?\\d+|kaufideen?[^\\p{L}\\d]*$)`, "iu");
+const ZAHLWORT = "eins|zwei|drei|vier|fünf", ORDNUNG = "erste[nrs]?|zweite[nrs]?|dritte[nrs]?|vierte[nrs]?|fünfte[nrs]?";
+const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*(nr\\.?|nummer|#)?\\s*(\\d+|(${ZAHLWORT})\\b|[a-c](?![\\p{L}\\d]))|(${ORDNUNG})\\s+(${WORT})\\b|kaufideen?[^\\p{L}\\d]*$)`, "iu");
 // Kaufidee beim Outfit: „Kaufidee: …“, „**Kaufideen:** …“, „🛍 Kaufidee (optional): …“ → der Text nach dem Doppelpunkt
 const KAUFIDEE = /^[^\p{L}]*kaufideen?\b[^:\n]{0,20}:[^\p{L}\d]*(.+)$/iu;
 // „Outfit Nr. 2“ ist die Nummer des Outfits, nicht die eines Teils
@@ -329,17 +333,19 @@ export function antwortLesen(text, items) {
   for (const g of gruppen) if (!g.nrs.length) g.nrs = g.imText;
   const nachNr = new Map(items.map(t => [t.nr, t])), unbekannt = new Set();
   const out = gruppen.map(g => {
-    const teile = [], hinweise = [];
+    const teile = [], hinweise = [], fremd = []; // fremd = Nummern dieser Gruppe, die es bei ihr nicht gibt
     for (const n of g.nrs) {
       const t = nachNr.get(n);
-      if (!t) { unbekannt.add(n); continue; }
+      if (!t) { unbekannt.add(n); fremd.push(n); continue; }
       if (t.geloescht) hinweise.push(`Nr. ${nrText(n)} liegt im Papierkorb.`);
       else if (t.nichtAnziehen) hinweise.push(`Nr. ${nrText(n)} ist als „🚫 Ziehe ich nicht an“ markiert.`);
       if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ In der Antwort steht bei Nr. ${nrText(n)} „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt der Chat einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
       teile.push(t);
     }
+    // Einzelne unbekannte Nummern direkt an der Karte nennen (seit 0.21), sonst sieht man nicht, dass dort ein Teil fehlt
+    if (fremd.length && teile.length) hinweise.push(`⚠️ ${fremd.map(n => "Nr. " + nrText(n)).join(", ")} gibt es bei dir nicht.`);
     // ohneIdeen = der Text ohne die Kaufidee-Zeilen (die stehen in der Anzeige eigens darunter); text = alles, z. B. zum Speichern
-    return { text: lesbar(g.zeilen.join("\n")).trim(), ohneIdeen: lesbar(g.zeilen.filter(z => !KAUFIDEE.test(lesbar(z))).join("\n")).trim(), teile, hinweise, kaufideen: g.kaufideen };
+    return { text: lesbar(g.zeilen.join("\n")).trim(), ohneIdeen: lesbar(g.zeilen.filter(z => !KAUFIDEE.test(lesbar(z))).join("\n")).trim(), teile, fremd, hinweise, kaufideen: g.kaufideen };
   }).filter(g => g.text || g.teile.length);
   return { gruppen: out, unbekannt: [...unbekannt].sort((a, b) => a - b) };
 }
@@ -347,19 +353,26 @@ export function antwortLesen(text, items) {
 // Outfits aus der gelesenen Antwort für Schritt 4: Gruppen mit Teilen, ohne Kaufideen. Name = Überschrift der Gruppe bis
 // zum Doppelpunkt („Outfit 2“, „Look 1“), sonst „Vorschlag 1“ … Die Namen sind fremder Text und werden nur als Text gezeigt.
 // Hat die Antwort Überschriften, zählen nur Gruppen mit Überschrift: Die Einleitung („Zu deiner Nr. 012 passt …“) ist kein Outfit.
+// Seit 0.21 zählt ein Outfit mit Überschrift auch, wenn es nur Nummern nennt, die es bei ihr nicht gibt (alter Stand im Chat):
+// Vorher stand „✓ 1 Outfit“ über den Karten „Outfit 1“ und „Outfit 2“. Solche Outfits haben keine Teile (kein Bild-Paket, kein Speichern).
+// anker = bei „Was passt dazu?“ das Teil, um das es geht: Es gehört in jedes Outfit, auch wenn der Chat es nicht noch einmal nennt
+// (sonst fehlte es im Bild-Paket und im gespeicherten Outfit, Durchsicht 04.11.2026).
 const OUTFITS = ["Outfit 1", "Outfit 2", "Outfit 3"];
-function outfitsAus(gruppen) {
+function outfitsAus(gruppen, anker = null) {
   const namen = new Set(), kopf = g => g.text.split("\n")[0].trim();
-  let liste = gruppen.filter(g => g.teile.length && !/^[^\p{L}]*kaufidee/iu.test(g.text));
+  let liste = gruppen.filter(g => (g.teile.length || g.fremd.length) && !/^[^\p{L}]*kaufidee/iu.test(g.text));
   if (liste.some(g => KOPF.test(kopf(g)))) liste = liste.filter(g => KOPF.test(kopf(g)));
+  else liste = liste.filter(g => g.teile.length);
   const ohneZeichen = s => s.replace(/^[^\p{L}\d]+/u, "").replace(/[\s–—|-]+$/u, "");
   return liste.map(g => {
-    let name = KOPF.test(kopf(g)) ? ohneZeichen(kopf(g).split(/[:|]/)[0]).slice(0, 30) : "";
+    // Erster nicht leerer Teil vor „:“ oder „|“ (bei einer Tabellenzeile „| Outfit 3 | …“ ist der erste Teil leer)
+    let name = KOPF.test(kopf(g)) ? (kopf(g).split(/[:|]/).map(ohneZeichen).find(Boolean) || "").slice(0, 30) : "";
     for (let k = 1; !name || namen.has(name); k++) name = `Vorschlag ${k}`; // Namen müssen eindeutig sein (Auswahl-Knöpfe)
     namen.add(name);
     // Name beim Speichern: was nach dem Doppelpunkt steht („Outfit 1: Modern Smart Casual“ → „Modern Smart Casual“)
     const danach = KOPF.test(kopf(g)) && kopf(g).includes(":") ? ohneZeichen(kopf(g).slice(kopf(g).indexOf(":") + 1)) : "";
-    return { name, titel: danach || name, teile: g.teile, gruppe: g };
+    const teile = anker && g.teile.length && !g.teile.some(t => t.nr === anker.nr) ? [anker, ...g.teile] : g.teile;
+    return { name, titel: danach || name, teile, gruppe: g };
   });
 }
 
@@ -375,7 +388,7 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
       const dateien = nur.length ? await sammelbilder(nur, art === "alles" ? "Mein Kleiderschrank" : "Neu im Kleiderschrank") : [];
       vorbereitet = { art, dateien, text: art === "alles" ? schrankText(teile, stil, dateien.length) : aenderungText(v.neu, v.weg), stand: standVon(teile) };
       zeigen();
-    } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+    } catch (e) { fehlerToast("Hat nicht geklappt", e); console.error(e); }
     finally { knopf.disabled = false; knopf.textContent = alt; }
   };
   function zeigen() {
@@ -485,7 +498,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
   const stand4 = () => { s4.stand.textContent = m.bildKopiert ? "✓ kopiert" : ""; };
   const bildFertig = () => { m.bildKopiert = true; stand4(); s4.auf(false); };
   function bildSchritt(gruppen) {
-    const outfits = gruppen ? outfitsAus(gruppen) : [];
+    const outfits = gruppen ? outfitsAus(gruppen, frage.teil).filter(o => o.teile.length) : [];
     if (!outfits.length) {
       const bildBox = el("div", {});
       const wahl = choice({ options: ["Outfit 1", "Outfit 2", "Outfit 3"], selected: [m.bildOutfit], onChange: sel => { m.bildOutfit = sel[0] || "Outfit 1"; } });
@@ -526,7 +539,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
     if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); s3.stand.textContent = ""; return; }
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
     bildSchritt(gruppen);
-    const outfits = outfitsAus(gruppen), outfitVon = new Map(outfits.map(o => [o.gruppe, o]));
+    const outfits = outfitsAus(gruppen, frage.teil), outfitVon = new Map(outfits.map(o => [o.gruppe, o]));
     s3.stand.textContent = outfits.length ? `✓ ${outfits.length} ${outfits.length === 1 ? "Outfit" : "Outfits"}` : "✓ eingefügt";
     fill(ergebnis,
       unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
@@ -538,17 +551,20 @@ export function chatgptPanel(items, stil, frage, kachel) {
         const titel = o ? (mitKopf ? zeilen[0].replace(/^[^\p{L}\d]+/u, "").trim() : o.name) : null;
         const rest = (mitKopf ? zeilen.slice(1).join("\n") : g.ohneIdeen).trim();
         if (!o && /^[^\p{L}]*kaufideen?/iu.test(g.ohneIdeen)) return el("div", { class: "kaufidee" }, el("p", {}, "🛍 " + g.ohneIdeen));
+        // Bei einem Outfit seine Teile (bei „Was passt dazu?“ samt dem Teil, um das es geht), sonst die Teile der Gruppe
+        const teile = o ? o.teile : g.teile;
         return el("div", { class: "panel kombi" },
           titel ? el("div", { class: "kombi-titel" }, titel) : null,
-          g.teile.length ? el("div", { class: "kombi-nummern" }, g.teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
-          g.teile.length ? el("div", { class: "kombi-teile" }, ...g.teile.map(kachel)) : null,
+          teile.length ? el("div", { class: "kombi-nummern" }, teile.map(t => `Nr. ${nrText(t.nr)}`).join(" + ")) : null,
+          teile.length ? el("div", { class: "kombi-teile" }, ...teile.map(kachel)) : null,
+          o && !teile.length ? el("p", { class: "hint" }, `⚠️ Keins dieser Teile gibt es in deinem Kleiderschrank (${g.fremd.map(n => "Nr. " + nrText(n)).join(", ")}). Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
           ...g.hinweise.map(h => el("p", { class: "hint" }, h)),
           // Kaufideen gehören zum Outfit (seit 0.19), hervorgehoben; gespeichert wird der ganze Text samt Kaufideen
           g.kaufideen.length ? el("div", { class: "kaufidee" }, ...g.kaufideen.map(k => el("p", {}, "🛍 Kaufidee: " + k))) : null,
           rest ? textKlappe(i, o ? "Erklärung und Styling-Tipps" : zeilen[0].replace(/^[^\p{L}\d]+/u, "").slice(0, 50) + (zeilen[0].length > 50 ? " …" : ""), rest) : null,
-          o ? el("div", { class: "actions" }, speichernKnopf(g.teile, o.titel, g.text, "chat")) : null);
+          o && teile.length ? el("div", { class: "actions" }, speichernKnopf(teile, o.titel, g.text, "chat")) : null);
       }));
-    if (weiter) { s3.auf(false); if (outfits.length) s4.auf(true); }
+    if (weiter) { s3.auf(false); if (outfits.some(o => o.teile.length)) s4.auf(true); }
   };
   // Eingefügt → gleich anzeigen (der Knopf „Outfits anzeigen“ bleibt für selbst getippte Änderungen)
   feld.onpaste = () => setTimeout(() => { m.antwort = feld.value; anzeigen(feld.value, true); }, 0);

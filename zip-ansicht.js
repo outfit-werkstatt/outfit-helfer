@@ -1,16 +1,17 @@
 // Etappe 1e: Sicherung als ZIP-Datei speichern und laden („Sicherung vom TT.MM.JJJJ Outfit Helfer.zip“).
 // Inhalt: Fotos als „012 - T-Shirt braun.jpg“, Vorschaubilder, Fotos der fertigen Outfits unter „Outfits/“, angaben.json
-// (Teile, Ordner, Mein Stil, eigene Knöpfe, fertige Outfits, nächste Nummer) und „Lies mich.txt“. Teile im Papierkorb kommen nicht mit.
+// (Teile, Ordner, Mein Stil, eigene Knöpfe, fertige Outfits, nächste Nummer, seit 0.21 was der Chat kennt) und „Lies mich.txt“.
+// Teile im Papierkorb kommen nicht mit.
 // Laden ERSETZT alles. Die Datei kann von irgendwoher stammen, darum wird sie misstrauisch gelesen: nur erwartete Dateien,
 // Grenzen für Größe und Anzahl, jede Angabe geprüft (nur bekannte Felder, Längen gekürzt), Fotos neu gezeichnet.
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=10";
-import { el, fill, toast, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=16";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=17";
+import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=17";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=18";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=10";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=11";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -87,7 +88,8 @@ export function zipKurz(items, letzte, stil, sonst) {
 
 /* ---------- Sicherung erstellen ---------- */
 async function erstellen(fortschritt) {
-  const [alle, ordner, stil, eigene, naechste, outfits] = await Promise.all([allItems(), getFolders(), getStil(), getCustom(), getMeta("naechsteNr"), getOutfits()]);
+  const [alle, ordner, stil, eigene, naechste, outfits, chat] = await Promise.all([allItems(), getFolders(), getStil(), getCustom(), getMeta("naechsteNr"), getOutfits(),
+    getMeta("chatgptStand").catch(() => null)]);
   const teile = alle.filter(t => !t.geloescht).sort((a, b) => a.nr - b.nr), dateien = [], angaben = [];
   for (const [i, t] of teile.entries()) {
     fortschritt(`Fotos sammeln: ${i + 1} von ${teile.length} …`);
@@ -106,7 +108,10 @@ async function erstellen(fortschritt) {
   }
   const jetzt = new Date();
   const json = { app: APP, format: FORMAT, erstellt: jetzt.toISOString(), naechsteNr: Math.max(naechste || 1, ...alle.map(t => t.nr + 1)), // auch Nummern aus dem Papierkorb nie wieder vergeben
-    teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits: outfitAngaben };
+    teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits: outfitAngaben,
+    // Was der Chat zuletzt vom Kleiderschrank bekommen hat (seit 0.21): Der Chat liegt in ihrem Konto, nicht auf dem Handy,
+    // und kennt nach dem Wiederherstellen (auch auf einem neuen Handy) noch denselben Stand. Ältere Versionen lesen das Feld nicht.
+    chatStand: chat?.zeit && chat?.teile ? { zeit: chat.zeit, teile: chat.teile } : null };
   dateien.unshift({ name: "angaben.json", data: utf8(JSON.stringify(json)) }, { name: "Lies mich.txt", data: utf8(LIES_MICH) });
   const blob = await zipErstellen(dateien, jetzt, (i, n) => fortschritt(`Sicherung packen: ${Math.round(100 * i / n)} % …`));
   return { blob, name: `Sicherung vom ${datumText(jetzt)} Outfit Helfer.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length };
@@ -193,7 +198,15 @@ function pruefen(j) {
       ...(zeit(o.geaendert) ? { geaendert: zeit(o.geaendert) } : {}), _foto: typeof o.foto === "string" ? o.foto : null });
   }
   const naechsteNr = Number.isInteger(j.naechsteNr) && j.naechsteNr > 0 && j.naechsteNr <= 1e6 ? j.naechsteNr : 1;
-  return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, ausgelassen };
+  // Stand des Chats: { zeit, teile: { Nummer: kurzer Fingerabdruck } }, nur Nummern und kurze Buchstaben-/Ziffernfolgen
+  let chatStand = null;
+  const cs = j.chatStand && typeof j.chatStand === "object" ? j.chatStand : null;
+  if (cs && zeit(cs.zeit) && cs.teile && typeof cs.teile === "object" && !Array.isArray(cs.teile)) {
+    const st = {};
+    for (const [k, v] of Object.entries(cs.teile).slice(0, MAX_TEILE)) if (/^\d{1,6}$/.test(k) && typeof v === "string" && /^[0-9a-z]{1,8}$/.test(v)) st[k] = v;
+    chatStand = { zeit: zeit(cs.zeit), teile: st };
+  }
+  return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, chatStand, ausgelassen };
 }
 // Nur echte JPG-Bilder mit vernünftiger Größe annehmen (Größe steht im Kopf der Datei, vor dem Entschlüsseln prüfbar).
 // Fotos der App haben höchstens etwa 1,5 Megapixel; 16 sind großzügig und für das Handy noch gut zu entpacken.
@@ -295,7 +308,7 @@ async function laden(datei) {
     const imKorb = jetzt.filter(t => t.geloescht).length, unlesbar = fehlen.length + s.ausgelassen;
     const frage = [
       `Sicherung${s.erstellt ? " vom " + datumText(new Date(s.erstellt)) : ""}: ${anzahl(teile.length)}, ${s.ordner.length} Ordner` +
-        `${outfits.length ? `, ${outfits.length} fertige ${outfits.length === 1 ? "Outfit" : "Outfits"}` : ""}` +
+        `${outfits.length ? `, ${outfits.length} ${outfits.length === 1 ? "fertiges Outfit" : "fertige Outfits"}` : ""}` +
         `${Object.keys(s.meinStil).some(k => k !== "geaendert") ? ", „Mein Stil“" : ""}.`,
       unlesbar ? `⚠️ ${unlesbar === 1 ? "1 Teil" : unlesbar + " Teile"} aus der Sicherung ${unlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${unlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
         (fehlen.length ? `: Nr. ${nummern(fehlen)}` : "") + (s.ausgelassen ? `${fehlen.length ? " und " : ": "}${s.ausgelassen} ohne gültige Nummer oder Art` : "") + "." : null,
@@ -308,7 +321,11 @@ async function laden(datei) {
     // 3. Alles in EINEM Schritt ersetzen. Nummern nie doppelt: weiter nach der höchsten aus Sicherung, App und bisherigem Zähler
     sp.text("Wird gespeichert …");
     const naechsteNr = Math.max(s.naechsteNr, ...s.teile.map(t => t.nr + 1), ...jetzt.map(t => t.nr + 1), (await getMeta("naechsteNr")) || 1);
-    await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits,
+    // Was der Chat kennt, bleibt erhalten (vorher fiel es weg, und die App bat, alles neu hochzuladen): der neuere Stand von
+    // diesem Handy oder aus der Sicherung. Danach vergleicht die App ihn wie immer mit den Teilen.
+    const chatJetzt = await getMeta("chatgptStand").catch(() => null);
+    const chat = [chatJetzt, s.chatStand].filter(x => typeof x?.zeit === "string" && x.teile).sort((a, b) => b.zeit.localeCompare(a.zeit))[0] || null;
+    await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, chatgptStand: chat,
       letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr) } } });
     await askPersist(); // auf einem neuen Handy gleich um dauerhaften Speicher bitten
     sp.weg();
@@ -348,11 +365,11 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
           if (!mobil()) return await gesichert(z);
           const ja = el("button", { type: "button", class: "btn primary" }, "Ja, gespeichert");
           const nein = el("button", { type: "button", class: "btn" }, "Nein");
-          ja.onclick = () => gesichert(z).catch(e => toast("Hat nicht geklappt: " + (e?.message || e)));
+          ja.onclick = () => gesichert(z).catch(e => fehlerToast("Hat nicht geklappt", e));
           nein.onclick = () => fill(weiter, el("div", { class: "actions" }, sichern),
             el("p", { class: "hint" }, "Dann tippe nochmal auf „In Dateien sichern …“ und wähle im Teilen-Menü „In Dateien sichern“."));
           fill(weiter, el("p", {}, "Ist die Sicherung jetzt in der Dateien-App gespeichert?"), el("div", { class: "actions" }, nein, ja));
-        } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+        } catch (e) { fehlerToast("Hat nicht geklappt", e); console.error(e); }
       };
       fill(weiter, el("div", { class: "actions" }, sichern), mobil()
         ? mitInfo(el("p", { class: "hint" }, "Im Teilen-Menü „In Dateien sichern“ wählen und einen Ort aussuchen. iCloud Drive liegt auch bei Apple."),
@@ -360,7 +377,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
               el("li", {}, el("strong", {}, "Auf meinem iPhone:"), " bleibt nur auf dem Handy. Ist das Handy weg, ist auch die Sicherung weg.")),
             "Die ZIP in der Dateien-App nicht antippen – sonst packt das iPhone sie aus (schadet nicht, die ZIP bleibt).")
         : el("p", { class: "hint" }, "Die Datei landet im Download-Ordner. Am besten danach an einen sicheren zweiten Ort kopieren (z. B. USB-Stick)."));
-    } catch (e) { meldung.textContent = "❌ Sicherung hat nicht geklappt: " + (e?.message || e); console.error(e); }
+    } catch (e) { meldung.textContent = "❌ Sicherung hat nicht geklappt: " + fehlerText(e); console.error(e); }
     erstellenKnopf.disabled = false;
   };
   const ladenStatus = el("div", { class: "status" });
@@ -370,7 +387,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
     if (!datei) return;
     ladenStatus.textContent = "";
     try { const m = await laden(datei); if (m) ladenStatus.textContent = m; }
-    catch (e) { ladenStatus.textContent = "❌ " + (e?.message || e); console.error(e); }
+    catch (e) { ladenStatus.textContent = "❌ " + fehlerText(e); console.error(e); }
   };
   fill(box, kopf,
     el("div", { class: "panel" },

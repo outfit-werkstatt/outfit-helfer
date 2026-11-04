@@ -2,7 +2,7 @@
 // ChatGPT/Gemini merken, auf Wunsch mit einem Foto vom fertigen Look (Bild aus dem Chat oder Spiegel-Selfie).
 // Gespeichert werden nur Name, Nummern und Text; die Teile selbst bleiben im Kleiderschrank. Der Text aus dem Chat ist
 // fremder Text: nur per textContent anzeigen. Das Foto wird wie alle Fotos neu gezeichnet und bleibt auf dem Gerät.
-import { el, fill, toast, clean, cleanText, mitInfo, zeigeGross } from "./ui.js?v=16";
+import { el, fill, toast, fehlerToast, clean, cleanText, mitInfo, zeigeGross } from "./ui.js?v=17";
 import { getOutfits, saveOutfit, deleteOutfit, getLookFoto, nrText } from "./speicher.js?v=10";
 import { loadImage, alsJpg } from "./ki.js?v=7";
 
@@ -23,7 +23,7 @@ export function speichernKnopf(teile, name, text, quelle) {
         nrs, text: text ? cleanText(text).slice(0, MAX_TEXT) || null : null, quelle, erstellt: new Date().toISOString(), foto: false });
       knopf.textContent = "✓ Gespeichert";
       toast("In „⭐ Fertige Outfits“ gespeichert");
-    } catch (e) { knopf.disabled = false; toast("Speichern hat nicht geklappt: " + (e?.message || e)); console.error(e); }
+    } catch (e) { knopf.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); console.error(e); }
   };
   return knopf;
 }
@@ -79,13 +79,13 @@ export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, 
     const datei = eingabe.files[0]; eingabe.value = "";
     if (!datei) return;
     try { await saveOutfit(o, await lookAusDatei(datei)); toast("Foto gespeichert"); neu(); }
-    catch (e) { toast("Foto ging nicht: " + (e?.message || e)); console.error(e); }
+    catch (e) { fehlerToast("Foto ging nicht", e); console.error(e); }
   };
   const waehlen = el("label", { class: "btn datei" }, o.foto ? "📷 Foto ändern" : "📷 Foto vom Look hinzufügen", eingabe);
   const entfernen = el("button", { type: "button", class: "btn" }, "Foto entfernen");
   entfernen.onclick = async () => {
     if (!confirm("Foto vom Look entfernen? Das Outfit selbst bleibt.")) return;
-    try { await saveOutfit(o, null); neu(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+    try { await saveOutfit(o, null); neu(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
   };
   if (o.foto) getLookFoto(o.id).then(b => {
     if (!b) return;
@@ -103,14 +103,14 @@ export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, 
     ok.onclick = async () => {
       const name = clean(input.value).slice(0, MAX_NAME);
       if (!name) { toast("Bitte einen Namen eintippen."); return; }
-      try { await saveOutfit({ ...o, name }); toast("Gespeichert"); neu(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+      try { await saveOutfit({ ...o, name }); toast("Gespeichert"); neu(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
     };
     fill(nameBox, input, el("div", { class: "actions" }, ok)); input.focus();
   };
   const loeschen = el("button", { type: "button", class: "btn" }, "Outfit löschen");
   loeschen.onclick = async () => {
     if (!confirm(`„${o.name}“ löschen? Die Teile bleiben im Kleiderschrank.`)) return;
-    try { await deleteOutfit(o.id); toast("Outfit gelöscht"); zurueck(); } catch (e) { toast("Hat nicht geklappt: " + (e?.message || e)); }
+    try { await deleteOutfit(o.id); toast("Outfit gelöscht"); zurueck(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
   };
 
   fill(box, kopf,

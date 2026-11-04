@@ -4,7 +4,7 @@
 :root{
   --bg:#f7e4e3; --card:#fbf5f0; --ink:#4f3328; --muted:#7d5e51; --line:#ecd3cd; --chip:#f4e1dc;
   --accent:#e6a3ad; --accent-ink:#4f3328;   /* Rosé: ausgewählte Knöpfe, Plaketten, Balken, „Outfit finden“ */
-  --link:#a24d5b;                           /* Rosé als Schrift (Zurück, Links) */
+  --link:#9e4957;                           /* Rosé als Schrift (Zurück, Links); seit 0.21 etwas dunkler, auch auf Chip-Grund gut lesbar */
   --haupt:#6b4433; --haupt-ink:#fbf5f0;     /* Braun: Hauptknöpfe wie „Kleidung hinzufügen“ und „Speichern“ */
   --schatten:0 2px 12px rgba(107,68,51,.07);
   --radius:22px; --gap:12px;
@@ -37,6 +37,8 @@ body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area
 h1{font:italic 400 1.6rem/1.2 var(--titel);color:var(--haupt);margin:0}
 h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 10px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--schatten)}
+/* Abstand zwischen einer Knopf-Reihe und der Karte darunter (z. B. „Was passt dazu?“ über den Angaben, seit 0.21) */
+.actions + .panel{margin-top:16px}
 .status{font-size:.95rem;color:var(--muted)}
 .bar{height:8px;background:var(--chip);border-radius:4px;overflow:hidden;margin-top:8px}
 .bar>div{height:100%;width:0;background:var(--accent);border-radius:4px;transition:width .2s}
@@ -114,13 +116,16 @@ body.ohne-scroll{overflow:hidden}
 .gross{cursor:zoom-in}
 .check .titel{font-weight:600}
 .field{padding:10px 0;border-top:1px solid var(--line)}
+/* Das erste Feld einer Karte braucht keine Trennlinie zur Kante der Karte (seit 0.21) */
+.panel > .field:first-child{border-top:0;padding-top:0}
 .field .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px}
 .field .note{font-size:.8rem;color:var(--muted);margin:-2px 0 6px}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid transparent;background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 13px;font:inherit;font-size:.92rem;cursor:pointer;min-height:36px}
+/* Auswahl-Knöpfe seit 0.21 etwas größer (40 statt 36 px, mehr Abstand), damit man auf dem iPhone nicht den Nachbarn trifft */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid transparent;background:var(--chip);color:var(--ink);border-radius:999px;padding:8px 14px;font:inherit;font-size:.92rem;cursor:pointer;min-height:40px}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 /* Eingabefelder mindestens 16px groß, sonst zoomt das iPhone beim Antippen in die Seite */
-.chips select{border:1px dashed var(--muted);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:1rem;min-height:36px;max-width:100%}
+.chips select{border:1px dashed var(--muted);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:1rem;min-height:40px;max-width:100%}
 .chip.eigen{border-style:dashed}
 .eigen-edit{margin-top:10px;padding:10px;border:1px dashed var(--muted);border-radius:16px}
 .eigen-edit input,.eigen-edit select{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin:6px 0}
@@ -256,9 +261,10 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .outfit-mini{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
 .outfit-mini img{width:40px;height:40px;object-fit:cover;border-radius:10px;background:var(--chip)}
 .look-gross{cursor:zoom-in}
-/* Runde Ecken, aber kein Ei bei zweizeiligen Meldungen */
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);text-align:center;
-  background:var(--haupt);color:var(--haupt-ink);padding:10px 18px;border-radius:18px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+/* Runde Ecken, aber kein Ei bei zweizeiligen Meldungen. Über allem (auch über der Auswahl-Leiste, sonst war die Meldung
+   verdeckt, Durchsicht 04.11.2026) und über dem Balken des iPhones; Tippen geht durch die Meldung hindurch. */
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);text-align:center;
+  background:var(--haupt);color:var(--haupt-ink);padding:10px 18px;border-radius:18px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:70;pointer-events:none}
 /* Geführte Schritte im Chat-Bereich: Stand hinter dem Titel („✓ kopiert“), Kaufidee hervorgehoben beim Outfit */
 .schritt-stand{margin-left:8px;color:var(--muted);font-size:.85rem;font-weight:600}
 .kaufidee{background:var(--chip);border-radius:14px;padding:8px 12px;margin-top:10px;font-size:.95rem}
