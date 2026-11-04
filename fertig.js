@@ -2,9 +2,9 @@
 // ChatGPT/Gemini merken, auf Wunsch mit einem Foto vom fertigen Look (Bild aus dem Chat oder Spiegel-Selfie).
 // Gespeichert werden nur Name, Nummern und Text; die Teile selbst bleiben im Kleiderschrank. Der Text aus dem Chat ist
 // fremder Text: nur per textContent anzeigen. Das Foto wird wie alle Fotos neu gezeichnet und bleibt auf dem Gerät.
-import { el, fill, toast, clean, cleanText, mitInfo, zeigeGross } from "./ui.js?v=14";
+import { el, fill, toast, clean, cleanText, mitInfo, zeigeGross } from "./ui.js?v=15";
 import { getOutfits, saveOutfit, deleteOutfit, getLookFoto, nrText } from "./speicher.js?v=10";
-import { loadImage, alsJpg } from "./ki.js?v=6";
+import { loadImage, alsJpg } from "./ki.js?v=7";
 
 const MAX_NAME = 40, MAX_TEXT = 4000, MAX_TEILE = 12;
 const datum = s => new Date(s).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });

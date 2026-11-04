@@ -1,12 +1,12 @@
 // „Was passt dazu?“: ein Teil antippen → Kombinationen aus dem Kleiderschrank + schlichte Kaufideen (Entscheidung 6).
 // Die Rechnung steht in regeln.js, hier nur die Anzeige. Texte immer per textContent/DOM, nie per innerHTML.
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
-import { el, fill, field, choice, mitInfo, beschreibung } from "./ui.js?v=14";
+import { el, fill, field, choice, mitInfo, beschreibung } from "./ui.js?v=15";
 import { nrText } from "./speicher.js?v=10";
-import { stilAktuell } from "./stil.js?v=14";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=9";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=5";
-import { speichernKnopf } from "./fertig.js?v=2";
+import { stilAktuell } from "./stil.js?v=15";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=10";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=6";
+import { speichernKnopf } from "./fertig.js?v=3";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“
 const OHNE_ORDNER = "Ohne Ordner";

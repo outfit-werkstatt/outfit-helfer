@@ -7,10 +7,10 @@
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=10";
-import { el, fill, toast, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=14";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=14";
-import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=6";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=5";
+import { el, fill, toast, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=15";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=15";
+import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=6";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -64,18 +64,25 @@ export function zipStand(items, letzte, stil, sonst) {
   return { nie: false, tage, datum: datumText(new Date(letzte.zeit)), aenderungen };
 }
 const tageText = n => n === 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`;
-// Karte auf der Startseite. Hervorgehoben, wenn es noch nie eine Sicherung gab oder die letzte über 14 Tage alt ist und sich etwas geändert hat.
-export function zipKarte(items, letzte, stil, sonst, oeffnen) {
+// Fällig: noch nie gesichert (und es gibt Teile) oder die letzte Sicherung ist über 14 Tage alt und seitdem hat sich etwas geändert
+const faellig = s => !s.leer && (s.nie || (s.aenderungen.length > 0 && s.tage >= ERINNERN_TAGE));
+// Startseite oben, nur wenn etwas zu tun ist: Sicherung fällig, oder leerer Kleiderschrank („Sicherung laden?“). Sonst null.
+export function zipHinweis(items, letzte, stil, sonst, oeffnen) {
   const s = zipStand(items, letzte, stil, sonst);
   if (s.nie && s.leer) return el("div", { class: "panel hinweis" }, el("strong", {}, "Neues Handy oder App neu eingerichtet?"),
     el("p", {}, "Wenn du eine Sicherung hast, holst du damit deinen ganzen Kleiderschrank zurück."),
     el("button", { type: "button", class: "btn", onclick: oeffnen }, "Sicherung laden"));
-  const warnen = s.nie || (s.aenderungen.length > 0 && s.tage >= ERINNERN_TAGE);
+  if (!faellig(s)) return null;
   const text = s.nie ? "Noch keine Sicherung. Geht das Handy kaputt oder räumt Safari den Speicher auf, wären sonst alle Teile weg."
-    : `Letzte Sicherung: ${s.datum} (${tageText(s.tage)}). ` + (s.aenderungen.length ? `Seit deiner letzten Sicherung: ${s.aenderungen.join(", ")}. Jetzt sichern?` : "Seitdem hat sich nichts geändert ✓");
-  return el("div", { class: "panel sicherung-karte" + (warnen ? " warnung" : "") },
-    el("div", { class: "titel" }, "💾 Sicherung"), el("div", { class: "hint" }, text),
-    el("div", { class: "actions" }, el("button", { type: "button", class: warnen || s.aenderungen.length ? "btn primary" : "btn", onclick: oeffnen }, "Sicherung speichern / laden")));
+    : `Letzte Sicherung ${tageText(s.tage)} (${s.datum}). Seitdem: ${s.aenderungen.join(", ")}.`;
+  return el("div", { class: "panel hinweis" }, el("strong", {}, "💾 Zeit für eine Sicherung"), el("p", {}, text),
+    el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: oeffnen }, "Jetzt sichern")));
+}
+// Kurzer Stand für die kleine Kachel „Sicherung“: { text, faellig }
+export function zipKurz(items, letzte, stil, sonst) {
+  const s = zipStand(items, letzte, stil, sonst);
+  const text = s.nie ? "noch keine" : s.aenderungen.length ? tageText(s.tage) : `${tageText(s.tage)} ✓`;
+  return { text, faellig: faellig(s) };
 }
 
 /* ---------- Sicherung erstellen ---------- */

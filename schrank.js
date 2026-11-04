@@ -2,15 +2,15 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, mitInfo, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=14";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=15";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
-import { renderStil, stilKurz } from "./stil.js?v=14";
-import { renderZip, zipKarte } from "./zip-ansicht.js?v=13";
-import { renderPasst, miniKachel } from "./passt.js?v=10";
-import { renderOutfit } from "./outfit.js?v=7";
-import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=2";
-import { bildPaketBereich } from "./chatgpt.js?v=5";
-import { GROUPS } from "./ki.js?v=6";
+import { renderStil, stilKurz } from "./stil.js?v=15";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=14";
+import { renderPasst, miniKachel } from "./passt.js?v=11";
+import { renderOutfit } from "./outfit.js?v=8";
+import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=3";
+import { bildPaketBereich } from "./chatgpt.js?v=6";
+import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
 const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
@@ -113,23 +113,22 @@ function nummernKarte(items, naechste) {
     el("div", { class: "hint" }, `Dein Kleiderschrank ist leer, das nächste Teil bekäme aber Nr. ${nrText(naechste)}.`),
     el("div", { class: "actions" }, knopf));
 }
+// Kleine Kachel unter dem Kleiderschrank (Mein Stil, Sicherung, Papierkorb): Name und kurzer Stand
+const nebenKachel = (name, stand, onclick, faellig = false) => el("button", { type: "button", class: faellig ? "faellig" : "", onclick },
+  el("span", { class: "name" }, name), el("span", { class: "stand" }, stand));
 function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
-  // „Mein Stil“: Kurzfassung (höchstens 3 Angaben, alles Weitere steht in „Mein Stil“) oder Bitte, es einmal einzustellen
-  const kurz = stilKurz(stil);
-  const zeigen = kurz.length > 3 ? [...kurz.slice(0, 3), `und ${kurz.length - 3} weitere`] : kurz;
-  const stilKnopf = el("button", { type: "button", class: "btn" }, kurz.length ? "Ändern" : "Jetzt einstellen");
-  stilKnopf.onclick = () => go({ v: "stil" });
-  fill($("stilKarte"), el("div", { class: "panel stil-karte" },
-    el("div", { class: "titel" }, "✨ Mein Stil"),
-    el("div", { class: "hint" }, zeigen.length ? zeigen.join(" · ") : "Noch nicht eingestellt. Sag einmal, was du gern trägst und was lieber nicht – die Vorschläge halten sich daran."),
-    el("div", { class: "actions" }, stilKnopf)));
-  fill($("outfitKarte"), el("div", { class: "panel stil-karte" },
-    mitInfo(el("div", { class: "titel" }, "👗 Outfit finden"),
-      "Sag, wofür es ist und wie das Wetter wird. Die App stellt aus deinem Kleiderschrank Outfits zusammen, und auf Wunsch fragst du zusätzlich ChatGPT oder Gemini."),
-    da.length ? null : el("div", { class: "hint" }, "Sobald du Kleidung gespeichert hast, geht es hier los."),
-    da.length ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "outfit" }) }, "Outfit finden")) : null));
-  fill($("zipKarte"), zipKarte(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
+  // Oben nur, wenn etwas zu tun ist: Sicherung fällig oder (leerer Kleiderschrank) „Sicherung laden?“
+  fill($("startHinweis"), zipHinweis(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
+  // „Outfit finden“ braucht gespeicherte Kleidung; vorher nur ein freundlicher Hinweis statt einer leeren Seite
+  const outfitKnopf = $("outfitKnopf");
+  outfitKnopf.classList.toggle("leer", !da.length);
+  outfitKnopf.onclick = () => da.length ? go({ v: "outfit" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
+  const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst);
+  fill($("nebenKacheln"),
+    nebenKachel("✨ Mein Stil", kurz.length ? `${kurz.length} ${kurz.length === 1 ? "Angabe" : "Angaben"}` : "einstellen", () => go({ v: "stil" })),
+    nebenKachel("💾 Sicherung", zip.text, () => go({ v: "sicherung" }), zip.faellig),
+    nebenKachel("🗑 Papierkorb", korb ? anzahl(korb) : "leer", () => go({ v: "korb" })));
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };
@@ -145,8 +144,6 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
     da.length || outfits.length ? fertigKachel(outfits, items, url, () => go({ v: "fertig" })) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
-  fill($("korbLink"), el("span", { "aria-hidden": "true" }, "🗑"), el("span", { class: "u" }, korb ? `Papierkorb (${anzahl(korb)})` : "Papierkorb (leer)"));
-  $("korbLink").onclick = () => go({ v: "korb" });
   fill($("nummernKarte"), nummernKarte(items, naechste));
 }
 // Name für neuen oder umbenannten Ordner eingeben (max. 30 Zeichen, nicht doppelt)

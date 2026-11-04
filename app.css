@@ -1,13 +1,22 @@
-/* Schlichtes Layout. Farben, Abstände und Schrift nur hier oben als Variablen, das Design kommt ganz am Ende. */
+/* Design „Rosé und verspielt“ (Entwurf C, gewählt am 04.11.2026), passend zum Symbol: zartrosa Grund, Karten in Creme,
+   Braun für Schrift und Hauptknopf, Rosé als Akzent, runde Knöpfe, weiche Ecken. Farben nur hier oben als Variablen.
+   Lesbarkeit geprüft: Auf Rosé steht braune Schrift (weiße wäre zu blass), Links in Rosé sind dunkler als die Rosé-Flächen. */
 :root{
-  --bg:#f6f3ee; --card:#ffffff; --ink:#22201c; --muted:#6f6a62; --line:#e4ded4;
-  --accent:#8a4b3a; --accent-ink:#ffffff; --chip:#f1ece4; --radius:14px; --gap:12px;
+  --bg:#f7e4e3; --card:#fbf5f0; --ink:#4f3328; --muted:#7d5e51; --line:#ecd3cd; --chip:#f4e1dc;
+  --accent:#e6a3ad; --accent-ink:#4f3328;   /* Rosé: ausgewählte Knöpfe, Plaketten, Balken, „Outfit finden“ */
+  --link:#a24d5b;                           /* Rosé als Schrift (Zurück, Links) */
+  --haupt:#6b4433; --haupt-ink:#fbf5f0;     /* Braun: Hauptknöpfe wie „Kleidung hinzufügen“ und „Speichern“ */
+  --schatten:0 2px 12px rgba(107,68,51,.07);
+  --radius:22px; --gap:12px;
+  --titel:Georgia,"Times New Roman",serif;
   --font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#1a1917; --card:#24221f; --ink:#f0ece6; --muted:#a59f95; --line:#38352f;
-    --accent:#d99a84; --accent-ink:#1a1917; --chip:#2f2c28;
+    --bg:#1c1514; --card:#281f1d; --ink:#f4e7e2; --muted:#c0a89f; --line:#3e302c; --chip:#382b28;
+    --accent:#e6a3ad; --accent-ink:#2a1717; --link:#eeb0b9;
+    --haupt:#e0c2b0; --haupt-ink:#2a1a15;
+    --schatten:none;
   }
 }
 *{box-sizing:border-box}
@@ -25,16 +34,36 @@ html,body{height:100%;overflow:hidden}
 body.ohne-scroll #rahmen{overflow:hidden}
 main{max-width:760px;margin:0 auto;padding:max(20px,calc(env(safe-area-inset-top) + 12px)) 16px 80px}
 body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top);background:var(--bg);z-index:45;pointer-events:none}
-h1{font-size:1.5rem;margin:0 0 4px}
-h2{font-size:1.15rem;margin:24px 0 10px}
-.version{display:inline-block;font-size:.75rem;color:var(--muted);background:var(--chip);border-radius:6px;padding:2px 8px;margin-bottom:14px}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+h1{font:italic 400 1.6rem/1.2 var(--titel);color:var(--haupt);margin:0}
+h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 10px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--schatten)}
 .status{font-size:.95rem;color:var(--muted)}
-.bar{height:6px;background:var(--chip);border-radius:3px;overflow:hidden;margin-top:8px}
-.bar>div{height:100%;width:0;background:var(--accent);transition:width .2s}
-label.upload{display:block;text-align:center;padding:18px;border:2px dashed var(--line);border-radius:12px;cursor:pointer;font-weight:600}
+.bar{height:8px;background:var(--chip);border-radius:4px;overflow:hidden;margin-top:8px}
+.bar>div{height:100%;width:0;background:var(--accent);border-radius:4px;transition:width .2s}
+
+/* Startseite: Kopf mit Symbol, zwei gleich große Hauptknöpfe, darunter der Kleiderschrank, ganz unten Mein Stil · Sicherung · Papierkorb */
+.kopfbereich{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 18px}
+.kopfbereich .logo{width:40px;height:40px;border-radius:11px;display:block}
+.haupt-knoepfe{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.haupt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:100px;padding:14px 10px;border:0;border-radius:var(--radius);
+  font:inherit;font-weight:700;line-height:1.25;text-align:center;cursor:pointer;box-shadow:var(--schatten)}
+.haupt .sym{font-size:1.6rem;line-height:1;font-weight:400}
+.haupt.upload{background:var(--haupt);color:var(--haupt-ink)}
+.haupt.outfit{background:var(--accent);color:var(--accent-ink)}
+.haupt.leer{opacity:.55}
 label.upload.disabled{opacity:.45;pointer-events:none}
 label.upload input{display:none}
+.foto-tipp{margin:10px 0 18px}
+.foto-tipp .info-zeile{justify-content:center}
+.foto-tipp .info-zeile > p{font-size:.9rem;color:var(--muted)}
+.neben{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px}
+.neben button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:68px;padding:10px 6px;font:inherit;color:inherit;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--schatten);text-align:center}
+.neben .name{font-weight:600;font-size:.9rem}
+.neben .stand{font-size:.78rem;color:var(--muted)}
+.neben button.faellig{border:1.5px solid var(--link)}
+.neben button.faellig .stand{color:var(--link);font-weight:600}
+.version{text-align:center;font-size:.75rem;color:var(--muted);margin:22px 0 0}
 .hint{font-size:.85rem;color:var(--muted);margin-top:8px}
 /* ⓘ: kleiner runder Knopf hinter einer Überschrift, Hinweis klappt darunter auf. Die Tippfläche ist größer als der Kreis. */
 .info-zeile{display:flex;align-items:center;gap:8px}
@@ -47,7 +76,7 @@ label.upload input{display:none}
   display:inline-flex;align-items:center;justify-content:center}
 .info-knopf::after{content:"";position:absolute;inset:-11px}
 .info-knopf[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.info-box{background:var(--chip);border-radius:10px;padding:10px 12px;margin:6px 0 10px;font-size:.88rem;color:var(--ink);text-transform:none;letter-spacing:0}
+.info-box{background:var(--chip);border-radius:14px;padding:10px 12px;margin:6px 0 10px;font-size:.88rem;color:var(--ink);text-transform:none;letter-spacing:0}
 .info-box p{margin:0 0 6px}
 .info-box p:last-child{margin-bottom:0}
 .info-box ul{margin:4px 0 6px;padding-left:20px}
@@ -60,8 +89,8 @@ label.upload input{display:none}
 .hinweis p{margin:8px 0}
 .hinweis ol{margin:8px 0;padding-left:22px}
 .hinweis li{margin:4px 0}
-.warnzeile{background:var(--chip);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:.9rem}
-.link{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+.warnzeile{background:var(--chip);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:16px;font-size:.9rem}
+.link{background:none;border:0;padding:0;color:var(--link);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 
 /* Fortschritt beim Hinzufügen: bleibt beim Scrollen durch die Karten oben (unter der Uhrzeit) stehen */
 #fortschritt{position:sticky;top:calc(env(safe-area-inset-top) + 8px);z-index:40;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
@@ -72,10 +101,10 @@ label.upload input{display:none}
 .warte-zahl{flex:0 0 auto;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 10px;font-size:.85rem}
 
 /* Prüfen-Karte */
-.check{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:var(--gap)}
+.check{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:var(--gap);box-shadow:var(--schatten)}
 .check .top{display:flex;gap:12px;align-items:center;margin-bottom:6px}
-.check .top img{width:96px;height:96px;object-fit:cover;border-radius:10px;background:var(--chip);flex-shrink:0;display:block}
-.lupe{position:relative;padding:0;border:0;background:none;cursor:zoom-in;flex-shrink:0;border-radius:10px}
+.check .top img{width:96px;height:96px;object-fit:cover;border-radius:16px;background:var(--chip);flex-shrink:0;display:block}
+.lupe{position:relative;padding:0;border:0;background:none;cursor:zoom-in;flex-shrink:0;border-radius:16px}
 .lupe span{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.55);border-radius:6px;padding:0 4px;font-size:.85rem}
 /* Foto groß: über allem, Tippen schließt */
 .gross-ansicht{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
@@ -88,73 +117,74 @@ body.ohne-scroll{overflow:hidden}
 .field .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px}
 .field .note{font-size:.8rem;color:var(--muted);margin:-2px 0 6px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:.92rem;cursor:pointer;min-height:36px}
+.chip{border:1px solid transparent;background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 13px;font:inherit;font-size:.92rem;cursor:pointer;min-height:36px}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 /* Eingabefelder mindestens 16px groß, sonst zoomt das iPhone beim Antippen in die Seite */
-.chips select{border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:1rem;min-height:36px;max-width:100%}
+.chips select{border:1px dashed var(--muted);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:1rem;min-height:36px;max-width:100%}
 .chip.eigen{border-style:dashed}
-.eigen-edit{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:10px}
-.eigen-edit input,.eigen-edit select{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin:6px 0}
+.eigen-edit{margin-top:10px;padding:10px;border:1px dashed var(--muted);border-radius:16px}
+.eigen-edit input,.eigen-edit select{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin:6px 0}
 .eigen-edit .gehoert{display:block;font-size:.85rem;color:var(--muted)}
 .eigen-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
 .eigen-row span{overflow-wrap:anywhere}
 .sw{display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px}
 .actions{display:flex;gap:8px;margin-top:12px}
-.btn{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);flex:1}
+.btn{border:1px solid transparent;background:var(--chip);color:var(--ink);border-radius:999px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.btn.primary{background:var(--haupt);border-color:var(--haupt);color:var(--haupt-ink);flex:1}
 .btn:disabled{opacity:.5}
 .wait{color:var(--muted);font-size:.95rem}
 
 /* Kleiderschrank */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--gap)}
+/* 130 px: auch auf dem kleinsten iPhone (320 px breit) zwei Kacheln nebeneinander */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:var(--gap)}
 button.teil,button.kachel{font:inherit;color:inherit;text-align:left;padding:0;cursor:pointer;width:100%}
 /* Flex: Knöpfe zentrieren ihren Inhalt sonst senkrecht, das Bild rutschte bei kürzerem Text nach unten */
-.teil{display:flex;flex-direction:column;justify-content:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-.teil .bild{display:block;position:relative;aspect-ratio:1;background:var(--chip)}
+/* Kacheln mit eingerücktem, rund abgeschnittenem Foto */
+.teil{display:flex;flex-direction:column;justify-content:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;padding:6px;box-shadow:var(--schatten)}
+.teil .bild{display:block;position:relative;aspect-ratio:1;background:var(--chip);border-radius:16px;overflow:hidden}
 .teil img{width:100%;height:100%;object-fit:cover;display:block}
-.plakette{position:absolute;left:8px;top:8px;background:#22201c;color:#fff;font-weight:700;font-size:.9rem;border-radius:8px;padding:2px 8px;letter-spacing:.03em}
-.teil .text{display:block;padding:8px 10px;font-size:.88rem}
-.teil .rest{display:block;padding:0 10px 8px;font-size:.8rem;color:var(--muted)}
+.plakette{position:absolute;left:7px;top:7px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.9rem;border-radius:999px;padding:2px 9px;letter-spacing:.03em}
+.teil .text{display:block;padding:7px 4px 2px;font-size:.88rem}
+.teil .rest{display:block;padding:0 4px 4px;font-size:.8rem;color:var(--muted)}
 /* „Teile auswählen“: angetippte Teile mit Haken */
 .teil .haken{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.25);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
 .teil .nicht{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.6);border-radius:8px;padding:1px 6px;font-size:.9rem}
 /* „Mehr Angaben“ eingeklappt, damit die Karte kurz bleibt */
 .mehr{border-top:1px solid var(--line);padding:10px 0 0}
-.mehr summary{cursor:pointer;font-weight:600;color:var(--accent);padding:4px 0 8px;min-height:36px}
+.mehr summary{cursor:pointer;font-weight:600;color:var(--link);padding:4px 0 8px;min-height:36px}
 .mehr .field:first-of-type{border-top:0}
-.notiz{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;resize:vertical}
+.notiz{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:9px 12px;resize:vertical}
 .teil.markiert{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .teil.markiert .haken{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 
 /* Startseite: Ordner-Kacheln */
-.kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--gap)}
-.kachel{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-.kachel .mosaik{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;aspect-ratio:1;background:var(--chip);gap:2px;overflow:hidden}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:var(--gap)}
+.kachel{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;padding:6px;box-shadow:var(--schatten)}
+.kachel .mosaik{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;aspect-ratio:1;background:var(--chip);gap:2px;overflow:hidden;border-radius:16px}
 .kachel .mosaik.eins{grid-template-columns:1fr;grid-template-rows:1fr}
 .kachel .mosaik img{width:100%;height:100%;min-height:0;object-fit:cover;display:block}
-.kachel .name{padding:8px 10px 0;font-weight:600;overflow-wrap:anywhere}
-.kachel .anzahl{padding:0 10px 8px;font-size:.85rem;color:var(--muted)}
-.kachel.neu{border-style:dashed;background:transparent;justify-content:center;align-items:center;min-height:150px}
-.kachel.neu .plus{font-size:2rem;line-height:1;color:var(--muted)}
+.kachel .name{padding:7px 4px 0;font-weight:600;overflow-wrap:anywhere}
+.kachel .anzahl{padding:0 4px 4px;font-size:.85rem;color:var(--muted)}
+.kachel.neu{border:1.5px dashed var(--accent);background:transparent;box-shadow:none;justify-content:center;align-items:center;min-height:150px}
+.kachel.neu .plus{font-size:2rem;line-height:1;color:var(--link)}
 .kachel.neu .name{padding:4px 10px 0}
 #ordnerEditor{margin-top:var(--gap)}
 .stil-karte .titel{font-weight:600}
 .stil-karte .hint{overflow-wrap:anywhere}
 details.panel.mehr{padding-top:12px}
-/* Papierkorb: Unterstrich nur unter dem Text, nicht unter dem Symbol und dem Abstand */
-.link.korb{display:inline-flex;align-items:center;gap:8px;margin:18px 0 0;min-height:44px;text-decoration:none}
-.link.korb .u{text-decoration:underline;text-underline-offset:3px}
 
 /* Ordner, Teil, Papierkorb */
 .kopf{margin-bottom:12px}
 .kopf-zeile{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.kopf-knopf{background:none;border:0;padding:8px 0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.kopf-knopf{background:none;border:0;padding:8px 0;color:var(--link);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
 /* „Was passt dazu?“ */
 .kombi-titel{font-weight:700;margin-bottom:2px}
 .kombi-nummern{font-size:.9rem;color:var(--muted);margin-bottom:10px}
 .kombi-teile{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}
-.teil.mini .text{padding:6px;font-size:.75rem}
-.teil.mini .plakette{left:4px;top:4px;font-size:.72rem;padding:1px 5px}
+.teil.mini{padding:4px}
+.teil.mini .bild{border-radius:12px}
+.teil.mini .text{padding:5px 2px 2px;font-size:.75rem}
+.teil.mini .plakette{left:4px;top:4px;font-size:.72rem;padding:1px 6px}
 .teil.mini.klein{opacity:.92}
 .tipps{margin:8px 0 0;padding-left:20px;font-size:.92rem}
 .tipps li{margin:5px 0}
@@ -165,7 +195,7 @@ details.panel.mehr{padding-top:12px}
 .leiste .actions{margin-top:8px}
 .leiste-extra{margin-top:8px}
 .kopf h2{margin:8px 0 2px;overflow-wrap:anywhere}
-.zurueck{background:none;border:0;padding:8px 0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.zurueck{background:none;border:0;padding:8px 0;color:var(--link);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
 .actions.wrap{flex-wrap:wrap}
 .actions.wrap .btn{flex:1 1 auto}
 .filter{margin:8px 0 12px}
@@ -179,12 +209,10 @@ details.panel.mehr{padding-top:12px}
 .angaben dt{color:var(--muted);font-size:.85rem;padding-top:2px}
 .angaben dd{margin:0;overflow-wrap:anywhere;white-space:pre-line}
 /* Suche in der Ordner-Ansicht; 16px, sonst zoomt das iPhone beim Antippen */
-.suche{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:4px 0 8px;-webkit-appearance:none;appearance:none}
+.suche{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:10px 16px;margin:4px 0 8px;-webkit-appearance:none;appearance:none}
 .korb-teil{display:flex;flex-direction:column;gap:6px}
 .btn.klein{min-height:40px;padding:8px 10px;font-size:.9rem}
-/* Sicherung: Karte auf der Startseite (hervorgehoben, wenn lange nicht gesichert), Datei-Knopf */
-.sicherung-karte .titel{font-weight:600}
-.warnung{border-color:var(--accent);background:var(--chip)}
+/* Sicherung: Datei-Knopf */
 label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .hint ul{margin:6px 0;padding-left:20px}
 .hint li{margin:4px 0}
@@ -192,27 +220,29 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .sperre{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
 .sperre .panel{max-width:420px;width:100%;margin:0}
 /* „Vielleicht doppelt“ in der Prüfen-Karte */
-.doppelt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--accent);border-radius:10px;padding:10px;margin:6px 0 10px;background:var(--chip);font-size:.92rem}
-.doppelt img{width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--card)}
+.doppelt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--link);border-radius:16px;padding:10px;margin:6px 0 10px;background:var(--chip);font-size:.92rem}
+.doppelt img{width:64px;height:64px;object-fit:cover;border-radius:12px;flex-shrink:0;background:var(--card)}
 .doppelt .btn{margin-top:8px}
 /* ChatGPT/Gemini: eingefügte Antwort als Text mit ihren Zeilenumbrüchen */
 .chatgpt .actions{flex-wrap:wrap}
 .chatgpt-text{white-space:pre-line;overflow-wrap:anywhere;font-size:.95rem;margin-top:8px}
 /* Sammelbilder für ChatGPT als kleine Vorschau */
 .sammelbilder{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin:10px 0}
-.sammelbild{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff}
+.sammelbild{width:100%;height:auto;border-radius:12px;border:1px solid var(--line);background:#fff}
 /* Bild-Paket: ein Outfit groß, als Vorschau */
 .bildpaket-box .actions{flex-wrap:wrap}
-.bildpaket{display:block;width:100%;max-width:360px;height:auto;margin:10px 0;border-radius:8px;border:1px solid var(--line);background:#fff}
+.bildpaket{display:block;width:100%;max-width:360px;height:auto;margin:10px 0;border-radius:14px;border:1px solid var(--line);background:#fff}
 /* Fertige Outfits: Liste und Foto vom Look */
 .outfit-karte{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;
-  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin-bottom:var(--gap)}
-.outfit-karte .look{flex:0 0 72px;width:72px;height:96px;border-radius:10px;background:var(--chip);overflow:hidden;display:block}
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin-bottom:var(--gap);box-shadow:var(--schatten)}
+.outfit-karte .look{flex:0 0 72px;width:72px;height:96px;border-radius:14px;background:var(--chip);overflow:hidden;display:block}
 .outfit-karte .look img{width:100%;height:100%;object-fit:cover;display:block}
 .outfit-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .outfit-info .name{font-weight:600;overflow-wrap:anywhere}
 .outfit-info .anzahl{font-size:.85rem;color:var(--muted)}
 .outfit-mini{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
-.outfit-mini img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:var(--chip)}
+.outfit-mini img{width:40px;height:40px;object-fit:cover;border-radius:10px;background:var(--chip)}
 .look-gross{cursor:zoom-in}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#22201c;color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+/* Runde Ecken, aber kein Ei bei zweizeiligen Meldungen */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);text-align:center;
+  background:var(--haupt);color:var(--haupt-ink);padding:10px 18px;border-radius:18px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25)}

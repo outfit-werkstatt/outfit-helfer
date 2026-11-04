@@ -120,10 +120,19 @@ async function segment(canvas) {
   const m = await new RawImage(g, mw, mh, 1).resize(W, H), mask = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) mask[i] = m.data[i * m.channels] >= 128 ? 1 : 0;
   const share = mask.reduce((a, b) => a + b, 0) / (W * H);
-  return { W, H, mask, ok: share >= 0.02 && share <= 0.97 };
+  return { W, H, mask, ok: share >= 0.02 && share <= 0.97, fein: { g, mw, mh } };
 }
-// Teil ausschneiden, quadratisch auf hellgrauem Grund
-function clipCanvas(canvas, { W, H, mask }) {
+// Feine Maske fürs Vorschaubild (seit 0.16): volle Auflösung des Modells (320 px) mit weichem Übergang am Rand statt der groben
+// 96-px-Maske, die Treppenstufen machte. Gleiche Grenze wie die grobe Maske (128 = halb durchsichtig), weich von 96 bis 160.
+function feineMaske({ g, mw, mh }) {
+  const c = new OffscreenCanvas(mw, mh), x = c.getContext("2d"), d = x.createImageData(mw, mh);
+  for (let i = 0; i < g.length; i++) d.data[i * 4 + 3] = Math.max(0, Math.min(255, (g[i] - 96) * 4));
+  x.putImageData(d, 0, 0);
+  return c;
+}
+// Teil ausschneiden, quadratisch auf hellgrauem Grund. Ausschnitt und Größe kommen immer von der groben Maske;
+// mit maske (feineMaske) wird nur der Rand weicher, so bleibt das Bild für die KI genau wie gemessen.
+function clipCanvas(canvas, { W, H, mask }, maske = null) {
   const m = new OffscreenCanvas(W, H);
   const mctx = m.getContext("2d"), md = mctx.createImageData(W, H);
   let x0 = W, y0 = H, x1 = 0, y1 = 0;
@@ -131,7 +140,8 @@ function clipCanvas(canvas, { W, H, mask }) {
   mctx.putImageData(md, 0, 0);
   const cut = new OffscreenCanvas(canvas.width, canvas.height);
   const cctx = cut.getContext("2d"); cctx.drawImage(canvas, 0, 0);
-  cctx.globalCompositeOperation = "destination-in"; cctx.drawImage(m, 0, 0, cut.width, cut.height);
+  cctx.globalCompositeOperation = "destination-in"; cctx.imageSmoothingQuality = "high"; cctx.drawImage(maske || m, 0, 0, cut.width, cut.height);
+  if (maske) maske.width = maske.height = 0;
   const sx = cut.width / W, sy = cut.height / H, pad = 0.08 * Math.max(x1 - x0, y1 - y0);
   const bx = Math.max(0, (x0 - pad) * sx), by = Math.max(0, (y0 - pad) * sy), bw = Math.min(cut.width, (x1 + 1 + pad) * sx) - bx, bh = Math.min(cut.height, (y1 + 1 + pad) * sy) - by;
   const side = Math.max(bw, bh), out = new OffscreenCanvas(Math.round(side), Math.round(side));
@@ -157,10 +167,10 @@ const ranked = map => [...map].map(([label, score]) => ({ label, score })).sort(
 export async function recognize(bild) {
   const full = new OffscreenCanvas(bild.width, bild.height);
   full.getContext("2d").drawImage(bild, 0, 0); bild.close();
-  const seg = await segment(full), cut = seg.ok ? clipCanvas(full, seg) : null;
+  const seg = await segment(full), cut = seg.ok ? clipCanvas(full, seg) : null, vorschau = seg.ok ? clipCanvas(full, seg, feineMaske(seg.fein)) : null;
   const views = [0, 90, 180, 270].map(d => rotated(full, d)).concat(cut ? [cut] : []);
   const out = await visionModel(await processor(await Promise.all(views.map(async c => RawImage.fromBlob(await canvasToBlob(c))))));
-  for (const c of views) if (c !== cut) c.width = c.height = 0;
+  for (const c of views) c.width = c.height = 0;
   full.width = full.height = 0;
   const vecs = normRows(out.image_embeds ?? out.pooler_output), fullVecs = vecs.slice(0, 4), matVecs = [vecs[0], vecs[4] || vecs[2]];
   const avgMap = (field, vs) => { const tot = new Map(); for (const v of vs) for (const [n, s] of scoreField(v, field)) tot.set(n, (tot.get(n) || 0) + s / vs.length); return tot; };
@@ -172,7 +182,7 @@ export async function recognize(bild) {
   // Bild-Vektor = Mittel aller Blickwinkel (Länge 1), um später doppelte Fotos zu finden (Ähnlichkeit = Skalarprodukt)
   const mean = vecs[0].map((_, j) => vecs.reduce((s, v) => s + v[j], 0)), len = Math.hypot(...mean);
   return {
-    cut: cut ? cut.transferToImageBitmap() : null, vektor: Float32Array.from(mean, x => x / len),
+    cut: vorschau ? vorschau.transferToImageBitmap() : null, vektor: Float32Array.from(mean, x => x / len),
     art: [...inGroup, ...rest],
     material: ranked(avgMap("mat", matVecs)),
     muster: ranked(avgMap("pat", vecs)),

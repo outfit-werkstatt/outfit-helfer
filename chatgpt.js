@@ -12,12 +12,12 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=14";
+import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=15";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
-import { stilAktuell, stilZeilen } from "./stil.js?v=14";
-import { kandidaten } from "./regeln.js?v=9";
-import { GROUPS, GROUP_OF } from "./ki.js?v=6";
-import { speichernKnopf } from "./fertig.js?v=2";
+import { stilAktuell, stilZeilen } from "./stil.js?v=15";
+import { kandidaten } from "./regeln.js?v=10";
+import { GROUPS, GROUP_OF } from "./ki.js?v=7";
+import { speichernKnopf } from "./fertig.js?v=3";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,

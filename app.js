@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=6";
+import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=7";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwuerfe } from "./speicher.js?v=10";
-import { $, el, fill, toast, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden } from "./ui.js?v=14";
-import { refresh, initSchrank } from "./schrank.js?v=24";
+import { $, el, fill, toast, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden } from "./ui.js?v=15";
+import { refresh, initSchrank } from "./schrank.js?v=25";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }

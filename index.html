@@ -15,8 +15,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Outfit-Helfer">
-<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7e4e3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1514" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
 <link rel="stylesheet" href="app.css?v=21">
 </head>
@@ -24,10 +24,11 @@
 <!-- Eigener Scroll-Bereich: Inhalt läuft auf dem iPhone sonst beim Scrollen unter Uhrzeit und Akku (siehe app.css) -->
 <div id="rahmen">
 <main>
-  <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht. -->
+  <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht.
+       Reihenfolge (04.11.2026): Kopf, Hinweise nur bei Bedarf, zwei Hauptknöpfe, beim Hinzufügen die Karten, Kleiderschrank,
+       Mein Stil · Sicherung · Papierkorb klein darunter, Version ganz unten. -->
   <div id="ansichtStart">
-  <h1>Outfit-Helfer</h1>
-  <div class="version" id="version">Version 0.15.1 (wartende Fotos in einem Kästchen) · 04.11.2026</div>
+  <header class="kopfbereich"><img class="logo" src="symbol-180.png" alt=""><h1>Outfit-Helfer</h1></header>
   <div class="warnzeile" id="warnzeile" hidden>
     ⚠️ Du nutzt die App im Browser. Hier kann dein Kleiderschrank nach 7 Tagen ohne Nutzung verschwinden.
     <button type="button" class="link" id="warnMehr">Wie geht es sicherer?</button>
@@ -58,11 +59,17 @@
     <div class="actions"><button type="button" class="btn" id="kiRetry" hidden>Nochmal versuchen</button></div>
   </div>
 
-  <div class="panel mit-ecke">
-    <label class="upload disabled" id="uploadLabel">📷 Kleidung hinzufügen
+  <!-- Sicherung fällig oder leerer Kleiderschrank („Sicherung laden?“), sonst leer (schrank.js) -->
+  <div id="startHinweis"></div>
+
+  <div class="haupt-knoepfe">
+    <label class="haupt upload disabled" id="uploadLabel"><span class="sym" aria-hidden="true">＋</span>Kleidung hinzufügen
       <input type="file" id="files" accept="image/*" multiple>
     </label>
-    <button type="button" class="info-knopf info-ecke" data-info="fotoTipp" aria-label="Tipps zum Fotografieren">i</button>
+    <button type="button" class="haupt outfit" id="outfitKnopf"><span class="sym" aria-hidden="true">✦</span>Outfit finden</button>
+  </div>
+  <div class="mit-info foto-tipp">
+    <div class="info-zeile"><p>📷 Tipps zum Fotografieren</p><button type="button" class="info-knopf" data-info="fotoTipp" aria-label="Tipps zum Fotografieren">i</button></div>
     <div class="info-box" id="fotoTipp" hidden>
       <p>Ein Teil pro Foto, glatt hingelegt oder auf dem Bügel.</p>
       <p>Am besten auf einem Untergrund, der sich vom Teil abhebt (weiße Teile nicht auf hellem Boden).</p>
@@ -93,14 +100,13 @@
     <div class="actions"><button type="button" class="btn" id="alleSpeichern">Alle speichern</button></div>
   </div>
 
-  <div id="outfitKarte"></div>
-  <div id="stilKarte"></div>
-  <div id="zipKarte"></div>
   <h2>Kleiderschrank</h2>
   <div class="kacheln" id="kacheln"></div>
   <div id="ordnerEditor" hidden></div>
-  <button type="button" class="link korb" id="korbLink">🗑 Papierkorb</button>
+  <!-- Mein Stil · Sicherung · Papierkorb als kleine Kacheln mit ihrem Stand (schrank.js) -->
+  <div class="neben" id="nebenKacheln"></div>
   <div id="nummernKarte"></div>
+  <div class="version" id="version">Version 0.16 (Design, neue Startseite) · 04.11.2026</div>
   </div>
 
   <section id="ansicht" hidden></section>
