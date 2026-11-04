@@ -227,7 +227,7 @@ export function field(label, note, body, mehr = null) {
   return el("div", { class: "field" }, el("div", { class: i ? "k info-zeile" : "k" }, label, i?.knopf), i?.box,
     note ? el("div", { class: "note" }, note) : null, body);
 }
-// ⓘ hinter einer Überschrift (Alis Wunsch 03.11.2026: weniger Text auf einmal). Antippen klappt den Hinweis direkt
+// ⓘ hinter einer Überschrift (Wunsch 03.11.2026: weniger Text auf einmal). Antippen klappt den Hinweis direkt
 // darunter auf, nochmal antippen schließt ihn. Aufklappen statt schwebendem Fenster: verdeckt nichts und klappt sicher
 // auf dem iPhone. Hinter ⓘ gehören Erklärungen, Anleitungen und Tipps. Sichtbar bleiben Warnungen, Fehler, Stand-Anzeigen
 // und je ein kurzer Satz, wo Fotos das Handy verlassen (Sicherheitsregel „deutlich hinweisen“).

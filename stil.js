@@ -2,7 +2,7 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=15";
+import { el, fill, toast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=16";
 import { setStil } from "./speicher.js?v=10";
 import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=7";
 
@@ -128,7 +128,7 @@ export function renderStil(box, kopf, stil) {
   fill(box, kopf,
     el("div", { class: "panel" },
       field("Kombinationen für", null, modus.el, "Bestimmt, welche Arten und Styling-Tipps die Vorschläge nutzen.")),
-    // Seit 0.18 (Ali, 04.11.2026): „Mein Stil“ = was allgemein gefällt und steht. Wie schick es sein soll, kommt jedes Mal aus „Outfit finden“.
+    // Seit 0.18 (Wunsch 04.11.2026): „Mein Stil“ = was allgemein gefällt und steht. Wie schick es sein soll, kommt jedes Mal aus „Outfit finden“.
     el("p", { class: "hint" }, "Hier stellst du ein, was dir allgemein gefällt und steht. Wie schick es sein soll, wählst du jedes Mal bei „Outfit finden“, und das geht vor."),
     mitInfo(el("p", { class: "hint" }, el("strong", {}, "Vorlieben, keine Verbote."), " Tippe an, was zu dir passt."),
       "Auch mehreres geht. Nichts angetippt heißt: egal. Passt keine Antwort, nimm „Andere …“ und schreib es selbst.",

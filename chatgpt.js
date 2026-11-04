@@ -1,6 +1,6 @@
-// ChatGPT (Entscheidung 4, unterer Teil). Ablauf seit 0.12 nach Alis Vorstellung (03.11.2026): ChatGPT soll den GANZEN
+// ChatGPT (Entscheidung 4, unterer Teil). Ablauf seit 0.12 (Wunsch 03.11.2026): ChatGPT soll den GANZEN
 // Kleiderschrank sehen, nicht nur Text. Seit 0.12.1 heißt es in der App „ChatGPT oder Gemini“: Ist ChatGPT am Limit,
-// soll sie ausweichen können (Ali, 03.11.2026). Texte darum ohne Eigenheiten einer bestimmten KI.
+// soll sie ausweichen können (Wunsch 03.11.2026). Texte darum ohne Eigenheiten einer bestimmten KI.
 // Das Bild vom Outfit ist eine eigene zweite Nachricht: Mit dem Bild-Wunsch in der Anfrage lieferte Gemini NUR ein Bild, keinen Text.
 // 1. Einmal den Kleiderschrank an einen eigenen ChatGPT-Chat geben: Sammelbilder (JPG, je bis 28 Teile mit großer Nummer) plus
 //    Text mit Nummer und Angaben. Warum Bilder und keine PDF oder ZIP: ChatGPT liest in PDFs (außer „Enterprise“) nur den Text und
@@ -12,12 +12,12 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=15";
+import { el, fill, choice, field, mitInfo, toast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=16";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
-import { stilAktuell, stilZeilen } from "./stil.js?v=16";
-import { kandidaten } from "./regeln.js?v=11";
+import { stilAktuell, stilZeilen } from "./stil.js?v=17";
+import { kandidaten } from "./regeln.js?v=12";
 import { GROUPS, GROUP_OF } from "./ki.js?v=7";
-import { speichernKnopf } from "./fertig.js?v=3";
+import { speichernKnopf } from "./fertig.js?v=4";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -174,7 +174,7 @@ async function sammelbilder(teile, titel) {
 }
 /* ---------- Bild-Paket (Entscheidung 5) ---------- */
 // Die Teile EINES Outfits groß, als ein JPG mit Nummern, zum Anhängen an den Bild-Wunsch. Aus den Originalfotos (1200 px,
-// nicht ausgeschnitten: echte Farben und Details, Alis Idee 03.11.2026). Die Sammelbilder reichen dafür nicht: Die KI
+// nicht ausgeschnitten: echte Farben und Details, Idee vom 03.11.2026). Die Sammelbilder reichen dafür nicht: Die KI
 // verkleinert jedes Bild, bei 28 Teilen bleiben pro Teil nur wenige Pixel (Gemini erfand eine Jacke, die Uhr sah anders aus).
 const PAKET_MAX = 9, PAKET_BREITE = 1600, SCHRIFT = "system-ui, -apple-system, sans-serif";
 async function bildPaket(teile) {
@@ -467,7 +467,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
     toast("Anfrage kopiert – jetzt in deinem Kleiderschrank-Chat einfügen");
     s2.auf(false); s3.auf(true);
   };
-  // Kein Knopf „ChatGPT öffnen“: Aus der Home-Bildschirm-App öffnete er nur die Web-Seite, nicht die ChatGPT-App (Ali, 03.11.2026)
+  // Kein Knopf „ChatGPT öffnen“: Aus der Home-Bildschirm-App öffnete er nur die Web-Seite, nicht die ChatGPT-App (iPhone-Test 03.11.2026)
 
   // Schritt 3: Antwort einfügen. Die Outfits stehen darunter außerhalb des Schritts, damit sie zugeklappt sichtbar bleiben.
   const feld = el("textarea", { class: "notiz", maxLength: MAX_ANTWORT, rows: 4, value: m.antwort, placeholder: "Antwort aus dem Chat hier einfügen", "aria-label": "Antwort aus dem Chat" });

@@ -2,13 +2,13 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=15";
+import { $, el, fill, toast, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=16";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
-import { renderStil, stilKurz } from "./stil.js?v=16";
+import { renderStil, stilKurz } from "./stil.js?v=17";
 import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=17";
 import { renderPasst, miniKachel } from "./passt.js?v=15";
 import { renderOutfit } from "./outfit.js?v=12";
-import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=3";
+import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=4";
 import { bildPaketBereich } from "./chatgpt.js?v=9";
 import { GROUPS } from "./ki.js?v=7";
 

@@ -7,8 +7,8 @@
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=10";
-import { el, fill, toast, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=15";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=16";
+import { el, fill, toast, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=16";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=17";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=9";
 
