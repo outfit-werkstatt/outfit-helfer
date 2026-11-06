@@ -10,7 +10,7 @@ import { renderPasst, miniKachel } from "./passt.js?v=18";
 import { renderOutfit } from "./outfit.js?v=15";
 import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=6";
 import { bildPaketBereich } from "./chatgpt.js?v=12";
-import { renderVinted } from "./vinted.js?v=1";
+import { renderVinted } from "./vinted.js?v=2";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)

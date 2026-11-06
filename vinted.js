@@ -40,6 +40,11 @@ const AERMEL = { "ärmellos": "ärmellos", kurz: "kurze Ärmel", "¾": "¾-Ärme
 const BUNT = "Bunt / mehrfarbig";
 
 const artText = a => String(a || "").replace(/\s*\/\s*/g, "/");
+// „Unbekannt“, „keine Marke“, „No Name“ … sind keine Marke (iPhone-Test 06.11.2026: „Unbekannt Poloshirt …“, „von Unbekannt“).
+// Gespeichert bleibt, was sie eingetippt hat; nur Titel und Beschreibung lassen es weg, und es gilt nicht als „fehlt noch“.
+const KEINE_MARKE = /^(unbekannt|keine marke|ohne marke|keine angabe|no ?name|unknown|sonstige|-+|–|\?+)$/i;
+const ohneMarke = m => !m || KEINE_MARKE.test(String(m).trim());
+const markeVon = t => ohneMarke(t.marke) ? null : t.marke;
 const und = l => l.length < 2 ? l.join("") : l.slice(0, -1).join(", ") + " und " + l[l.length - 1];
 const wort = (map, v) => v == null ? null : v in map ? map[v] : v;
 
@@ -50,16 +55,17 @@ export function titelText(t) {
   let mat = t.material ? wort(MAT_KURZ, t.material) : "";
   if (t.art === "Jeans" && mat === "Denim") mat = ""; // „Jeans Denim“ sagt dasselbe zweimal
   const gr = t.groesse ? `Gr. ${t.groesse}` : "";
-  const bau = (fb, m) => [t.marke, artText(t.art), fb.join("/"), m, gr].filter(Boolean).join(" ");
+  const marke = markeVon(t);
+  const bau = (fb, m) => [marke, artText(t.art), fb.join("/"), m, gr].filter(Boolean).join(" ");
   for (const [fb, m] of [[farben, mat], [farben, ""], [farben.slice(0, 1), ""], [[], ""]]) { const s = bau(fb, m); if (s.length <= TITEL_MAX) return s; }
-  const vorne = [t.marke, artText(t.art)].filter(Boolean).join(" ").slice(0, TITEL_MAX - (gr ? gr.length + 1 : 0)).trim();
+  const vorne = [marke, artText(t.art)].filter(Boolean).join(" ").slice(0, TITEL_MAX - (gr ? gr.length + 1 : 0)).trim();
   return [vorne, gr].filter(Boolean).join(" ");
 }
 
 // Beschreibung: Aufhänger, ein, zwei Sätze, Details, Service. v = Formulierung 0–2
 export function beschreibungText(t, emojis = true, v = 0) {
   const em = s => emojis ? " " + s : "."; // ohne Emojis endet der erste Satz mit einem Punkt
-  const g = GENUS[t.art], art = artText(t.art), von = t.marke ? ` von ${t.marke}` : "";
+  const marke = markeVon(t), g = GENUS[t.art], art = artText(t.art), von = marke ? ` von ${marke}` : "";
   const farben = t.farben || [], fa = !farben.length ? "" : farben.includes(BUNT) ? " in bunten Farben" : " in " + und(farben);
   const intro = g
     ? [`${FORM[g][0]} ${art}${von}${fa}${em("✨")}`, `Ich verkaufe ${FORM[g][1]} ${art}${von}${fa}${em("💕")}`,
@@ -71,7 +77,7 @@ export function beschreibungText(t, emojis = true, v = 0) {
   const saetze = [ZUSTAND_SATZ[t.zustand], saisonSatz].filter(Boolean).join(" ");
   const passform = [wort(PASSFORM, t.weite), wort(PASSFORM, t.laenge), wort(AERMEL, t.aermel), wort(PASSFORM, t.schnitt), wort(PASSFORM, t.bund)].filter(Boolean);
   const details = [
-    ["🏷", "Marke", t.marke], ["📏", "Größe", t.groesse], ["🎨", "Farbe", farben.join(", ")], ["🧵", "Material", t.material],
+    ["🏷", "Marke", marke], ["📏", "Größe", t.groesse], ["🎨", "Farbe", farben.join(", ")], ["🧵", "Material", t.material],
     ["🔸", "Muster", t.muster && t.muster !== "Einfarbig" ? t.muster : null], ["✂️", "Passform", passform.join(", ")],
     ["💫", "Stil", (t.stil || []).join(", ")], ["✨", "Zustand", t.zustand]
   ].filter(([, , w]) => w).map(([e, k, w]) => `${emojis ? e : "•"} ${k}: ${w}`);
