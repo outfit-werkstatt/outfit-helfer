@@ -15,7 +15,7 @@
 import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=18";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
 import { stilAktuell, stilZeilen } from "./stil.js?v=19";
-import { kandidaten } from "./regeln.js?v=14";
+import { kandidaten } from "./regeln.js?v=15";
 import { GROUPS, GROUP_OF } from "./ki.js?v=7";
 import { speichernKnopf } from "./fertig.js?v=6";
 
@@ -87,7 +87,8 @@ function aenderungText(neu, weg) {
 const temperaturText = t => t ? t.replace("°", " °C") : null;
 function anfrageText(frage, freitext, stil) {
   const s = stilAktuell(stil), zeilen = stilMit ? stilZeilen(s) : [], q = frage.situation || {};
-  const angaben = frage.teil ? [] : [["Anlass", q.anlass], ["Wie schick", q.schickWahl], ["Temperatur", temperaturText(q.temperatur)], ["Wetter", q.wetter?.join(", ")]].filter(([, v]) => v);
+  // Seit 0.23 auch bei „Was passt dazu?“ (dort gibt es jetzt dieselben Knöpfe für die Situation)
+  const angaben = [["Anlass", q.anlass], ["Wie schick", q.schickWahl], ["Temperatur", temperaturText(q.temperatur)], ["Wetter", q.wetter?.join(", ")]].filter(([, v]) => v);
   const teil = frage.teil && `Nr. ${nrText(frage.teil.nr)} – ${beschreibung(frage.teil)}`;
   return [
     frage.teil ? `Hallo! Ich möchte ${teil} tragen und suche passende Kombinationen aus meinem Kleiderschrank (die Bilder und die Liste weiter oben in diesem Chat).`
@@ -96,7 +97,7 @@ function anfrageText(frage, freitext, stil) {
     ...angaben.map(([k, v]) => `- ${k}: ${v}`),
     freitext ? `- Dazu: ${ohneUmbruch(freitext)}` : null,
     !frage.teil && !angaben.length && !freitext ? "- Ich habe nichts Besonderes angegeben: Schlag mir etwas Schönes für den Alltag vor." : null,
-    frage.teil && !freitext ? "- Sonst nichts Besonderes, gern alltagstauglich." : null,
+    frage.teil && !freitext && !angaben.length ? "- Sonst nichts Besonderes, gern alltagstauglich." : null,
     MODE_TEXT[s.mode] ? `- Mode: ${MODE_TEXT[s.mode]}` : null,
     // Der Moment geht vor (seit 0.18): Mit Anlass oder „Wie schick“ sagt die Anfrage, dass „Mein Stil“ nur allgemeine Vorlieben sind
     zeilen.length ? (q.anlass || q.schickWahl

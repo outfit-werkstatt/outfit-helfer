@@ -11,7 +11,7 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE } from "./ui.js?v=18";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=19";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=12";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=13";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos

@@ -4,8 +4,8 @@
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=18";
 import { nrText } from "./speicher.js?v=10";
 import { stilAktuell } from "./stil.js?v=19";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=14";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=12";
+import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=15";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=13";
 import { speichernKnopf } from "./fertig.js?v=6";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
@@ -13,6 +13,9 @@ import { speichernKnopf } from "./fertig.js?v=6";
 const OHNE_ORDNER = "Ohne Ordner";
 // „Meinen Stil beachten“ ist seit 0.22 standardmäßig aus (Wunsch 06.11.2026), wie „Meinen Stil mitschicken“
 let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = false, appOffen = false, einstellOffen = false;
+// Situation für „Was passt dazu?“ (seit 0.23, Wunsch 06.11.2026): dieselben Knöpfe wie bei „Outfit finden“, aber eigene Auswahl
+// (pro Sitzung gemerkt, unabhängig von „Outfit finden“). Nichts angetippt = wie bisher ohne Situation.
+const sit = { anlass: null, schickWahl: null, temperatur: null, wetter: [] };
 
 // Seit 0.17 (iPhone-Test 04.11.2026): Die Vorschläge der App stehen eingeklappt UNTER ChatGPT/Gemini. Die App kennt nur die
 // Angaben, nicht die Fotos (z. B. fehlt fast immer das Material), darum passten sie oft nicht zum Anlass; der Chat sieht die Fotos.
@@ -80,13 +83,28 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
   const anker = items.find(t => t.nr === nr);
   if (!anker) return false;
   const { ordnerWahl, stilWahl, pool, mitStil } = auswahlFelder(items, folders, stil, neuZeichnen);
+  // Mit Situation rechnet die App wie bei „Outfit finden“ (Anlass, Temperatur, Wetter), sonst wie bisher.
   // Kaufideen rechnen immer mit dem ganzen Schrank: Was nur gerade abgewählt ist, fehlt ja nicht wirklich.
-  const r = kombinationen(anker, pool, mitStil), ideen = kaufideen(anker, kandidaten(items), mitStil);
+  const mitSituation = !!(sit.anlass || sit.schickWahl || sit.temperatur || sit.wetter.length);
+  const r = mitSituation ? kombinationenSituation(anker, pool, sit, mitStil) : kombinationen(anker, pool, mitStil), ideen = kaufideen(anker, kandidaten(items), mitStil);
+
+  // Situation: gleicher Aufbau wie bei „Outfit finden“ (outfit.js). Jedes Tippen zeichnet die Ansicht neu.
+  const einer = (werte, wert, setzen) => choice({ options: werte, selected: wert ? [wert] : [], onChange: sel => { setzen(sel[0] || null); neuZeichnen(); } }).el;
+  const namen = Object.keys(ANLAESSE);
+  const anlassWahl = choice({ field: "Anlass", options: namen, selected: sit.anlass ? [sit.anlass] : [], beispiel: "z. B. Konzert", aehnlich: { liste: namen, pflicht: true },
+    onChange: sel => { sit.anlass = sel[0] || null; neuZeichnen(); } });
+  box.dispose = () => anlassWahl.dispose();
+  const wetterWahl = choice({ options: WETTER, selected: sit.wetter, max: 0, onChange: sel => { sit.wetter = sel; neuZeichnen(); } });
+  const ergebnis = el("div", {});
+  const zuDenVorschlaegen = el("button", { type: "button", class: "link" }, "Zu den Vorschlägen ↓");
+  zuDenVorschlaegen.onclick = () => ergebnis.scrollIntoView({ behavior: "smooth" });
+  const fuer = [sit.anlass, sit.schickWahl, sit.temperatur, ...sit.wetter].filter(Boolean).join(" · ");
 
   // Erst ChatGPT/Gemini (sieht die Fotos), darunter eingeklappt die Vorschläge der App
-  fill(box, kopf,
-    anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
-    chatgptPanel(items, stil, { teil: anker }, t => miniKachel(t, bild, oeffnen)),
+  fill(ergebnis,
+    el("h2", {}, "Vorschläge"),
+    fuer ? el("p", { class: "hint" }, `Für: ${fuer}`) : el("p", { class: "hint" }, "Tippe oben an, wofür es ist und wie das Wetter wird, dann passen die Vorschläge besser."),
+    chatgptPanel(items, stil, { teil: anker, situation: { ...sit } }, t => miniKachel(t, bild, oeffnen)),
     appKlappe({ anzahl: r.kombis.length + (r.anders ? 1 : 0), art: ["Kombination", "Kombinationen"], offen: appOffen, umschalten: x => { appOffen = x; },
       einstellungen: [ordnerWahl, stilWahl], einstellOffen, einstellUmschalten: x => { einstellOffen = x; } },
       !r.kombis.length && pool.length < kandidaten(items).length ? el("p", { class: "hint" }, "Mit dieser Ordner-Auswahl findet die App nichts Passendes. Hake weitere Ordner an.")
@@ -95,5 +113,15 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
       r.anders ? kombiKarte(r.anders, "✨ Mal was anderes", bild, oeffnen, `Mit Nr. ${nrText(anker.nr)}, mal anders`) : null,
       ideen.length ? el("div", { class: "panel" }, el("strong", {}, "🛍 Könnte noch fehlen"),
         el("ul", { class: "tipps" }, ...ideen.map(x => el("li", {}, el("strong", {}, x.was), ": ", x.warum)))) : null));
+
+  fill(box, kopf,
+    anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
+    el("div", { class: "panel" },
+      field("Wofür?", null, anlassWahl.el),
+      field("Wie schick?", "freiwillig", einer(Object.keys(SCHICK_WAHL), sit.schickWahl, x => { sit.schickWahl = x; }), "Ohne Angabe richtet es sich nach dem Anlass."),
+      field("Temperatur", null, einer(Object.keys(TEMPERATUREN), sit.temperatur, x => { sit.temperatur = x; })),
+      field("Wetter", "Mehrere möglich.", wetterWahl.el),
+      el("div", { class: "actions" }, zuDenVorschlaegen)),
+    ergebnis);
   return true;
 }

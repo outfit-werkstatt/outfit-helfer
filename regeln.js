@@ -558,6 +558,69 @@ export function outfitsFuer(wahl, alle, meinStil = null) {
     hinweis: notloesung ? "Für diese Situation hat dein Kleiderschrank nichts wirklich Passendes. Das hier kommt dem am nächsten." : ergebnis[0].stimmig < 1 ? "Die App findet für diese Situation noch wenig wirklich Stimmiges." : null };
 }
 
+/* ---------- „Was passt dazu?“ mit Situation (seit 0.23, Wunsch 06.11.2026) ----------
+   Wie outfitsFuer, aber das ausgewählte Teil ist fest dabei. Ohne Situation rechnet passt.js weiter mit kombinationen
+   (unverändert). Anlass und Wetter dürfen die anderen Teile für diese Situation weglassen; ergibt das nichts, rechnet die
+   App mit allem und sagt es ehrlich. Passt das Teil selbst nicht zur Situation (z. B. Shorts bei Kälte), steht es im Hinweis.
+   wahl = { anlass, schickWahl, temperatur, wetter } wie bei „Outfit finden“. */
+export function kombinationenSituation(anker, alle, wahl, meinStil = null) {
+  const platz = platzVon(anker);
+  if (platz === "bade") return { kombis: [], anders: null, hinweis: "Für Bademode macht die App keine Outfit-Vorschläge." };
+  const sit = situation(wahl);
+  // Der Moment geht vor (wie bei „Outfit finden“): Mit Anlass oder „Wie schick?“ zählt die Stilrichtung aus „Mein Stil“ nicht
+  const stil = sit.ziel != null && meinStil?.richtung?.length ? { ...meinStil, richtung: [] } : meinStil;
+  const andere = alle.filter(t => t.nr !== anker.nr && platzVon(t) !== "bade");
+  const platzListe = liste => { const m = {}; for (const t of liste) (m[platzVon(t)] ||= []).push(t); return m; };
+  // Vorlagen wie bei kombinationen; bei Kälte gehört eine Jacke dazu (fehlt sie, ist es eine Lücke), „Zuhause“ ohne Schuhe
+  const jacke = !!sit.temp?.jacke && platz !== "lage", ohneSchuhe = !!sit.anlass?.ohneSchuhe;
+  const vorlagen = (VORLAGEN[platz] || GANZES_OUTFIT).map(v => [...v.filter(p => !(ohneSchuhe && p === "schuh")), ...(jacke && !v.includes("lage") ? ["lage"] : [])]);
+  const rechne = nachPlatz => {
+    const roh = [];
+    for (const vorlage of vorlagen) {
+      if (vorlage.some(p => !["schuh", "lage"].includes(p) && !nachPlatz[p]?.length)) continue;
+      const plaetze = vorlage.filter(p => nachPlatz[p]?.length), luecken = vorlage.filter(p => !nachPlatz[p]?.length);
+      const einzeln = t => paar(t, anker) + situationsPunkte([t], sit) + stilPunkte(t, stil) * 0.2;
+      const listen = plaetze.map(p => [...nachPlatz[p]].sort((a, b) => einzeln(b) - einzeln(a)).slice(0, plaetze.length > 3 ? 8 : JE_PLATZ));
+      const weiter = (i, weg) => {
+        if (i === listen.length) { const teile = [anker, ...weg]; roh.push({ teile, luecken, stimmig: stimmig(teile), stil: stilSchnitt(teile, stil), sit: situationsPunkte(teile, sit) }); return; }
+        for (const t of listen[i]) weiter(i + 1, [...weg, t]);
+      };
+      weiter(0, []);
+    }
+    return roh;
+  };
+  const genauNachPlatz = platzListe(andere.filter(t => passtZu(t, sit)));
+  if (jacke && genauNachPlatz.lage?.some(aussen)) genauNachPlatz.lage = genauNachPlatz.lage.filter(aussen);
+  let nachPlatz = genauNachPlatz, roh = rechne(genauNachPlatz), notloesung = false;
+  if (!roh.length) { nachPlatz = platzListe(andere); roh = rechne(nachPlatz); notloesung = roh.length > 0; }
+  if (!roh.length) return { kombis: [], anders: null, hinweis: "Dazu fehlen im Kleiderschrank noch passende Teile." };
+  const heil = roh.filter(k => !bricht(k.teile));
+  if (heil.length) roh = heil;
+  if (sit.ziel >= 3.5) {
+    const schickGenug = roh.filter(k => { const kl = k.teile.filter(t => KLEIDUNG.has(platzVon(t))); return !kl.length || kl.reduce((s, t) => s + schick(t), 0) / kl.length >= sit.ziel - 0.75; });
+    if (schickGenug.length) roh = schickGenug;
+  }
+  const gesamt = k => k.stimmig + k.stil * 0.3 + k.sit + farbtupfer(k.teile, stil);
+  // Die Jacke darf sich wie bei „Outfit finden“ wiederholen
+  const sortiert = [...roh].sort((a, b) => gesamt(b) - gesamt(a)), frei = k => k.teile.slice(1).filter(t => platzVon(t) !== "lage");
+  const auswahl = verschiedene(sortiert, frei, gesamt), anders = malWasAnderes(roh, auswahl, frei);
+  const fuer = [sit.anlassName, sit.temperatur, ...sit.wetter].filter(Boolean).join(", ");
+  const vorhanden = platzListe(andere);
+  const tippStil = sit.anlass?.ohneSchmuck || sit.anlass?.ohneExtras ? { ...stil, schmuck: ["wenig Schmuck"] } : stil;
+  const benutzt = new Map();
+  const fertig = k => {
+    const { extras, ideen } = zusaetze(k.teile, nachPlatz, stil, sit, benutzt);
+    return { teile: k.teile, extras, ideen, stimmig: k.stimmig, tipps: [...wetterTipps(k.teile, extras, sit, stil), ...tipps(k.teile, extras, tippStil, ideen)].slice(0, 4),
+      luecken: k.luecken.map(p => (vorhanden[p]?.length ? `passende ${PLATZ_NAME[p]}` : PLATZ_NAME[p])),
+      warum: warum(k.teile) + (fuer && !notloesung ? ` Passt zu: ${fuer}.` : "") };
+  };
+  const ergebnis = auswahl.map(fertig);
+  const hinweis = [!passtZu(anker, sit) ? `${nr(anker)} passt eigentlich nicht gut zu dieser Situation (z. B. Wetter, Temperatur oder wie schick). Die Vorschläge machen das Beste daraus.` : null,
+    notloesung ? "Für diese Situation hat dein Kleiderschrank sonst nichts wirklich Passendes. Das hier kommt dem am nächsten."
+      : ergebnis[0].stimmig < 1 ? "Für dieses Teil findet die App noch wenig wirklich Stimmiges." : null].filter(Boolean).join(" ");
+  return { kombis: ergebnis, anders: anders && fertig(anders), hinweis: hinweis || null };
+}
+
 /* ---------- Kaufideen: schlicht nach Lücken ---------- */
 export function kaufideen(anker, alle, stil = null) {
   const mode = stil?.mode || "beides", herren = mode === "Herren", f = hauptFarbe(anker), p = platzVon(anker), sch = schick(anker);
