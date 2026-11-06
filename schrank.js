@@ -5,12 +5,12 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken } from "./ui.js?v=18";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
 import { renderStil, stilKurz } from "./stil.js?v=19";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=21";
-import { renderPasst, miniKachel } from "./passt.js?v=19";
-import { renderOutfit } from "./outfit.js?v=16";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=22";
+import { renderPasst, miniKachel } from "./passt.js?v=20";
+import { renderOutfit } from "./outfit.js?v=17";
 import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=6";
-import { bildPaketBereich } from "./chatgpt.js?v=13";
-import { renderVinted } from "./vinted.js?v=3";
+import { bildPaketBereich } from "./chatgpt.js?v=14";
+import { renderVinted } from "./vinted.js?v=4";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)

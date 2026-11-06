@@ -7,7 +7,7 @@
 // nichts dazuerfunden. Die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
 import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf } from "./ui.js?v=18";
 import { updateItem, getPhoto, nrText } from "./speicher.js?v=10";
-import { kopieren, vonHand, bilderWeitergeben, mobil } from "./chatgpt.js?v=13";
+import { kopieren, vonHand, bilderWeitergeben, mobil } from "./chatgpt.js?v=14";
 
 // Länge des Titels: laut einem Ratgeber erlaubt Vinted etwa 50 Zeichen (nicht offiziell bestätigt) → lieber kürzer
 const TITEL_MAX = 50;

@@ -125,13 +125,16 @@ const bildText = (wovon, teile = null) => [
   ...(teile || []).map(t => "• " + teilZeile(t, false)),
   teile ? "- Angehängt ist das Bild-Paket: Darauf siehst du genau diese Teile groß, mit Nummer. Übernimm sie so genau wie möglich (Farbe, Schnitt, Länge, Muster, Material und Details wie Knöpfe, Aufdruck, Schnallen oder Zifferblatt). Material und Form nicht verändern: Leder bleibt Leder, eine eckige Tasche bleibt eckig, eine schmale Hose bleibt schmal und eine weite weit."
     : "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Länge, Muster, Material).",
+  // Gemini machte am 06.11.2026 aus einem rötlich-braunen Poloshirt („Poloshirt, braun“) ein schokobraunes, fast wie die Strickjacke darüber.
+  `- Die Farbwörter sind nur grob. Es zählt der genaue Farbton auf ${teile ? "dem Bild-Paket" : "meinen Sammelbildern"}, z. B. bleibt ein rötliches Braun rötlich. Ähnliche Farben nicht aneinander angleichen: Die Teile sollen so verschieden aussehen wie auf den Fotos.`,
   traegt === TRAEGT.ich
     ? `- Angehängt ist außerdem ein Foto von mir${teile ? " (das andere Bild)" : ""}. Zeig genau diese Person in dem Outfit: gleiches Gesicht, gleiche Haare, gleiche Figur und Hautfarbe. Nichts an der Person verschönern oder verändern.`
     : "- Zeig das Outfit an einem Model.",
   "- Ganzer Körper von Kopf bis Fuß, natürliche Haltung, ruhiger Hintergrund, Tageslicht.",
   "- Zeig nur Teile aus meinem Kleiderschrank. Füg nichts dazu, was nicht im Outfit steht, auch keinen Schmuck, keine Tasche und keine Kaufidee.",
   "- Fehlt etwas (z. B. eine Jacke), lass es im Bild weg und schreib es nur als Text darunter: „Mit … würde es noch besser aussehen“.",
-  "- Schreib unter das Bild, welche Nummern darauf zu sehen sind."
+  // Gemini malte die Nummern am 06.11.2026 ins Bild, dabei eine doppelt.
+  "- Schreib nur in deiner Antwort unter das Bild, welche Nummern darauf zu sehen sind. Ins Bild selbst kommen keine Nummern und kein Text."
 ].join("\n");
 // Knöpfe „Wer soll es tragen?“ (in Schritt 4 und bei den Vorschlägen der App)
 const traegtWahl = () => field("Wer soll das Outfit tragen?", null,
