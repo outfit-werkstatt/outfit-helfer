@@ -8,10 +8,10 @@
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
 import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=10";
-import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo } from "./ui.js?v=17";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=18";
+import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE } from "./ui.js?v=18";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=19";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=11";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=12";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -160,6 +160,8 @@ function pruefen(j) {
       weite: text(t.weite, 30), laenge: text(t.laenge, 30), bund: text(t.bund, 30), stil: liste(t.stil, 30, 5),
       saison: liste(t.saison, 30, 4).filter(s => SAISONS.includes(s)),
       notiz: typeof t.notiz === "string" ? cleanText(t.notiz).slice(0, 200) || null : null, nichtAnziehen: t.nichtAnziehen === true,
+      // Für Vinted (seit 0.22): Marke, Größe, Zustand (nur die Stufen, die es bei Vinted gibt)
+      marke: text(t.marke, 40), groesse: text(t.groesse, 30), zustand: ZUSTAENDE.includes(t.zustand) ? t.zustand : null,
       ordner: liste(t.ordner, 50, 50).filter(id => ids.has(id)), erstellt: zeit(t.erstellt) || new Date().toISOString(),
       ki: Object.fromEntries(["art", "farbe", "muster", "material", "aermel", "schnitt"].map(f => [f, text(k[f], 30)])),
       _foto: typeof t.foto === "string" ? t.foto : null, _vorschau: typeof t.vorschau === "string" ? t.vorschau : null };

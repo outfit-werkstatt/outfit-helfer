@@ -124,7 +124,8 @@ const removeCustom = (f, wert) => nacheinander(async () => {
   for (const w of widgets) if (w.field === f) w.removeOption(wert);
 });
 const EXAMPLE = { Art: "z. B. Kimono", Farbe: "z. B. Petrol", Muster: "z. B. Paisley", Material: "z. B. Viskose",
-  Weite: "z. B. tailliert", "Länge oben": "z. B. hüftlang", "Länge Rock/Kleid": "z. B. bodenlang", Bund: "z. B. mit Gummizug", Stil: "z. B. Y2K" };
+  Weite: "z. B. tailliert", "Länge oben": "z. B. hüftlang", "Länge Rock/Kleid": "z. B. bodenlang", Bund: "z. B. mit Gummizug", Stil: "z. B. Y2K",
+  "Größe": "z. B. W28/L32", "Schuhgröße": "z. B. 38,5" };
 
 /* ---------- Auswahl-Knöpfe ----------
    options: sichtbare Knöpfe (in dieser Reihenfolge), more: weitere Werte im Auswahlfeld „Andere …“ ([Gruppe, [Werte]] oder [Werte]),
@@ -270,7 +271,8 @@ export function infoKnoepfeVerbinden(wurzel = document) {
 /* ---------- Angaben eines Teils als Auswahl-Felder ----------
    Beim Hinzufügen mit den Vorschlägen der KI, beim Ändern mit den gespeicherten Werten.
    opt: { art, farbe, muster, material: { options, selected, note? }, aermel, schnitt, weite, laenge, bund, stil, saison: { selected },
-          notiz, nichtAnziehen, saisonAuto (Saison folgt Art/Material, bis man sie selbst antippt), mehrOffen } */
+          notiz, nichtAnziehen, saisonAuto (Saison folgt Art/Material, bis man sie selbst antippt), mehrOffen,
+          für Vinted: marke (Text), groesseKleidung, groesseSchuhe, zustand: { selected } } */
 const ALL_ARTS = GROUPS.map(([g, arts]) => [g, arts.map(([n]) => n)]);
 // Gleiche Wörter wie in „Mein Stil“ (stil.js), damit die Vorschläge später Vorlieben und Teile direkt vergleichen können
 export const STILRICHTUNGEN = ["lässig", "schick-lässig", "sportlich", "klassisch", "elegant", "Business", "minimalistisch", "romantisch", "Boho", "Streetwear", "Vintage", "rockig", "Preppy"];
@@ -287,6 +289,29 @@ export const MERKMALE = {
   stil: { label: "Stil", feld: "Stil", werte: STILRICHTUNGEN, passt: () => true, max: 2 },
   saison: { label: "Saison", feld: null, werte: ["Sommer", "Übergang", "Winter", "ganzjährig"], passt: () => true, max: 0, allein: ["ganzjährig"] }
 };
+// Für Vinted (seit 0.22, Wunsch 06.11.2026): Größe und Zustand als Knöpfe, die Marke als Textfeld mit Vorschlägen (siehe unten).
+// Freiwillig, die KI wählt nichts vor. Größe: Kleidung und Schuhe haben eigene Knöpfe, gespeichert wird beides als „groesse“.
+// Die Zustände heißen wie bei Vinted, damit sie dort genauso ausgewählt werden können.
+const KLEIDER_GRUPPEN = ["Oberteile", "Jacken & Mäntel", "Unterteile", "Kleider & Einteiler", "Bademode"];
+export const ZUSTAENDE = ["Neu mit Etikett", "Neu ohne Etikett", "Sehr gut", "Gut", "Zufriedenstellend"];
+export const VINTED_MERKMALE = {
+  groesseKleidung: { label: "Größe", feld: "Größe", werte: ["XS", "S", "M", "L", "XL"],
+    more: ["XXS", "XXL", "3XL", "32", "34", "36", "38", "40", "42", "44", "46", "48", "Einheitsgröße"], passt: (a, g) => KLEIDER_GRUPPEN.includes(g) },
+  groesseSchuhe: { label: "Größe", feld: "Schuhgröße", werte: ["37", "38", "39", "40", "41"], more: ["35", "36", "42", "43", "44", "45", "46"], passt: (a, g) => g === "Schuhe" },
+  zustand: { label: "Zustand", feld: null, werte: ZUSTAENDE, passt: () => true }
+};
+// Marken, die schon an Teilen stehen: Vorschläge beim Eintippen (schrank.js meldet sie bei jedem Zeichnen, hier nur gemerkt)
+const bekannteMarken = new Set();
+export const merkeMarken = teile => { for (const t of teile) if (t?.marke) bekannteMarken.add(t.marke); };
+let markenListeNr = 0;
+// Textfeld „Marke“ mit Vorschlägen aus den schon eingetragenen Marken (datalist). wert = vorbelegter Text
+export function markenFeld(wert = "") {
+  const id = "marken-" + (++markenListeNr);
+  const liste = el("datalist", { id }, ...[...bekannteMarken].sort((a, b) => a.localeCompare(b, "de")).map(m => el("option", { value: m })));
+  const input = el("input", { type: "text", class: "feld-eingabe", maxLength: 40, value: wert || "", placeholder: "z. B. Zara, H&M, Levi's", autocomplete: "off", "aria-label": "Marke" });
+  input.setAttribute("list", id);
+  return { el: el("div", {}, input, liste), input, get: () => clean(input.value) || null };
+}
 // Wörter von vor 0.6.3 auf die gemeinsamen umstellen (läuft beim Start über alle Teile, ändert nur, was nötig ist)
 const ALTE_WOERTER = { weite: { eng: "figurnah" }, bund: { normal: "normale Höhe", tief: "tief sitzend" } };
 export function teilAngleichen(t) {
@@ -327,18 +352,27 @@ export function angabenFelder(opt, onChange = () => {}) {
   }));
   const notiz = el("textarea", { class: "notiz", maxLength: 200, rows: 2, placeholder: "z. B. sitzt eng, nur mit Gürtel, fällt klein aus", value: opt.notiz || "", "aria-label": "Notiz" });
   const nicht = choice({ options: [NICHT_ANZIEHEN], selected: opt.nichtAnziehen ? [NICHT_ANZIEHEN] : [] });
-  const mehr = el("details", { class: "mehr", open: !!opt.mehrOffen }, el("summary", {}, "Mehr Angaben (freiwillig): Passform, Länge, Stil, Saison, Notiz"),
+  // Für Vinted: Marke, Größe (je nach Art Kleidung oder Schuhe), Zustand
+  const marke = markenFeld(opt.marke);
+  const vinted = Object.fromEntries(Object.entries(VINTED_MERKMALE).map(([k, m]) => {
+    const w = choice({ field: m.feld, options: m.werte, more: m.more || [], selected: opt[k]?.selected || [] });
+    return [k, { w, f: field(m.label, null, w.el), m }];
+  }));
+  const mehr = el("details", { class: "mehr", open: !!opt.mehrOffen }, el("summary", {}, "Mehr Angaben (freiwillig): Passform, Länge, Stil, Saison, Notiz, für Vinted"),
     ...Object.values(extra).map(x => x.f), field("Notiz", null, notiz),
-    field("Vorschläge", null, nicht.el, "Das Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge."));
+    field("Vorschläge", null, nicht.el, "Das Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge."),
+    el("div", { class: "abschnitt" }, "🏷 Für Vinted (freiwillig)"),
+    field("Marke", null, marke.el), ...Object.values(vinted).map(x => x.f));
   const visible = () => {
     const a = art.get()[0], g = groupOf(a);
     fArmel.hidden = !HAS_SLEEVES.has(g); fSchnitt.hidden = !HAS_LEGS.has(a); fMuster.hidden = g === "Schmuck";
-    for (const x of Object.values(extra)) x.f.hidden = !a || !x.m.passt(a, g);
+    for (const x of [...Object.values(extra), ...Object.values(vinted)]) x.f.hidden = !a || !x.m.passt(a, g);
     if (saisonAuto && a) extra.saison.w.set(saisonVorschlag(a, g, material.get()[0]));
   };
   const update = () => { visible(); onChange(); };
   visible();
   const wert = k => extra[k].f.hidden ? null : extra[k].w.get()[0] || null;
+  const vWert = k => vinted[k].f.hidden ? null : vinted[k].w.get()[0] || null;
   return {
     elements: [field("Art", null, art.el), field("Farbe", "bis zu 2", farbe.el), fMuster,
       field("Material", opt.material.note || null, material.el), fArmel, fSchnitt, mehr],
@@ -347,9 +381,10 @@ export function angabenFelder(opt, onChange = () => {}) {
       return { art: a, gruppe: groupOf(a), farben: farbe.get(), muster: fMuster.hidden ? null : muster.get()[0] || null, material: material.get()[0] || null,
         aermel: fArmel.hidden ? null : aermel.get()[0] || null, schnitt: fSchnitt.hidden ? null : schnitt.get()[0] || null,
         weite: wert("weite"), laenge: wert("laengeOben") ?? wert("laengeUnten"), bund: wert("bund"),
-        stil: extra.stil.w.get(), saison: extra.saison.w.get(), notiz: cleanText(notiz.value) || null, nichtAnziehen: nicht.get().length > 0 };
+        stil: extra.stil.w.get(), saison: extra.saison.w.get(), notiz: cleanText(notiz.value) || null, nichtAnziehen: nicht.get().length > 0,
+        marke: marke.get(), groesse: vWert("groesseKleidung") ?? vWert("groesseSchuhe"), zustand: vWert("zustand") };
     },
-    dispose: () => [art, farbe, muster, material, ...Object.values(extra).map(x => x.w)].forEach(w => w.dispose())
+    dispose: () => [art, farbe, muster, material, ...Object.values(extra).map(x => x.w), ...Object.values(vinted).map(x => x.w)].forEach(w => w.dispose())
   };
 }
 // Für „Angaben ändern“: die gespeicherten Werte vorwählen, ähnliche Arten derselben Gruppe als Knöpfe anbieten
@@ -369,6 +404,10 @@ export function angabenVon(t) {
     stil: { selected: t.stil || [] },
     // Teile von vor Version 0.5 haben noch keine Saison → Vorschlag nach Regel
     saison: { selected: t.saison || [] }, saisonAuto: !t.saison?.length,
-    notiz: t.notiz || "", nichtAnziehen: !!t.nichtAnziehen, mehrOffen: true
+    notiz: t.notiz || "", nichtAnziehen: !!t.nichtAnziehen, mehrOffen: true,
+    // Für Vinted; die Größe gehört zu Schuh- oder Kleidergrößen, je nach Art
+    marke: t.marke || "", zustand: { selected: t.zustand ? [t.zustand] : [] },
+    groesseSchuhe: { selected: t.groesse && VINTED_MERKMALE.groesseSchuhe.passt(t.art, t.gruppe) ? [t.groesse] : [] },
+    groesseKleidung: { selected: t.groesse && !VINTED_MERKMALE.groesseSchuhe.passt(t.art, t.gruppe) ? [t.groesse] : [] }
   };
 }

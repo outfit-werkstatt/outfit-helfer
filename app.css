@@ -271,3 +271,11 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .kaufidee p{margin:2px 0;overflow-wrap:anywhere;white-space:pre-line}
 .antwort-text{margin-top:8px}
 .antwort-text .chatgpt-text{margin-top:0}
+/* Für Vinted (seit 0.22): Abschnitt in „Mehr Angaben“, Textfelder, Foto mit Knopf, Optionen unter dem Text */
+.abschnitt{font-weight:700;color:var(--haupt);padding:14px 0 2px;border-top:1px solid var(--line);margin-top:6px}
+.abschnitt + .field{border-top:0}
+.feld-eingabe{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.vinted-kopf{display:flex;gap:12px;align-items:center;margin-top:10px}
+.vinted-kopf .actions{margin-top:0;flex:1}
+.vinted-foto{width:84px;height:84px;object-fit:cover;border-radius:16px;background:var(--chip);flex-shrink:0}
+.vinted-optionen{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}

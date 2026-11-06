@@ -12,17 +12,18 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=17";
+import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=18";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
-import { stilAktuell, stilZeilen } from "./stil.js?v=18";
-import { kandidaten } from "./regeln.js?v=13";
+import { stilAktuell, stilZeilen } from "./stil.js?v=19";
+import { kandidaten } from "./regeln.js?v=14";
 import { GROUPS, GROUP_OF } from "./ki.js?v=7";
-import { speichernKnopf } from "./fertig.js?v=5";
+import { speichernKnopf } from "./fertig.js?v=6";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
 // damit nichts in die falsche Ansicht wandert.
-let stilMit = true, vorbereitet = null, vorschauUrls = [];
+// „Meinen Stil mitschicken“ ist seit 0.22 standardmäßig aus (Wunsch 06.11.2026): Sie hakt es an, wenn sie es will
+let stilMit = false, vorbereitet = null, vorschauUrls = [];
 // offen = welche Schritte 2–4 aufgeklappt sind, anfrageFuer = wofür die Anfrage zuletzt kopiert wurde, bildKopiert = Schritt 4 erledigt
 const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt, bildOutfit, offen, anfrageFuer, bildKopiert }
 const merker = frage => {
@@ -257,7 +258,7 @@ export function bildPaketBereich(alle, wovon, kopiert = () => {}) {
 
 // Handy: Teilen-Menü („Bilder sichern“ legt sie in die Fotos, oder direkt an die ChatGPT-App). PC: herunterladen.
 // Muss direkt im Antippen laufen (navigator.share braucht ein frisches Tippen), darum werden die Bilder vorher erstellt.
-async function bilderWeitergeben(dateien) {
+export async function bilderWeitergeben(dateien) {
   if (navigator.canShare?.({ files: dateien })) {
     try { await navigator.share({ files: dateien }); return true; } catch (e) { if (e?.name === "AbortError") return false; console.error(e); }
   }
@@ -270,7 +271,7 @@ async function bilderWeitergeben(dateien) {
 
 /* ---------- Kopieren ---------- */
 // navigator.clipboard braucht ein frisches Antippen: darum direkt im Klick aufrufen, ohne vorher auf etwas zu warten
-async function kopieren(text) {
+export async function kopieren(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch {}
   const ta = el("textarea", { readOnly: true, value: text, style: "position:fixed;top:0;left:0;opacity:0" });
   document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
@@ -278,7 +279,7 @@ async function kopieren(text) {
   ta.remove(); return ok;
 }
 // Klappt Kopieren gar nicht: Text zum Markieren zeigen
-const vonHand = (box, text) => fill(box, el("div", { class: "hint" }, "Kopieren hat nicht geklappt. Tippe in das Feld, markiere alles und kopiere es selbst:"),
+export const vonHand = (box, text) => fill(box, el("div", { class: "hint" }, "Kopieren hat nicht geklappt. Tippe in das Feld, markiere alles und kopiere es selbst:"),
   el("textarea", { class: "notiz", readOnly: true, rows: 6, value: text, "aria-label": "Text zum Kopieren" }));
 
 /* ---------- Antwort lesen ---------- */
@@ -429,7 +430,7 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
   pruefen(); zeigen();
   return { el: el("div", {}, status, knoepfe, box), zustand: () => v };
 }
-const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+export const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 
 /* ---------- Anzeige unter „Outfit finden“ und „Was passt dazu?“ ---------- */
 // frage = { situation: { anlass, schickWahl, temperatur, wetter } } oder { teil }; kachel(t) = kleine Kachel eines Teils

@@ -1,17 +1,18 @@
 // „Was passt dazu?“: ein Teil antippen → Kombinationen aus dem Kleiderschrank + schlichte Kaufideen (Entscheidung 6).
 // Die Rechnung steht in regeln.js, hier nur die Anzeige. Texte immer per textContent/DOM, nie per innerHTML.
 // Die Ordner-Auswahl und die Kombi-Karten nutzt auch „Outfit finden“ (outfit.js).
-import { el, fill, field, choice, beschreibung } from "./ui.js?v=17";
+import { el, fill, field, choice, beschreibung } from "./ui.js?v=18";
 import { nrText } from "./speicher.js?v=10";
-import { stilAktuell } from "./stil.js?v=18";
-import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=13";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=11";
-import { speichernKnopf } from "./fertig.js?v=5";
+import { stilAktuell } from "./stil.js?v=19";
+import { kandidaten, kombinationen, kaufideen } from "./regeln.js?v=14";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=12";
+import { speichernKnopf } from "./fertig.js?v=6";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
 // dazu hier in „Was passt dazu?“, ob die Vorschläge der App und „Ordner und Mein Stil“ aufgeklappt sind
 const OHNE_ORDNER = "Ohne Ordner";
-let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = true, appOffen = false, einstellOffen = false;
+// „Meinen Stil beachten“ ist seit 0.22 standardmäßig aus (Wunsch 06.11.2026), wie „Meinen Stil mitschicken“
+let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = false, appOffen = false, einstellOffen = false;
 
 // Seit 0.17 (iPhone-Test 04.11.2026): Die Vorschläge der App stehen eingeklappt UNTER ChatGPT/Gemini. Die App kennt nur die
 // Angaben, nicht die Fotos (z. B. fehlt fast immer das Material), darum passten sie oft nicht zum Anlass; der Chat sieht die Fotos.

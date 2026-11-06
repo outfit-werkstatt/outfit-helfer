@@ -2,7 +2,7 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, fehlerToast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=17";
+import { el, fill, toast, fehlerToast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=18";
 import { setStil } from "./speicher.js?v=10";
 import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=7";
 
@@ -133,7 +133,7 @@ export function renderStil(box, kopf, stil) {
     mitInfo(el("p", { class: "hint" }, el("strong", {}, "Vorlieben, keine Verbote."), " Tippe an, was zu dir passt."),
       "Auch mehreres geht. Nichts angetippt heißt: egal. Passt keine Antwort, nimm „Andere …“ und schreib es selbst.",
       "Passendes kommt in den Vorschlägen zuerst, aber nichts wird ganz weggelassen. Was du wirklich nie tragen willst, markierst du am Teil mit 🚫.",
-      "Alles wird sofort gespeichert und bleibt nur auf diesem Handy (und in deiner Sicherung). An ChatGPT oder Gemini geht es nur, wenn du die Anfrage selbst kopierst und „Meinen Stil mitschicken“ angehakt lässt."),
+      "Alles wird sofort gespeichert und bleibt nur auf diesem Handy (und in deiner Sicherung). An ChatGPT oder Gemini geht es nur, wenn du „Meinen Stil mitschicken“ anhakst und die Anfrage selbst kopierst. Auch bei den Vorschlägen der App zählt „Mein Stil“ nur, wenn du dort „Meinen Stil beachten“ anhakst."),
     ...STIL_ABSCHNITTE.map(a => el("details", { class: "panel mehr", open: !!a.offen }, el("summary", {}, a.titel), ...a.fragen.map(f => feldVon.get(f)))),
     el("details", { class: "panel mehr" }, el("summary", {}, "Lieblingsfarben"),
       farbe("lieblingsfarben", "Farben, die ich gern trage"), farbe("nichtFarben", "Farben, die ich lieber nicht trage")),

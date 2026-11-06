@@ -2,14 +2,15 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen } from "./ui.js?v=17";
+import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken } from "./ui.js?v=18";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
-import { renderStil, stilKurz } from "./stil.js?v=18";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=19";
-import { renderPasst, miniKachel } from "./passt.js?v=17";
-import { renderOutfit } from "./outfit.js?v=14";
-import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=5";
-import { bildPaketBereich } from "./chatgpt.js?v=11";
+import { renderStil, stilKurz } from "./stil.js?v=19";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=20";
+import { renderPasst, miniKachel } from "./passt.js?v=18";
+import { renderOutfit } from "./outfit.js?v=15";
+import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=6";
+import { bildPaketBereich } from "./chatgpt.js?v=12";
+import { renderVinted } from "./vinted.js?v=1";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -50,7 +51,7 @@ async function show(y) {
 // Dieselbe Ansicht neu zeichnen, ohne zu springen
 async function neuZeichnen() { const y = scrollStelle(); await render(); scrollen(y); }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
-export async function refresh() { if (current.v !== "stil" && current.v !== "sicherung" && current.v !== "fertigEins" && !bearbeitet) await neuZeichnen(); }
+export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
@@ -62,6 +63,7 @@ async function render() {
     getFolders(), getStil(), getMeta("letzteSicherung"), s.v === "teil" ? getPhoto(s.nr) : null]);
   const [sonst, naechste, outfits] = await Promise.all([getMeta("sonstGeaendert"), getMeta("naechsteNr"), getOutfits()]);
   if (nr !== zeichnung) return;
+  merkeMarken(items); // Vorschläge beim Eintippen der Marke
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
   // Auswahl-Felder der vorigen Ansicht abmelden (sie hören sonst weiter auf neue eigene Einträge)
   const box = $("ansicht"); box.dispose?.(); box.dispose = null;
@@ -75,6 +77,11 @@ async function render() {
     return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden"), items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
+  if (s.v === "vinted") {
+    const t = items.find(x => x.nr === s.nr);
+    if (!t || t.geloescht) return back();
+    return renderVinted(box, kopf("🏷 Für Vinted", `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), t, url);
+  }
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
   if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }));
   if (s.v === "fertigEins") {
@@ -239,7 +246,7 @@ function passtSuche(t, q) {
   if (!q) return true;
   if (/^\d+$/.test(q)) return t.nr === Number(q) || nrText(t.nr).startsWith(q);
   const text = [t.art, t.gruppe, ...(t.farben || []), t.muster, t.material, t.aermel, t.schnitt, t.weite, t.laenge, t.bund,
-    ...(t.stil || []), ...(t.saison || []), t.notiz].filter(Boolean).join(" ").toLowerCase();
+    ...(t.stil || []), ...(t.saison || []), t.notiz, t.marke, t.groesse, t.zustand].filter(Boolean).join(" ").toLowerCase();
   return q.split(/\s+/).every(w => text.includes(w));
 }
 function renderListe(items, folders, id) {
@@ -372,7 +379,8 @@ function renderTeil(items, folders, nr, foto) {
     ...zeile("Ärmel", t.aermel), ...zeile("Hosenschnitt", t.schnitt),
     ...zeile("Weite", t.weite), ...zeile("Länge", t.laenge), ...zeile("Bund", t.bund),
     ...zeile("Stil", t.stil?.join(", ")), ...zeile("Saison", t.saison?.join(", ")), ...zeile("Notiz", t.notiz),
-    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null), ...zeile("Hinzugefügt", datum(t.erstellt)));
+    ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null),
+    ...zeile("Marke", t.marke), ...zeile("Größe", t.groesse), ...zeile("Zustand", t.zustand), ...zeile("Hinzugefügt", datum(t.erstellt)));
   const inhalt = el("div", { class: "panel" }, angaben);
 
   // Ordner: Änderungen werden sofort gespeichert
@@ -419,7 +427,9 @@ function renderTeil(items, folders, nr, foto) {
   };
   // wrap: Bei 320 px Breite stehen die zwei Knöpfe untereinander statt zweizeilig beschriftet (seit 0.21)
   const aktionen = el("div", { class: "actions wrap" }, t.geloescht ? null : aendern, korb);
-  const passt = t.geloescht ? null : el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"));
+  // „Für Vinted“ (seit 0.22): Titel und Beschreibung zum Kopieren, Foto zum Sichern
+  const passt = t.geloescht ? null : el("div", { class: "actions wrap" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
+    el("button", { type: "button", class: "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Für Vinted"));
   fill($("ansicht"),
     kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : null),
     bild, passt, inhalt, t.geloescht ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld), aktionen);
