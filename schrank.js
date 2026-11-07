@@ -5,12 +5,12 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken } from "./ui.js?v=18";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
 import { renderStil, stilKurz } from "./stil.js?v=19";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=22";
-import { renderPasst, miniKachel } from "./passt.js?v=20";
-import { renderOutfit } from "./outfit.js?v=17";
-import { renderFertigListe, renderFertig, fertigKachel } from "./fertig.js?v=6";
-import { bildPaketBereich } from "./chatgpt.js?v=14";
-import { renderVinted } from "./vinted.js?v=4";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=23";
+import { renderPasst, miniKachel } from "./passt.js?v=21";
+import { renderOutfit } from "./outfit.js?v=18";
+import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=7";
+import { bildPaketBereich } from "./chatgpt.js?v=15";
+import { renderVinted } from "./vinted.js?v=5";
 import { GROUPS } from "./ki.js?v=7";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
@@ -40,10 +40,14 @@ function back() {
   if (current.d > 0) history.back();
   else { current = { v: "start", d: 0 }; history.replaceState(current, ""); show(0); }
 }
+// Die aktuelle Ansicht ersetzen, ohne neuen Eintrag im Verlauf (nach „Eigenes Outfit“ → das gespeicherte Outfit;
+// „Zurück“ führt dann zur Liste der fertigen Outfits und nicht wieder zum Antippen)
+function ersetze(state) { current = { ...state, d: current.d }; history.replaceState(current, ""); show(0); }
 addEventListener("popstate", e => { current = e.state || { v: "start", d: 0 }; show(current.y || 0); });
 history.scrollRestoration = "manual"; // die Stelle merken wir uns selbst (y im Verlauf)
 async function show(y) {
-  auswahl = null; bearbeitet = false; mehrfach = null; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
+  auswahl = null; bearbeitet = false; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
+  mehrfach = current.zusammenstellen ? new Set() : null; // „＋ Eigenes Outfit zusammenstellen“ beginnt gleich mit dem Antippen
   $("ansichtStart").hidden = current.v !== "start"; $("ansicht").hidden = current.v === "start";
   try { await render(); } catch (e) { fehlerToast("Anzeigen hat nicht geklappt", e); console.error(e); }
   scrollen(y);
@@ -83,7 +87,8 @@ async function render() {
     return renderVinted(box, kopf("🏷 Für Vinted", `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), t, url);
   }
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
-  if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }));
+  if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }),
+    () => sichtbar(items).length ? go({ v: "liste", id: ALLE, zusammenstellen: true }) : toast("Speichere zuerst Kleidung, dann kannst du Outfits zusammenstellen."));
   if (s.v === "fertigEins") {
     const o = outfits.find(x => x.id === s.id);
     if (!o) return back();
@@ -189,12 +194,12 @@ function teilKachel(t, { markiert = null, onclick, extra = null }) {
 // Kachel im Auswahl-Modus an- oder abhaken, ohne die Ansicht neu zu zeichnen
 function haken(b, an) { b.classList.toggle("markiert", an); b.setAttribute("aria-pressed", an); b.querySelector(".haken").textContent = an ? "✓" : ""; }
 // Leiste unten im Auswahl-Modus: Anzahl, „Alle auswählen“ und Knöpfe, die für alle angetippten Teile gelten.
-// kacheln() = die gerade sichtbaren Kacheln (Suche/Filter), aktionen = [{ text, los(nrs) }]
+// kacheln() = die gerade sichtbaren Kacheln (Suche/Filter), aktionen = [{ text, los(nrs), haupt }] (haupt = hervorgehoben)
 function auswahlLeiste(kacheln, aktionen) {
   const zahl = el("span", {}), alle = el("button", { type: "button", class: "link" });
   const extra = el("div", { class: "leiste-extra" }); extra.hidden = true; // z. B. „In welchen Ordner?“
   const knoepfe = aktionen.map(a => {
-    const b = el("button", { type: "button", class: "btn klein" }, a.text);
+    const b = el("button", { type: "button", class: a.haupt ? "btn klein primary" : "btn klein" }, a.text);
     b.onclick = async () => {
       if (!mehrfach?.size) return;
       try { await a.los([...mehrfach]); } catch (e) { fehlerToast("Hat nicht geklappt", e); console.error(e); }
@@ -291,9 +296,11 @@ function renderListe(items, folders, id) {
     : id === NICHT ? `${anzahl(drin.length)}, ${drin.length === 1 ? "das nie in Outfit-Vorschläge kommt" : "die nie in Outfit-Vorschläge kommen"}. Zum Zurückholen: Teil antippen und „Ziehe ich nicht an“ ausschalten.`
     : `Alle ${anzahl(drin.length)}`;
 
+  // „＋ Eigenes Outfit zusammenstellen“ (aus „⭐ Fertige Outfits“): alle Teile antippen, unten nur „⭐ Als Outfit speichern“
+  const zusammen = !!current.zusammenstellen && id === ALLE && !!mehrfach;
   // „Auswählen“ oben rechts: mehrere Teile antippen und gemeinsam verschieben, in einen Ordner legen, 🚫 markieren oder löschen
-  const waehlenKnopf = !auswahl && basis.length ? el("button", { type: "button", class: "kopf-knopf" }, mehrfach ? "Fertig" : "Auswählen") : null;
-  if (waehlenKnopf) waehlenKnopf.onclick = () => { mehrfach = mehrfach ? null : new Set(); neuZeichnen(); };
+  const waehlenKnopf = !auswahl && basis.length ? el("button", { type: "button", class: "kopf-knopf" }, zusammen ? "Abbrechen" : mehrfach ? "Fertig" : "Auswählen") : null;
+  if (waehlenKnopf) waehlenKnopf.onclick = zusammen ? back : () => { mehrfach = mehrfach ? null : new Set(); neuZeichnen(); };
   if (mehrfach) aktionen = null;
   let leiste = null;
 
@@ -318,7 +325,32 @@ function renderListe(items, folders, id) {
       leiste.extra.hidden = false;
     };
     const n = nrs => anzahl(nrs.length);
-    leiste = auswahlLeiste(() => [...grid.children].filter(k => !k.hidden), [
+    // „⭐ Als Outfit speichern“ (Wunsch 07.11.2026): Name freiwillig, dann gleich das gespeicherte Outfit öffnen
+    const zuViele = k => toast(`Ein Outfit hat höchstens ${MAX_TEILE} Teile, ausgewählt ${k === 1 ? "ist" : "sind"} ${k}.`);
+    const alsOutfit = { text: "⭐ Als Outfit speichern", haupt: zusammen, los: async nrs => {
+      if (nrs.length > MAX_TEILE) return zuViele(nrs.length);
+      const name = el("input", { type: "text", class: "suche", maxLength: MAX_NAME, placeholder: "z. B. Büro am Freitag", "aria-label": "Name des Outfits (freiwillig)", autocomplete: "off", enterKeyHint: "done" });
+      const ok = el("button", { type: "button", class: "btn primary" }, "Speichern");
+      ok.onclick = async () => {
+        const jetzt = [...(mehrfach || [])]; // was gerade angetippt ist (auch nach dem Öffnen dieses Felds noch änderbar)
+        if (!jetzt.length) return toast("Tippe zuerst die Teile an.");
+        if (jetzt.length > MAX_TEILE) return zuViele(jetzt.length);
+        ok.disabled = true;
+        try {
+          const r = await outfitSpeichern(jetzt, clean(name.value) || "Eigenes Outfit", null, "eigen");
+          if (r.da) { ok.disabled = false; return toast(`Ist schon gespeichert als „${r.da.name}“`); }
+          toast("In „⭐ Fertige Outfits“ gespeichert");
+          (zusammen ? ersetze : go)({ v: "fertigEins", id: r.neu.id });
+        } catch (e) { ok.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); console.error(e); }
+      };
+      name.onkeydown = e => { if (e.key === "Enter") ok.click(); };
+      fill(leiste.extra, el("div", { class: "note" }, "Name für das Outfit (freiwillig):"), name,
+        el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => { leiste.extra.hidden = true; } }, "Abbrechen"), ok));
+      leiste.extra.hidden = false;
+      name.focus();
+    } };
+    leiste = auswahlLeiste(() => [...grid.children].filter(k => !k.hidden), zusammen ? [alsOutfit] : [
+      id !== NICHT && alsOutfit,
       ordner && { text: "Verschieben nach …", los: async nrs => ordnerWahl(`${n(nrs)} aus „${ordner.name}“ verschieben nach:`, async f => {
         await updateItems(nrs.map(nr => ({ nr, ordner: [...new Set([...ordnerVon(nr).filter(o => o !== id), f.id])] })));
         fertigMit(`${n(nrs)} nach „${f.name}“ verschoben`);
@@ -357,7 +389,8 @@ function renderListe(items, folders, id) {
   suche.onkeydown = e => { if (e.key === "Enter") suche.blur(); };
   suchen();
   fill($("ansicht"),
-    kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter, waehlenKnopf),
+    zusammen ? kopf("＋ Eigenes Outfit", `Tippe die Teile an, die zum Outfit gehören (höchstens ${MAX_TEILE}). Dann unten „⭐ Als Outfit speichern“.`, waehlenKnopf)
+      : kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter, waehlenKnopf),
     aktionen, editor,
     basis.length ? suche : null,
     basis.length ? filterChips(basis, f, nf => { filters.set(id, nf); neuZeichnen(); }) : null,

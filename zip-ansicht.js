@@ -11,7 +11,7 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE } from "./ui.js?v=18";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=19";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=14";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=15";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -196,7 +196,7 @@ function pruefen(j) {
     const onrs = Array.isArray(o?.nrs) ? [...new Set(o.nrs.filter(n => Number.isInteger(n) && nrs.has(n)))].slice(0, 12) : [];
     if (!id || !name || !onrs.length || outfits.some(x => x.id === id)) continue;
     outfits.push({ id, name, nrs: onrs, text: typeof o.text === "string" ? cleanText(o.text).slice(0, 4000) || null : null,
-      quelle: o.quelle === "app" ? "app" : "chat", erstellt: zeit(o.erstellt) || new Date().toISOString(),
+      quelle: o.quelle === "app" || o.quelle === "eigen" ? o.quelle : "chat", erstellt: zeit(o.erstellt) || new Date().toISOString(),
       ...(zeit(o.geaendert) ? { geaendert: zeit(o.geaendert) } : {}), _foto: typeof o.foto === "string" ? o.foto : null });
   }
   const naechsteNr = Number.isInteger(j.naechsteNr) && j.naechsteNr > 0 && j.naechsteNr <= 1e6 ? j.naechsteNr : 1;

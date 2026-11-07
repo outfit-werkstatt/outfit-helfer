@@ -5,8 +5,8 @@ import { el, fill, field, choice, beschreibung } from "./ui.js?v=18";
 import { nrText } from "./speicher.js?v=10";
 import { stilAktuell } from "./stil.js?v=19";
 import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=15";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=14";
-import { speichernKnopf } from "./fertig.js?v=6";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=15";
+import { speichernKnopf } from "./fertig.js?v=7";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
 // dazu hier in „Was passt dazu?“, ob die Vorschläge der App und „Ordner und Mein Stil“ aufgeklappt sind

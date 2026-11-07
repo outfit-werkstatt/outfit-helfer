@@ -6,21 +6,31 @@ import { el, fill, toast, fehlerToast, clean, cleanText, mitInfo, zeigeGross } f
 import { getOutfits, saveOutfit, deleteOutfit, getLookFoto, nrText } from "./speicher.js?v=10";
 import { loadImage, alsJpg } from "./ki.js?v=7";
 
-const MAX_NAME = 40, MAX_TEXT = 4000, MAX_TEILE = 12;
+export const MAX_NAME = 40, MAX_TEILE = 12;
+const MAX_TEXT = 4000;
 const datum = s => new Date(s).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const schluessel = nrs => [...nrs].sort((a, b) => a - b).join(",");
+const HERKUNFT = { app: "Vorschlag der App", eigen: "selbst zusammengestellt", chat: "aus ChatGPT/Gemini" };
+
+// Ein Outfit speichern. quelle = "app", "chat" oder "eigen" (selbst zusammengestellt, Wunsch 07.11.2026).
+// Dasselbe Outfit (gleiche Nummern) wird nicht doppelt gespeichert: dann { da: das vorhandene }, sonst { neu: das neue }.
+export async function outfitSpeichern(nummern, name, text, quelle) {
+  const nrs = [...new Set(nummern)].slice(0, MAX_TEILE), da = (await getOutfits()).find(o => schluessel(o.nrs) === schluessel(nrs));
+  if (da) return { da };
+  const neu = { id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: clean(name || "").slice(0, MAX_NAME) || "Outfit",
+    nrs, text: text ? cleanText(text).slice(0, MAX_TEXT) || null : null, quelle, erstellt: new Date().toISOString(), foto: false };
+  await saveOutfit(neu);
+  return { neu };
+}
 
 // Knopf „⭐ Outfit speichern“ (unter den Vorschlägen der App und unter jedem Outfit aus der eingefügten Antwort).
-// Dasselbe Outfit (gleiche Nummern) wird nicht doppelt gespeichert.
 export function speichernKnopf(teile, name, text, quelle) {
   const knopf = el("button", { type: "button", class: "btn" }, "⭐ Outfit speichern");
   knopf.onclick = async () => {
     knopf.disabled = true;
     try {
-      const nrs = [...new Set(teile.map(t => t.nr))].slice(0, MAX_TEILE), da = (await getOutfits()).find(o => schluessel(o.nrs) === schluessel(nrs));
+      const { da } = await outfitSpeichern(teile.map(t => t.nr), name, text, quelle);
       if (da) { knopf.textContent = "✓ Schon gespeichert"; toast(`Ist schon gespeichert als „${da.name}“`); return; }
-      await saveOutfit({ id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: clean(name || "").slice(0, MAX_NAME) || "Outfit",
-        nrs, text: text ? cleanText(text).slice(0, MAX_TEXT) || null : null, quelle, erstellt: new Date().toISOString(), foto: false });
       knopf.textContent = "✓ Gespeichert";
       toast("In „⭐ Fertige Outfits“ gespeichert");
     } catch (e) { knopf.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); console.error(e); }
@@ -37,8 +47,9 @@ export function fertigKachel(outfits, items, bild, oeffnen) {
     el("span", { class: "anzahl" }, outfits.length === 1 ? "1 Outfit" : `${outfits.length} Outfits`));
 }
 
-// Liste aller fertigen Outfits. bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen frei)
-export function renderFertigListe(box, kopf, outfits, items, bild, oeffnen) {
+// Liste aller fertigen Outfits. bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen frei),
+// zusammenstellen() = Kleiderschrank zum Antippen öffnen („＋ Eigenes Outfit zusammenstellen“)
+export function renderFertigListe(box, kopf, outfits, items, bild, oeffnen, zusammenstellen) {
   const nachNr = new Map(items.map(t => [t.nr, t]));
   const karte = o => {
     const look = el("span", { class: "look" }), teile = o.nrs.map(n => nachNr.get(n)).filter(Boolean);
@@ -51,8 +62,10 @@ export function renderFertigListe(box, kopf, outfits, items, bild, oeffnen) {
         el("span", { class: "outfit-mini" }, ...teile.slice(0, 6).map(t => el("img", { src: bild(t.vorschau), alt: `Nr. ${nrText(t.nr)}`, loading: "lazy" })))));
   };
   fill(box, kopf,
+    el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: zusammenstellen }, "＋ Eigenes Outfit zusammenstellen")),
     mitInfo(el("p", { class: "hint" }, outfits.length ? "Antippen zum Ansehen." : "Noch keine fertigen Outfits."),
       "Ein Outfit speicherst du mit „⭐ Outfit speichern“: bei den Vorschlägen der App oder unter einer eingefügten Antwort von ChatGPT oder Gemini.",
+      "Oder du stellst es selbst zusammen: mit „＋ Eigenes Outfit zusammenstellen“ oder im Kleiderschrank über „Auswählen“ und „⭐ Als Outfit speichern“.",
       "Gespeichert werden die Nummern der Teile, der Name und die Erklärung. Dazu kannst du ein Foto vom fertigen Look legen. Alles bleibt auf diesem Handy und kommt mit in deine Sicherung."),
     ...outfits.map(karte));
 }
@@ -125,7 +138,7 @@ export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, 
       fehlt.length ? el("p", { class: "hint" }, `${fehlt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es nicht mehr.`) : null,
       imKorb.length ? el("p", { class: "hint" }, `${imKorb.map(n => "Nr. " + nrText(n)).join(", ")} ${imKorb.length === 1 ? "liegt" : "liegen"} im Papierkorb.`) : null,
       nie.length ? el("p", { class: "hint" }, `${nie.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${nie.length === 1 ? "ist" : "sind"} als „🚫 Ziehe ich nicht an“ markiert.`) : null,
-      el("p", { class: "hint" }, `Gespeichert am ${datum(o.erstellt)} · ${o.quelle === "app" ? "Vorschlag der App" : "aus ChatGPT/Gemini"}`)),
+      el("p", { class: "hint" }, `Gespeichert am ${datum(o.erstellt)} · ${HERKUNFT[o.quelle] || HERKUNFT.chat}`)),
     o.text ? el("details", { class: "panel mehr" }, el("summary", {}, "Erklärung und Tipps"), el("div", { class: "chatgpt-text" }, o.text)) : null,
     teile.length ? el("div", { class: "panel" }, el("strong", {}, "🖼 Bild vom Outfit"), paket(teile, "diesem Outfit aus meinem Kleiderschrank").el) : null,
     nameBox,

@@ -17,7 +17,7 @@ import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
 import { stilAktuell, stilZeilen } from "./stil.js?v=19";
 import { kandidaten } from "./regeln.js?v=15";
 import { GROUPS, GROUP_OF } from "./ki.js?v=7";
-import { speichernKnopf } from "./fertig.js?v=6";
+import { speichernKnopf } from "./fertig.js?v=7";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -127,6 +127,8 @@ const bildText = (wovon, teile = null) => [
     : "- Zeig genau die Teile aus diesem Outfit, so wie sie auf meinen Sammelbildern aussehen (Farbe, Schnitt, Länge, Muster, Material).",
   // Gemini machte am 06.11.2026 aus einem rötlich-braunen Poloshirt („Poloshirt, braun“) ein schokobraunes, fast wie die Strickjacke darüber.
   `- Die Farbwörter sind nur grob. Es zählt der genaue Farbton auf ${teile ? "dem Bild-Paket" : "meinen Sammelbildern"}, z. B. bleibt ein rötliches Braun rötlich. Ähnliche Farben nicht aneinander angleichen: Die Teile sollen so verschieden aussehen wie auf den Fotos.`,
+  // Gemini machte am 06.11.2026 aus einem rötlich-braunen Hemd („Muster: Gestreift“) ein weiß-braun gestreiftes.
+  `- Auch die Musterwörter sind nur grob. Es zählt, wie das Muster auf ${teile ? "dem Bild-Paket" : "meinen Sammelbildern"} aussieht: Ganz feine Streifen bleiben fein und in den Farben des Teils, aus einem einfarbig wirkenden Stoff wird kein auffälliges Muster.`,
   traegt === TRAEGT.ich
     ? `- Angehängt ist außerdem ein Foto von mir${teile ? " (das andere Bild)" : ""}. Zeig genau diese Person in dem Outfit: gleiches Gesicht, gleiche Haare, gleiche Figur und Hautfarbe. Nichts an der Person verschönern oder verändern.`
     : "- Zeig das Outfit an einem Model.",
