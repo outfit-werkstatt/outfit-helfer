@@ -2,9 +2,9 @@
 // Die App erkennt bewusst NICHT die Figur; sie fragt freundlich nach Vorlieben. Wortwahl neutral, nie „Problemzonen“.
 // Vorlieben, keine Verbote: Die Vorschläge sortieren danach, lassen aber nichts weg (hartes „Nie“ nur 🚫 am Teil).
 // Wird sofort gespeichert, bleibt nur auf dem Gerät (und später in ihrer eigenen Sicherung).
-import { el, fill, toast, fehlerToast, choice, field, mitInfo, cleanText, names, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=18";
-import { setStil } from "./speicher.js?v=10";
-import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=7";
+import { el, fill, toast, fehlerToast, choice, field, mitInfo, cleanText, names, tabelle, GRUND_FARBEN, STILRICHTUNGEN, HOSENSCHNITTE, MERKMALE } from "./ui.js?v=19";
+import { setStil } from "./speicher.js?v=11";
+import { GROUPS, PATTERNS, SLEEVES } from "./ki.js?v=8";
 
 // Abschnitte mit Fragen. Bei jeder Frage beliebig viele Knöpfe (nichts angetippt = egal) und „Andere …“ zum Eintippen.
 // Wo es dasselbe Merkmal auch am Teil gibt, stehen hier dieselben Wörter und dieselbe Liste für eigene Einträge (liste),
@@ -45,13 +45,13 @@ const FRAGEN = STIL_ABSCHNITTE.flatMap(a => a.fragen);
 export const MODI = ["Damen", "Herren", "beides"];
 // Ältere Fassungen speicherten andere Wörter (0.6: nur ein Text pro Frage; 0.6.1: Wörter, die es am Teil anders gibt) → umschreiben
 const liste = v => Array.isArray(v) ? v : v ? [v] : [];
-const ALT = {
+const ALT = tabelle({
   "lieber locker": "locker", "gern figurnah": "figurnah", "lieber hohe Taille": "hohe Taille", "lieber normale Höhe": "normale Höhe",
   "gern betonen (z. B. mit Gürtel)": "gern betonen (Gürtel, tailliert)", "lieber locker umspielen": "locker umspielen",
   "gern kräftig": "kräftig", "lieber gedeckt": "gedeckt / neutral", "gern mit Absatz": "Absatzschuhe", "lieber flach": "Flache Schuhe",
   "Schlag / Bootcut": "Schlag", "Jogger / mit Bündchen": "mit Bündchen", "gern ärmellos": "ärmellos", "kurze Ärmel": "kurz", "lieber lange Ärmel": "lang",
   "lieber einfarbig": "Einfarbig", "gern auffällige Muster": "auffällige Muster", "Streifen": "Gestreift", "Karo": "Kariert", "Blumen": "Geblümt",
-  "flache Schuhe": "Flache Schuhe", "Absatz": "Absatzschuhe", "Stiefel / Stiefeletten": "Stiefel", "Loafer": "Flache Schuhe" };
+  "flache Schuhe": "Flache Schuhe", "Absatz": "Absatzschuhe", "Stiefel / Stiefeletten": "Stiefel", "Loafer": "Flache Schuhe" });
 // „Mein Stil“ in der aktuellen Form: jede Frage als Liste, alte Wörter umgeschrieben, doppelte nur einmal
 export function stilAktuell(s) {
   const n = { ...s };
@@ -111,8 +111,11 @@ export function renderStil(box, kopf, stil) {
     onChange: sel => speichern({ [k]: sel }) }).el);
   const text = el("textarea", { class: "notiz", maxLength: 300, rows: 3, value: s.text || "", "aria-label": "Sonst noch etwas",
     placeholder: "z. B. keine Rollkragen, mag es bequem, trage oft Blazer zur Jeans" });
-  text.oninput = () => { clearTimeout(timer); timer = setTimeout(() => speichern({ text: cleanText(text.value) || null }, false), 600); };
-  text.onblur = () => { clearTimeout(timer); speichern({ text: cleanText(text.value) || null }, false); };
+  // Nur speichern, wenn sich der Text wirklich geändert hat (seit 0.25): Sonst galt „Mein Stil“ schon als geändert,
+  // wenn man nur kurz ins Feld tippte, und die Sicherung meldete eine Änderung.
+  const textSpeichern = () => { const neu = cleanText(text.value) || null; if (neu !== (s.text ?? null)) speichern({ text: neu }, false); };
+  text.oninput = () => { clearTimeout(timer); timer = setTimeout(textSpeichern, 600); };
+  text.onblur = () => { clearTimeout(timer); textSpeichern(); };
   sichtbar();
   // Alles auf „egal“ zurück (nach Rückfrage). Selbst eingetippte Knöpfe bleiben, sie lassen sich über „Andere …“ löschen.
   const zuruecksetzen = el("button", { type: "button", class: "btn" }, "Alles zurücksetzen");

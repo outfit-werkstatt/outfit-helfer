@@ -1,10 +1,10 @@
 // „Outfit finden“: Anlass und Wetter antippen → erst die Anfrage an ChatGPT/Gemini (chatgpt.js), darunter eingeklappt die
 // Outfits der App aus festen Regeln (regeln.js). Reihenfolge seit 0.17, siehe appKlappe in passt.js.
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
-import { el, fill, field, choice } from "./ui.js?v=18";
-import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=15";
-import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=21";
-import { chatgptPanel } from "./chatgpt.js?v=15";
+import { el, fill, field, choice } from "./ui.js?v=19";
+import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=16";
+import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=22";
+import { chatgptPanel } from "./chatgpt.js?v=16";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
 let anlass = null, schickWahl = null, temperatur = null, wetter = [], einstellOffen = false, appOffen = false;

@@ -6,7 +6,7 @@
 //        "eigeneWerte" = selbst eingetippte Einträge, "ordner" = eigene Ordner [{ id, name }], "meinStil" = Vorlieben.
 // Am Teil: ordner = [ids] (ein Teil kann in mehreren Ordnern sein, „Mein Kleiderschrank“ = alle Teile, kein Eintrag),
 //          geloescht = Zeitpunkt, wenn es im Papierkorb liegt (sonst fehlt das Feld oder ist null).
-//        "outfits" = fertige Outfits [{ id, name, nrs, text, quelle: "chat"|"app", erstellt, geaendert, foto: true|false }].
+//        "outfits" = fertige Outfits [{ id, name, nrs, text, quelle: "chat"|"app"|"eigen", erstellt, geaendert, foto: true|false }].
 //        Ein Foto vom fertigen Look liegt in „fotos“ unter "outfit:<id>" (groß) und "outfit-klein:<id>" (Vorschau). Die Schlüssel
 //        sind Text, die der Teile Zahlen: So braucht es keinen neuen Speicherbereich und keinen Umbau der Datenbank.
 // entwuerfe (ab DB_VERSION 2): ausgewählte Fotos, die noch nicht gespeichert sind (wartend oder erkannt), Schlüssel = id.
@@ -25,11 +25,31 @@ function db() {
       if (!d.objectStoreNames.contains("meta")) d.createObjectStore("meta");
       if (!d.objectStoreNames.contains("entwuerfe")) d.createObjectStore("entwuerfe", { keyPath: "id" });
     };
-    // Will eine neuere Version der App umziehen, gibt diese hier die Datenbank frei (sonst wartet die neue ewig)
-    req.onsuccess = () => { req.result.onversionchange = () => req.result.close(); res(req.result); };
-    req.onerror = () => rej(req.error);
+    req.onsuccess = () => {
+      const d = req.result;
+      // Will eine neuere Version der App umziehen, gibt diese hier die Datenbank frei (sonst wartet die neue ewig).
+      // Schließt das iPhone die Verbindung (z. B. lange im Hintergrund), wird beim nächsten Zugriff neu geöffnet (seit 0.25).
+      d.onversionchange = () => { d.close(); if (dbPromise === offen) dbPromise = null; };
+      d.onclose = () => { if (dbPromise === offen) dbPromise = null; };
+      res(d);
+    };
+    req.onerror = () => { if (dbPromise === offen) dbPromise = null; rej(req.error); };
   });
+  const offen = dbPromise;
   return dbPromise;
+}
+// Lese- oder Schreibvorgang beginnen. Ist die Verbindung inzwischen zu (das meldet Safari nicht immer), einmal neu öffnen.
+// Jeder Schreibvorgang zählt „stand“ hoch: Damit weiß allItems, ob die gemerkte Liste noch stimmt.
+let stand = 0;
+async function bereich(namen, art = "readonly") {
+  let tx;
+  try { tx = (await db()).transaction(namen, art); }
+  catch (e) {
+    if (e?.name !== "InvalidStateError") throw e;
+    dbPromise = null; tx = (await db()).transaction(namen, art);
+  }
+  if (art === "readwrite") { stand++; const fertig = () => { stand++; }; tx.addEventListener("complete", fertig); tx.addEventListener("abort", fertig); tx.addEventListener("error", fertig); }
+  return tx;
 }
 // Fehler einer einzelnen Anfrage stehen in e.target.error, tx.error ist in dem Moment oft noch leer
 const done = tx => new Promise((res, rej) => {
@@ -44,7 +64,7 @@ const toBlob = buf => new Blob([buf], { type: "image/jpeg" });
 export async function addItem({ foto, vorschau, ...angaben }, entwurfId = null) {
   // Erst umwandeln, dann schreiben: während einer Transaktion darf nicht auf anderes gewartet werden
   const [fotoBuf, vorschauBuf] = await Promise.all([foto.arrayBuffer(), vorschau.arrayBuffer()]);
-  const tx = (await db()).transaction(["teile", "fotos", "meta", "entwuerfe"], "readwrite");
+  const tx = await bereich(["teile", "fotos", "meta", "entwuerfe"], "readwrite");
   const meta = tx.objectStore("meta");
   let nr;
   meta.get("naechsteNr").onsuccess = e => {
@@ -65,41 +85,52 @@ export async function entwurfSpeichern(e) {
   const bufs = await Promise.all(BILDER.map(k => e[k] ? e[k].arrayBuffer() : null));
   const rec = { ...e };
   BILDER.forEach((k, i) => { if (bufs[i]) rec[k] = bufs[i]; else delete rec[k]; });
-  const tx = (await db()).transaction("entwuerfe", "readwrite");
+  const tx = await bereich("entwuerfe", "readwrite");
   tx.objectStore("entwuerfe").put(rec);
   await done(tx);
 }
 // Kleine Änderungen (Auswahl, Ordner …) ohne die Bilder neu zu schicken; gibt es den Entwurf nicht mehr, passiert nichts
 export async function entwurfAendern(id, felder) {
-  const tx = (await db()).transaction("entwuerfe", "readwrite"), E = tx.objectStore("entwuerfe");
+  const tx = await bereich("entwuerfe", "readwrite"), E = tx.objectStore("entwuerfe");
   E.get(id).onsuccess = ev => { if (ev.target.result) E.put({ ...ev.target.result, ...felder }); };
   await done(tx);
 }
 export async function entwurfLoeschen(id) {
-  const tx = (await db()).transaction("entwuerfe", "readwrite");
+  const tx = await bereich("entwuerfe", "readwrite");
   tx.objectStore("entwuerfe").delete(id);
   await done(tx);
 }
-// Alle Entwürfe in der Reihenfolge, in der die Fotos ausgewählt wurden
-export async function entwuerfe() {
-  const alle = await request((await db()).transaction("entwuerfe").objectStore("entwuerfe").getAll());
-  return alle.map(e => ({ ...e, datei: e.datei ? new Blob([e.datei], { type: e.dateiTyp || "image/jpeg" }) : null,
-    foto: e.foto ? toBlob(e.foto) : null, vorschau: e.vorschau ? toBlob(e.vorschau) : null }));
+// Nur die Nummern (ids) der Entwürfe, in der Reihenfolge, in der die Fotos ausgewählt wurden. Seit 0.25 (Durchsicht 11.11.2026):
+// Vorher kamen beim Start alle Originalfotos auf einmal in den Speicher, und das iPhone konnte die App gleich wieder schließen.
+export async function entwurfIds() {
+  return request((await bereich("entwuerfe")).objectStore("entwuerfe").getAllKeys());
 }
-// Alle Teile mit Vorschau (als Blob), ohne die großen Fotos
+// Einen Entwurf mit seinen Bildern (als Blob) oder null, erst wenn er an der Reihe ist
+export async function entwurfLaden(id) {
+  const e = await request((await bereich("entwuerfe")).objectStore("entwuerfe").get(id));
+  return e ? { ...e, datei: e.datei ? new Blob([e.datei], { type: e.dateiTyp || "image/jpeg" }) : null,
+    foto: e.foto ? toBlob(e.foto) : null, vorschau: e.vorschau ? toBlob(e.vorschau) : null } : null;
+}
+// Alle Teile mit Vorschau (als Blob), ohne die großen Fotos.
+// Seit 0.25 gemerkt, bis etwas gespeichert wird: Jede Ansicht fragt danach, bei 300 Teilen dauerte das jedes Mal spürbar.
+// Die Teile sind dann bei mehreren Anzeigen dieselben Objekte – sie dürfen darum nirgends verändert werden.
+let gemerkt = null;
 export async function allItems() {
-  const items = await request((await db()).transaction("teile").objectStore("teile").getAll());
-  return items.map(t => ({ ...t, vorschau: toBlob(t.vorschau) }));
+  if (gemerkt && gemerkt.stand === stand) return [...gemerkt.items];
+  const beginn = stand;
+  const items = (await request((await bereich("teile")).objectStore("teile").getAll())).map(t => ({ ...t, vorschau: toBlob(t.vorschau) }));
+  if (beginn === stand) gemerkt = { stand: beginn, items };
+  return [...items];
 }
 // Ein Teil mit Vorschau (als Blob) oder null
 export async function getItem(nr) {
-  const t = await request((await db()).transaction("teile").objectStore("teile").get(nr));
+  const t = await request((await bereich("teile")).objectStore("teile").get(nr));
   return t ? { ...t, vorschau: toBlob(t.vorschau) } : null;
 }
 // Angaben von Teilen ändern: [{ nr, ...geänderte Felder }], alles in EINEM Schritt. Vorschau und Nummer bleiben.
 // „geaendert“ = Zeitpunkt, damit die App sagen kann, was seit der letzten Sicherung anders ist.
 export async function updateItems(changes) {
-  const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile"), jetzt = new Date().toISOString();
+  const tx = await bereich("teile", "readwrite"), teile = tx.objectStore("teile"), jetzt = new Date().toISOString();
   for (const { nr, ...felder } of changes) {
     teile.get(nr).onsuccess = e => { if (e.target.result) teile.put({ ...e.target.result, ...felder, geaendert: jetzt }); };
   }
@@ -108,7 +139,7 @@ export async function updateItems(changes) {
 export const updateItem = (nr, felder) => updateItems([{ nr, ...felder }]);
 // Alle Teile in EINEM Schritt durchgehen: fn(teil) gibt das geänderte Teil zurück oder null (dann bleibt es, wie es ist)
 export async function updateAll(fn) {
-  const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile");
+  const tx = await bereich("teile", "readwrite"), teile = tx.objectStore("teile");
   teile.getAll().onsuccess = e => { for (const t of e.target.result) { const neu = fn(t); if (neu) teile.put(neu); } };
   await done(tx);
 }
@@ -118,33 +149,33 @@ export const restoreItem = nr => updateItem(nr, { geloescht: null });
 // Endgültig löschen (Papierkorb leeren oder nach 30 Tagen). Die Nummer wird trotzdem nie wieder vergeben.
 export async function purgeItems(nrs) {
   if (!nrs.length) return;
-  const tx = (await db()).transaction(["teile", "fotos"], "readwrite");
+  const tx = await bereich(["teile", "fotos"], "readwrite");
   for (const nr of nrs) { tx.objectStore("teile").delete(nr); tx.objectStore("fotos").delete(nr); }
   await done(tx);
 }
 // „Mein Stil“: was sie gern trägt (sehr persönlich, bleibt nur auf dem Gerät und in ihrer eigenen Sicherung)
 export async function getStil() {
-  return (await request((await db()).transaction("meta").objectStore("meta").get("meinStil"))) || {};
+  return (await request((await bereich("meta")).objectStore("meta").get("meinStil"))) || {};
 }
 export async function setStil(stil) {
-  const tx = (await db()).transaction("meta", "readwrite");
+  const tx = await bereich("meta", "readwrite");
   tx.objectStore("meta").put(stil, "meinStil");
   await done(tx);
 }
 // Eigene Ordner [{ id, name }]
 export async function getFolders() {
-  return (await request((await db()).transaction("meta").objectStore("meta").get("ordner"))) || [];
+  return (await request((await bereich("meta")).objectStore("meta").get("ordner"))) || [];
 }
 // „sonstGeaendert“ = wann zuletzt Ordner oder eigene Knöpfe geändert wurden (für „Seit deiner letzten Sicherung …“)
 const merken = meta => meta.put(new Date().toISOString(), "sonstGeaendert");
 export async function setFolders(folders) {
-  const tx = (await db()).transaction("meta", "readwrite");
+  const tx = await bereich("meta", "readwrite");
   tx.objectStore("meta").put(folders, "ordner"); merken(tx.objectStore("meta"));
   await done(tx);
 }
 // Ordner löschen: nur der Ordner verschwindet, die Teile bleiben (auch im Papierkorb wird er bei ihnen ausgetragen)
 export async function deleteFolder(id) {
-  const tx = (await db()).transaction(["teile", "meta"], "readwrite"), teile = tx.objectStore("teile"), meta = tx.objectStore("meta");
+  const tx = await bereich(["teile", "meta"], "readwrite"), teile = tx.objectStore("teile"), meta = tx.objectStore("meta");
   teile.getAll().onsuccess = e => {
     for (const t of e.target.result) if (t.ordner?.includes(id)) teile.put({ ...t, ordner: t.ordner.filter(o => o !== id) });
   };
@@ -155,7 +186,7 @@ export async function deleteFolder(id) {
 // Welche Teile in einem Ordner liegen (Auswahl „Teile auswählen“): nrs = alle Nummern, die drin sein sollen.
 // Teile im Papierkorb bleiben, wie sie sind: Sie stehen nicht zur Auswahl und kommen beim Wiederherstellen mit ihren Ordnern zurück.
 export async function setFolderItems(id, nrs) {
-  const tx = (await db()).transaction("teile", "readwrite"), teile = tx.objectStore("teile");
+  const tx = await bereich("teile", "readwrite"), teile = tx.objectStore("teile");
   teile.getAll().onsuccess = e => {
     for (const t of e.target.result) {
       if (t.geloescht) continue;
@@ -169,7 +200,7 @@ export async function setFolderItems(id, nrs) {
 // Schritt geprüft, in dem die Nummer zurückgesetzt wird. Gibt true zurück, wenn es geklappt hat.
 // „letzteSicherung“ und die fertigen Outfits fallen weg, weil ihre Nummern sonst mit den neuen Teilen verwechselt würden.
 export async function nummernZuruecksetzen() {
-  const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
+  const tx = await bereich(["teile", "fotos", "meta"], "readwrite");
   let ok = false;
   tx.objectStore("teile").count().onsuccess = e => {
     if (e.target.result !== 0) return;
@@ -184,18 +215,18 @@ export async function nummernZuruecksetzen() {
 }
 // Großes Foto eines Teils (als Blob) oder null
 export async function getPhoto(nr) {
-  const buf = await request((await db()).transaction("fotos").objectStore("fotos").get(nr));
+  const buf = await request((await bereich("fotos")).objectStore("fotos").get(nr));
   return buf ? toBlob(buf) : null;
 }
 // Fertige Outfits (neueste zuerst)
 export async function getOutfits() {
-  return (await request((await db()).transaction("meta").objectStore("meta").get("outfits"))) || [];
+  return (await request((await bereich("meta")).objectStore("meta").get("outfits"))) || [];
 }
 const lookSchluessel = (id, klein = false) => (klein ? "outfit-klein:" : "outfit:") + id;
 // Outfit neu anlegen oder ändern (gleiche id), in EINEM Schritt mit seinem Foto.
 // foto: { gross, klein } (ArrayBuffer) = Foto setzen, null = Foto entfernen, weglassen = Foto bleibt, wie es ist
 export async function saveOutfit(o, foto) {
-  const tx = (await db()).transaction(["meta", "fotos"], "readwrite"), M = tx.objectStore("meta"), F = tx.objectStore("fotos");
+  const tx = await bereich(["meta", "fotos"], "readwrite"), M = tx.objectStore("meta"), F = tx.objectStore("fotos");
   const neu = { ...o, geaendert: new Date().toISOString() };
   if (foto) { F.put(foto.gross, lookSchluessel(o.id)); F.put(foto.klein, lookSchluessel(o.id, true)); neu.foto = true; }
   else if (foto === null) { F.delete(lookSchluessel(o.id)); F.delete(lookSchluessel(o.id, true)); neu.foto = false; }
@@ -208,7 +239,7 @@ export async function saveOutfit(o, foto) {
   return neu;
 }
 export async function deleteOutfit(id) {
-  const tx = (await db()).transaction(["meta", "fotos"], "readwrite"), M = tx.objectStore("meta");
+  const tx = await bereich(["meta", "fotos"], "readwrite"), M = tx.objectStore("meta");
   M.get("outfits").onsuccess = e => M.put((e.target.result || []).filter(x => x.id !== id), "outfits");
   tx.objectStore("fotos").delete(lookSchluessel(id)); tx.objectStore("fotos").delete(lookSchluessel(id, true));
   merken(M);
@@ -216,25 +247,25 @@ export async function deleteOutfit(id) {
 }
 // Foto vom Look (als Blob) oder null
 export async function getLookFoto(id, klein = false) {
-  const buf = await request((await db()).transaction("fotos").objectStore("fotos").get(lookSchluessel(id, klein)));
+  const buf = await request((await bereich("fotos")).objectStore("fotos").get(lookSchluessel(id, klein)));
   return buf ? toBlob(buf) : null;
 }
 // Selbst eingetippte Einträge („Andere …“), pro Merkmal eine Liste: { Art: [{ wert, gruppe }], Farbe: [{ wert }], … }
 // Liegen am selben Ort wie die Teile und kommen später mit in die Sicherung.
 export async function getCustom() {
-  return (await request((await db()).transaction("meta").objectStore("meta").get("eigeneWerte"))) || {};
+  return (await request((await bereich("meta")).objectStore("meta").get("eigeneWerte"))) || {};
 }
 export async function setCustom(custom) {
-  const tx = (await db()).transaction("meta", "readwrite");
+  const tx = await bereich("meta", "readwrite");
   tx.objectStore("meta").put(custom, "eigeneWerte"); merken(tx.objectStore("meta"));
   await done(tx);
 }
 // Einzelne Einträge in meta, z. B. "naechsteNr", "letzteSicherung" = { zeit, nrs } (was in der letzten ZIP war), "sonstGeaendert"
 export async function getMeta(key) {
-  return request((await db()).transaction("meta").objectStore("meta").get(key));
+  return request((await bereich("meta")).objectStore("meta").get(key));
 }
 export async function setMeta(key, value) {
-  const tx = (await db()).transaction("meta", "readwrite");
+  const tx = await bereich("meta", "readwrite");
   tx.objectStore("meta").put(value, key);
   await done(tx);
 }
@@ -243,13 +274,21 @@ export async function setMeta(key, value) {
 // teile: fertige Einträge (mit vorschau als ArrayBuffer), fotos: Map nr → ArrayBuffer (dazu die Fotos der Outfits unter
 // "outfit:<id>" / "outfit-klein:<id>"), meta: { Schlüssel: Wert }
 export async function replaceAll({ teile, fotos, meta }) {
-  const tx = (await db()).transaction(["teile", "fotos", "meta"], "readwrite");
-  const T = tx.objectStore("teile"), F = tx.objectStore("fotos"), M = tx.objectStore("meta");
-  T.clear(); F.clear(); M.clear();
-  for (const t of teile) T.put(t);
-  for (const [nr, buf] of fotos) F.put(buf, nr);
-  for (const [k, v] of Object.entries(meta)) if (v != null) M.put(v, k);
-  await done(tx);
+  const tx = await bereich(["teile", "fotos", "meta"], "readwrite");
+  const T = tx.objectStore("teile"), F = tx.objectStore("fotos"), M = tx.objectStore("meta"), fertig = done(tx);
+  // Scheitert ein Eintrag sofort (z. B. ein Wert, den der Speicher nicht annimmt), muss der ganze Schritt abgebrochen werden.
+  // Sonst wäre schon alles geleert und nur zum Teil neu geschrieben (Durchsicht 11.11.2026: aus 300 Teilen wurde 1).
+  try {
+    T.clear(); F.clear(); M.clear();
+    for (const t of teile) T.put(t);
+    for (const [nr, buf] of fotos) F.put(buf, nr);
+    for (const [k, v] of Object.entries(meta)) if (v != null) M.put(v, k);
+  } catch (e) {
+    try { tx.abort(); } catch {}
+    await fertig.catch(() => {});
+    throw e;
+  }
+  await fertig;
 }
 // Browser bitten, die Daten nicht beim Aufräumen zu löschen (Safari entscheidet selbst, ob er zustimmt)
 export async function askPersist() {

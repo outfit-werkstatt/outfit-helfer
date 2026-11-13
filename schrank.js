@@ -2,16 +2,16 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken } from "./ui.js?v=18";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=10";
-import { renderStil, stilKurz } from "./stil.js?v=19";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=23";
-import { renderPasst, miniKachel } from "./passt.js?v=21";
-import { renderOutfit } from "./outfit.js?v=18";
-import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=7";
-import { bildPaketBereich } from "./chatgpt.js?v=15";
-import { renderVinted } from "./vinted.js?v=5";
-import { GROUPS } from "./ki.js?v=7";
+import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=19";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
+import { renderStil, stilKurz } from "./stil.js?v=20";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=24";
+import { renderPasst, miniKachel } from "./passt.js?v=22";
+import { renderOutfit } from "./outfit.js?v=19";
+import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=8";
+import { bildPaketBereich } from "./chatgpt.js?v=16";
+import { renderVinted } from "./vinted.js?v=6";
+import { GROUPS } from "./ki.js?v=8";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
 const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
@@ -26,11 +26,17 @@ const ordnerMelden = () => document.dispatchEvent(new Event("ordner-geaendert"))
 /* ---------- Ansichten und „Zurück“ ---------- */
 let current = { v: "start", d: 0 }, urls = [];
 let bearbeitet = false; // „Angaben ändern“ ist offen: dann nicht von außen neu zeichnen, sonst wären die Änderungen weg
+let geaendert = () => false; // bei „Angaben ändern“: wurde schon etwas angetippt oder eingetippt?
 let mehrfach = null;    // „Auswählen“ (Ordner-Ansicht, Papierkorb): Set der angetippten Nummern, sonst null
 const url = blob => { const u = URL.createObjectURL(blob); urls.push(u); return u; };
 // Gescrollt wird im eigenen Bereich #rahmen, nicht in der ganzen Seite (wegen Uhrzeit und Akku auf dem iPhone, siehe app.css)
 const scrollStelle = () => $("rahmen").scrollTop, scrollen = y => $("rahmen").scrollTo(0, y);
+// Dieselbe Ansicht? (seit 0.25: Zweimal schnell auf eine Kachel legte zwei Einträge an, „Zurück“ musste man dann zweimal tippen)
+const gleicheAnsicht = (a, b) => ["v", "nr", "id", "zusammenstellen"].every(k => (a[k] ?? null) === (b[k] ?? null));
+// Ungespeicherte Änderungen bei „Angaben ändern“ nicht still verwerfen (seit 0.25)
+const darfVerlassen = () => !bearbeitet || !geaendert() || confirm("Änderungen verwerfen?\n\nDu hast die Angaben geändert, aber noch nicht gespeichert.");
 export function go(state) {
+  if (gleicheAnsicht(state, current) || !darfVerlassen()) return;
   history.replaceState({ ...current, y: scrollStelle() }, "");
   current = { ...state, d: current.d + 1 };
   history.pushState(current, "");
@@ -40,13 +46,20 @@ function back() {
   if (current.d > 0) history.back();
   else { current = { v: "start", d: 0 }; history.replaceState(current, ""); show(0); }
 }
+// Knopf „‹ Zurück“: Ein zweites Tippen kurz danach zählt nicht (sonst ging es zwei Schritte zurück)
+let zurueckZeit = 0;
+const zurueckTippen = () => { const jetzt = Date.now(); if (jetzt - zurueckZeit < 700) return; zurueckZeit = jetzt; back(); };
 // Die aktuelle Ansicht ersetzen, ohne neuen Eintrag im Verlauf (nach „Eigenes Outfit“ → das gespeicherte Outfit;
 // „Zurück“ führt dann zur Liste der fertigen Outfits und nicht wieder zum Antippen)
 function ersetze(state) { current = { ...state, d: current.d }; history.replaceState(current, ""); show(0); }
-addEventListener("popstate", e => { current = e.state || { v: "start", d: 0 }; show(current.y || 0); });
+addEventListener("popstate", e => {
+  // Will sie bei „Angaben ändern“ doch bleiben, kommt die Ansicht wieder in den Verlauf (der Schritt zurück ist schon passiert)
+  if (!darfVerlassen()) { history.pushState(current, ""); return; }
+  current = e.state || { v: "start", d: 0 }; show(current.y || 0);
+});
 history.scrollRestoration = "manual"; // die Stelle merken wir uns selbst (y im Verlauf)
 async function show(y) {
-  auswahl = null; bearbeitet = false; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
+  auswahl = null; bearbeitet = false; geaendert = () => false; // Auswählen und „Angaben ändern“ enden, sobald man die Ansicht wechselt
   mehrfach = current.zusammenstellen ? new Set() : null; // „＋ Eigenes Outfit zusammenstellen“ beginnt gleich mit dem Antippen
   $("ansichtStart").hidden = current.v !== "start"; $("ansicht").hidden = current.v === "start";
   try { await render(); } catch (e) { fehlerToast("Anzeigen hat nicht geklappt", e); console.error(e); }
@@ -88,7 +101,8 @@ async function render() {
   }
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
   if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }),
-    () => sichtbar(items).length ? go({ v: "liste", id: ALLE, zusammenstellen: true }) : toast("Speichere zuerst Kleidung, dann kannst du Outfits zusammenstellen."));
+    // Zusammenstellen beginnt ohne Suche und Filter (seit 0.25: vorher galten die aus „Mein Kleiderschrank“ mit)
+    () => { if (!sichtbar(items).length) return toast("Speichere zuerst Kleidung, dann kannst du Outfits zusammenstellen."); filters.delete(ZUSAMMEN); go({ v: "liste", id: ALLE, zusammenstellen: true }); });
   if (s.v === "fertigEins") {
     const o = outfits.find(x => x.id === s.id);
     if (!o) return back();
@@ -98,7 +112,7 @@ async function render() {
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
-  el("div", { class: "kopf-zeile" }, el("button", { type: "button", class: "zurueck", onclick: back }, "‹ Zurück"), rechts),
+  el("div", { class: "kopf-zeile" }, el("button", { type: "button", class: "zurueck", onclick: zurueckTippen }, "‹ Zurück"), rechts),
   el("h2", {}, titel), unter ? el("div", { class: "hint" }, unter) : null);
 const anzahl = n => `${n} ${n === 1 ? "Teil" : "Teile"}`;
 
@@ -180,6 +194,7 @@ function nameEditor(box, start, folders, onOk, selfId = null) {
 
 /* ---------- Ordner-Ansicht mit Filtern und Suche ---------- */
 const filters = new Map(); // pro Ordner gemerkt, solange die App offen ist: { gruppe, farbe, suche }
+const ZUSAMMEN = "zusammenstellen"; // eigene Filter beim „＋ Eigenes Outfit zusammenstellen“
 let auswahl = null;        // „Teile auswählen“: Set der Nummern, die im Ordner sein sollen (sonst null)
 function teilKachel(t, { markiert = null, onclick, extra = null }) {
   const b = el("button", { type: "button", class: "teil" + (markiert ? " markiert" : "") },
@@ -246,10 +261,12 @@ function filterChips(list, f, onChange) {
     farben.size > 1 || f.farbe ? field("Farbe", null, row([...farben].sort((a, b) => b[1] - a[1]), "farbe", true)) : null);
 }
 // Suche: nur Ziffern (auch „Nr. 12“) = Nummer; sonst Wörter, die alle in den Angaben vorkommen müssen (z. B. „jeans blau“)
+// Seit 0.25 (Durchsicht 11.11.2026): Ziffern finden genau diese Nummer („12“ und „012“ = Nr. 012, nicht mehr auch 120–129)
+// und dieselbe Größe („38“ = Nr. 038 und Teile in Größe 38)
 function passtSuche(t, q) {
   q = q.trim().toLowerCase().replace(/^nr\.?\s*/, "");
   if (!q) return true;
-  if (/^\d+$/.test(q)) return t.nr === Number(q) || nrText(t.nr).startsWith(q);
+  if (/^\d+$/.test(q)) return t.nr === Number(q) || String(t.groesse || "").toLowerCase().split(/[\s/]+/).includes(q);
   const text = [t.art, t.gruppe, ...(t.farben || []), t.muster, t.material, t.aermel, t.schnitt, t.weite, t.laenge, t.bund,
     ...(t.stil || []), ...(t.saison || []), t.notiz, t.marke, t.groesse, t.zustand].filter(Boolean).join(" ").toLowerCase();
   return q.split(/\s+/).every(w => text.includes(w));
@@ -259,15 +276,16 @@ function renderListe(items, folders, id) {
   if (id !== ALLE && id !== NICHT && !ordner) { auswahl = null; return back(); }
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr);
   const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : id === NICHT ? da.filter(t => t.nichtAnziehen) : da;
-  const f = filters.get(id) || { gruppe: null, farbe: null, suche: "" };
-  filters.set(id, f);
+  const filterName = current.zusammenstellen ? ZUSAMMEN : id;
+  const f = filters.get(filterName) || { gruppe: null, farbe: null, suche: "" };
+  filters.set(filterName, f);
   const basis = auswahl ? da : drin; // beim Auswählen alle Teile zeigen
   const gefiltert = basis.filter(t => (!f.gruppe || (t.gruppe || "Sonstiges") === f.gruppe) && (!f.farbe || t.farben?.includes(f.farbe)));
   const editor = el("div", {}); editor.hidden = true;
 
-  let aktionen = null;
+  let aktionen = null, fertigKnopf = null;
   if (ordner && auswahl) {
-    const fertig = el("button", { type: "button", class: "btn primary" }, `Fertig (${anzahl(auswahl.size)})`);
+    const fertig = fertigKnopf = el("button", { type: "button", class: "btn primary" }, `Fertig (${anzahl(auswahl.size)})`);
     fertig.onclick = async () => {
       fertig.disabled = true;
       try { await setFolderItems(id, auswahl); auswahl = null; toast("Ordner gespeichert"); neuZeichnen(); }
@@ -307,7 +325,11 @@ function renderListe(items, folders, id) {
   const teilVon = new Map(gefiltert.map(t => [t.nr, t]));
   const grid = el("div", { class: "grid" }, ...gefiltert.map(t => {
     const k = auswahl
-      ? teilKachel(t, { markiert: auswahl.has(t.nr), onclick: () => { auswahl.has(t.nr) ? auswahl.delete(t.nr) : auswahl.add(t.nr); neuZeichnen(); } })
+      // Nur den Haken umschalten statt alles neu zu zeichnen (seit 0.25: bei 300 Teilen stockte sonst jedes Tippen)
+      ? teilKachel(t, { markiert: auswahl.has(t.nr), onclick: () => {
+          auswahl.has(t.nr) ? auswahl.delete(t.nr) : auswahl.add(t.nr); haken(k, auswahl.has(t.nr));
+          if (fertigKnopf) fertigKnopf.textContent = `Fertig (${anzahl(auswahl.size)})`;
+        } })
       : mehrfach
       ? teilKachel(t, { markiert: mehrfach.has(t.nr), onclick: () => { mehrfach.has(t.nr) ? mehrfach.delete(t.nr) : mehrfach.add(t.nr); haken(k, mehrfach.has(t.nr)); leiste.update(); } })
       : teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }) });
@@ -327,9 +349,12 @@ function renderListe(items, folders, id) {
     const n = nrs => anzahl(nrs.length);
     // „⭐ Als Outfit speichern“ (Wunsch 07.11.2026): Name freiwillig, dann gleich das gespeicherte Outfit öffnen
     const zuViele = k => toast(`Ein Outfit hat höchstens ${MAX_TEILE} Teile, ausgewählt ${k === 1 ? "ist" : "sind"} ${k}.`);
+    let nameFeld = null;
     const alsOutfit = { text: "⭐ Als Outfit speichern", haupt: zusammen, los: async nrs => {
       if (nrs.length > MAX_TEILE) return zuViele(nrs.length);
-      const name = el("input", { type: "text", class: "suche", maxLength: MAX_NAME, placeholder: "z. B. Büro am Freitag", "aria-label": "Name des Outfits (freiwillig)", autocomplete: "off", enterKeyHint: "done" });
+      // Ist das Namensfeld schon offen, nur dorthin springen (vorher löschte ein zweites Tippen den eingetippten Namen)
+      if (nameFeld?.isConnected && !leiste.extra.hidden) { nameFeld.focus(); return; }
+      const name = nameFeld = el("input", { type: "text", class: "suche", maxLength: MAX_NAME, placeholder: "z. B. Büro am Freitag", "aria-label": "Name des Outfits (freiwillig)", autocomplete: "off", enterKeyHint: "done" });
       const ok = el("button", { type: "button", class: "btn primary" }, "Speichern");
       ok.onclick = async () => {
         const jetzt = [...(mehrfach || [])]; // was gerade angetippt ist (auch nach dem Öffnen dieses Felds noch änderbar)
@@ -393,14 +418,14 @@ function renderListe(items, folders, id) {
       : kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter, waehlenKnopf),
     aktionen, editor,
     basis.length ? suche : null,
-    basis.length ? filterChips(basis, f, nf => { filters.set(id, nf); neuZeichnen(); }) : null,
+    basis.length ? filterChips(basis, f, nf => { filters.set(filterName, nf); neuZeichnen(); }) : null,
     grid, keinTreffer,
     leer ? el("p", { class: "hint" }, leer) : null,
     leiste?.el);
 }
 
 /* ---------- Teil-Ansicht ---------- */
-const datum = iso => new Date(iso).toLocaleDateString("de-DE");
+const datum = datumText;
 function renderTeil(items, folders, nr, foto) {
   const t = items.find(x => x.nr === nr);
   if (!t) return back();
@@ -438,8 +463,10 @@ function renderTeil(items, folders, nr, foto) {
   aendern.onclick = () => {
     bearbeitet = true;
     const form = angabenFelder(angabenVon(t), () => { speichern.disabled = !form.get().art; });
+    const start = JSON.stringify(form.get());
+    geaendert = () => JSON.stringify(form.get()) !== start;
     $("ansicht").dispose = () => form.dispose();
-    const fertig = () => { bearbeitet = false; neuZeichnen(); };
+    const fertig = () => { bearbeitet = false; geaendert = () => false; neuZeichnen(); };
     const speichern = el("button", { type: "button", class: "btn primary" }, "Speichern");
     const abbrechen = el("button", { type: "button", class: "btn", onclick: fertig }, "Abbrechen");
     speichern.onclick = async () => {
@@ -448,15 +475,17 @@ function renderTeil(items, folders, nr, foto) {
       catch (e) { speichern.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
     };
     inhalt.replaceChildren(...form.elements, el("div", { class: "actions" }, abbrechen, speichern));
-    // 🚫 steht jetzt im Formular unter „Mehr Angaben“; ein zweiter Schalter würde das Formular verwerfen
-    aktionen.hidden = true; nichtFeld.hidden = true;
+    // 🚫 steht jetzt im Formular unter „Mehr Angaben“; ein zweiter Schalter würde das Formular verwerfen.
+    // „Was passt dazu?“ und „Für Vinted“ während des Änderns ausblenden, sie würden die Ansicht wechseln.
+    aktionen.hidden = true; nichtFeld.hidden = true; if (passt) passt.hidden = true;
   };
   const korb = el("button", { type: "button", class: "btn" }, t.geloescht ? "Wiederherstellen" : "In den Papierkorb");
   korb.onclick = async () => {
+    korb.disabled = true; // zweimal schnell getippt ging es sonst zwei Schritte zurück (seit 0.25)
     try {
       if (t.geloescht) { await restoreItem(nr); toast(`Nr. ${nrText(nr)} ist wieder da`); neuZeichnen(); }
       else { await trashItem(nr); toast(`Nr. ${nrText(nr)} liegt jetzt im Papierkorb`); back(); }
-    } catch (e) { fehlerToast("Hat nicht geklappt", e); }
+    } catch (e) { korb.disabled = false; fehlerToast("Hat nicht geklappt", e); }
   };
   // wrap: Bei 320 px Breite stehen die zwei Knöpfe untereinander statt zweizeilig beschriftet (seit 0.21)
   const aktionen = el("div", { class: "actions wrap" }, t.geloescht ? null : aendern, korb);
@@ -489,8 +518,8 @@ function renderKorb(items, naechste) {
     }
     const zurueck = el("button", { type: "button", class: "btn klein" }, "Wiederherstellen");
     zurueck.onclick = async ev => {
-      ev.stopPropagation();
-      try { await restoreItem(t.nr); toast(`Nr. ${nrText(t.nr)} ist wieder da`); neuZeichnen(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
+      ev.stopPropagation(); zurueck.disabled = true;
+      try { await restoreItem(t.nr); toast(`Nr. ${nrText(t.nr)} ist wieder da`); neuZeichnen(); } catch (e) { zurueck.disabled = false; fehlerToast("Hat nicht geklappt", e); }
     };
     return el("div", { class: "korb-teil" }, teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }), extra: rest }), zurueck);
   });
@@ -512,13 +541,18 @@ function renderKorb(items, naechste) {
 }
 
 /* ---------- Start ---------- */
-// Teile, die länger als 30 Tage im Papierkorb liegen, endgültig löschen
+// Teile, die länger als 30 Tage im Papierkorb liegen, endgültig löschen. Gibt zurück, ob etwas gelöscht wurde.
 async function aufraeumen() {
   const alt = (await allItems()).filter(t => t.geloescht && Date.now() - Date.parse(t.geloescht) >= KORB_TAGE * TAG);
   await purgeItems(alt.map(t => t.nr));
+  return alt.length > 0;
 }
+// Start seit 0.25 schneller (Durchsicht 11.11.2026): Die Wörter von vor 0.6.3 werden nur einmal angeglichen (danach steht es in
+// meta, Sicherungen gleicht schon das Laden an), und der Kleiderschrank wird nur einmal gelesen statt dreimal.
 export async function initSchrank() {
-  try { await updateAll(teilAngleichen); } catch (e) { console.error(e); } // Wörter von vor 0.6.3 angleichen
+  try {
+    if (!(await getMeta("woerterAngeglichen"))) { await updateAll(teilAngleichen); await setMeta("woerterAngeglichen", true); }
+  } catch (e) { console.error(e); }
   try { await aufraeumen(); } catch (e) { console.error(e); }
   if (history.state?.v) current = history.state; else history.replaceState(current, "");
   await show(current.y || 0);

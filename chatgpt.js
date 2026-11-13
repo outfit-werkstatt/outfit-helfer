@@ -12,12 +12,12 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf } from "./ui.js?v=18";
-import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=10";
-import { stilAktuell, stilZeilen } from "./stil.js?v=19";
-import { kandidaten } from "./regeln.js?v=15";
-import { GROUPS, GROUP_OF } from "./ki.js?v=7";
-import { speichernKnopf } from "./fertig.js?v=7";
+import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=19";
+import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=11";
+import { stilAktuell, stilZeilen } from "./stil.js?v=20";
+import { kandidaten } from "./regeln.js?v=16";
+import { GROUPS, GROUP_OF } from "./ki.js?v=8";
+import { speichernKnopf } from "./fertig.js?v=8";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -33,9 +33,9 @@ const merker = frage => {
 };
 
 /* ---------- Texte ---------- */
-const datum = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+const datum = datumText;
 const ohneUmbruch = s => s.replace(/\s*\n\s*/g, " / ");
-const MODE_TEXT = { Damen: "Damenmode", Herren: "Herrenmode", beides: "Damen- und Herrenmode" };
+const MODE_TEXT = tabelle({ Damen: "Damenmode", Herren: "Herrenmode", beides: "Damen- und Herrenmode" });
 // Eine Zeile pro Teil, z. B. „Nr. 012 – T-Shirt, braun; Material: Baumwolle; Ärmel: kurz; Saison: Sommer“.
 // mitSaison = false für die Anweisung fürs Bild (dort zählen Material und Schnitt, die Saison nicht)
 export function teilZeile(t, mitSaison = true) {
@@ -301,9 +301,18 @@ const ZAHLWORT = "eins|zwei|drei|vier|fünf", ORDNUNG = "erste[nrs]?|zweite[nrs]
 const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*(nr\\.?|nummer|#)?\\s*(\\d+|(${ZAHLWORT})\\b|[a-c](?![\\p{L}\\d]))|(${ORDNUNG})\\s+(${WORT})\\b|kaufideen?[^\\p{L}\\d]*$)`, "iu");
 // Kaufidee beim Outfit: „Kaufidee: …“, „**Kaufideen:** …“, „🛍 Kaufidee (optional): …“ → der Text nach dem Doppelpunkt
 const KAUFIDEE = /^[^\p{L}]*kaufideen?\b[^:\n]{0,20}:[^\p{L}\d]*(.+)$/iu;
-// „Outfit Nr. 2“ ist die Nummer des Outfits, nicht die eines Teils
-const OUTFIT_NR = new RegExp(`\\b(${WORT})\\s*Nr\\.?\\s*\\d+`, "gi");
+// „Outfit Nr. 2“, „Outfit #2“, „Outfit Nummer 2“ ist die Nummer des Outfits, nicht die eines Teils
+const OUTFIT_NR = new RegExp(`\\b(${WORT})\\s*(?:Nr\\.?|Nummer|No\\.?|#)\\s*\\d+`, "gi");
 const NUMMER = /\bNr\.?\s*0*(\d{1,6})\b([^\n]*?)(?=\bNr\.?\s*\d|$)/gi;
+// Andere Schreibweisen einer Teil-Nummer werden zu „Nr. 012“ (seit 0.25, Durchsicht 11.11.2026): „#012“, „Nummer 12“, „No. 12“,
+// eine Zeile „- 012 – Hemd“ und Listen wie „Nr. 005, 015 und 025“ (vorher kam davon nur das erste Teil an). In einer Liste
+// zählen weitere Nummern nur genau dreistellig wie in der App, damit „Nr. 012 mit 2 Knöpfen“ oder „Nr. 012, 2026 im Trend“
+// kein weiteres Teil ergibt.
+const ANDERE_NR = /(?:\bNummer\s+|\bNo\.?\s*|#)(?=0*\d{1,6}\b)/gi;
+const NR_AM_ANFANG = /^([^\p{L}\d]*)(\d{3})(?=\s*[–—:-]\s*\p{L})/u;
+const NR_LISTE = /\bNr\.?\s*0*\d{1,6}\b(?:\s*(?:,|\+|&|\/|\bund\b|\bsowie\b|\bmit\b)\s*\d{3}\b)+/gi;
+const nummernZeile = zeile => zeile.replace(OUTFIT_NR, "").replace(ANDERE_NR, "Nr. ").replace(NR_AM_ANFANG, "$1Nr. $2")
+  .replace(NR_LISTE, liste => liste.match(/\d+/g).map(n => "Nr. " + n).join(", "));
 // Teile eines Outfits stehen in eigenen Zeilen („- Nr. 009 – Hemd“, „Oberteil: Nr. 040“, „1. Nr. 009“, „| Nr. 009 |“,
 // „Outfit 1: Nr. 009 + Nr. 008“). Nummern mitten im Text gehören nicht dazu (Styling-Tipp „mit einer Haarklammer,
 // z. B. Nr. 062“, Gemini 03.11.2026) – außer die Gruppe hat gar keine solche Zeile („Kombiniere das Hemd (Nr. 009) mit …“).
@@ -329,7 +338,7 @@ export function antwortLesen(text, items) {
     const idee = lesbar(zeile).match(KAUFIDEE);
     if (idee) { akt.kaufideen.push(idee[1].trim().slice(0, 200)); akt.zeilen.push(zeile); continue; }
     akt.zeilen.push(zeile);
-    const ohne = zeile.replace(OUTFIT_NR, ""), liste = TEIL_ZEILE.test(ohne) ? akt.nrs : akt.imText;
+    const ohne = nummernZeile(zeile), liste = TEIL_ZEILE.test(ohne) ? akt.nrs : akt.imText;
     for (const m of ohne.matchAll(NUMMER)) {
       const n = +m[1], b = m[2].replace(/^[\s–—\-:,(]+/, "").replace(/[\s+,;)]+$/, "").slice(0, 60);
       if (n <= 0) continue;
@@ -436,7 +445,6 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
   pruefen(); zeigen();
   return { el: el("div", {}, status, knoepfe, box), zustand: () => v };
 }
-export const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 
 /* ---------- Anzeige unter „Outfit finden“ und „Was passt dazu?“ ---------- */
 // frage = { situation: { anlass, schickWahl, temperatur, wetter } } oder { teil }; kachel(t) = kleine Kachel eines Teils

@@ -77,4 +77,3 @@ export const LEGS = [
 // Wo welches Merkmal passt
 export const HAS_SLEEVES = new Set(["Oberteile", "Jacken & Mäntel", "Kleider & Einteiler"]);
 export const HAS_LEGS = new Set(["Jeans", "Hose", "Leggings", "Jogginghose"]);
-export const IS_GARMENT = g => !["Schuhe", "Taschen", "Schmuck", "Haar"].includes(g);

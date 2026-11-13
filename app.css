@@ -82,9 +82,6 @@ label.upload input{display:none}
 .info-box p{margin:0 0 6px}
 .info-box p:last-child{margin-bottom:0}
 .info-box ul{margin:4px 0 6px;padding-left:20px}
-/* ⓘ oben rechts in einer Karte ohne Überschrift */
-.mit-ecke{position:relative;padding-right:48px}
-.info-ecke{position:absolute;top:14px;right:14px}
 
 /* Hinweis Home-Bildschirm */
 .hinweis{border-color:var(--accent)}
@@ -92,7 +89,9 @@ label.upload input{display:none}
 .hinweis ol{margin:8px 0;padding-left:22px}
 .hinweis li{margin:4px 0}
 .warnzeile{background:var(--chip);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:16px;font-size:.9rem}
-.link{background:none;border:0;padding:0;color:var(--link);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+.link{position:relative;background:none;border:0;padding:0;color:var(--link);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+/* Text-Knöpfe sind nur eine Zeile hoch: unsichtbar größere Tippfläche (44 px), ohne den Text zu verschieben (seit 0.25) */
+.link::after{content:"";position:absolute;left:-4px;right:-4px;top:50%;height:44px;transform:translateY(-50%)}
 
 /* Fortschritt beim Hinzufügen: bleibt beim Scrollen durch die Karten oben (unter der Uhrzeit) stehen */
 #fortschritt{position:sticky;top:calc(env(safe-area-inset-top) + 8px);z-index:40;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
@@ -122,7 +121,7 @@ body.ohne-scroll{overflow:hidden}
 .field .note{font-size:.8rem;color:var(--muted);margin:-2px 0 6px}
 /* Auswahl-Knöpfe seit 0.21 etwas größer (40 statt 36 px, mehr Abstand), damit man auf dem iPhone nicht den Nachbarn trifft */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{border:1px solid transparent;background:var(--chip);color:var(--ink);border-radius:999px;padding:8px 14px;font:inherit;font-size:.92rem;cursor:pointer;min-height:40px}
+.chip{border:1px solid transparent;background:var(--chip);color:var(--ink);border-radius:999px;padding:8px 14px;font:inherit;font-size:.92rem;cursor:pointer;min-height:40px;max-width:100%;overflow-wrap:anywhere}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 /* Eingabefelder mindestens 16px groß, sonst zoomt das iPhone beim Antippen in die Seite */
 .chips select{border:1px dashed var(--muted);background:transparent;color:var(--muted);border-radius:999px;padding:7px 10px;font:inherit;font-size:1rem;min-height:40px;max-width:100%}
@@ -156,7 +155,7 @@ button.teil,button.kachel{font:inherit;color:inherit;text-align:left;padding:0;c
 .teil .nicht{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.6);border-radius:8px;padding:1px 6px;font-size:.9rem}
 /* „Mehr Angaben“ eingeklappt, damit die Karte kurz bleibt */
 .mehr{border-top:1px solid var(--line);padding:10px 0 0}
-.mehr summary{cursor:pointer;font-weight:600;color:var(--link);padding:4px 0 8px;min-height:36px}
+.mehr summary{cursor:pointer;font-weight:600;color:var(--link);padding:11px 0;min-height:44px}
 .mehr .field:first-of-type{border-top:0}
 .notiz{width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:9px 12px;resize:vertical}
 .teil.markiert{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
@@ -174,14 +173,12 @@ button.teil,button.kachel{font:inherit;color:inherit;text-align:left;padding:0;c
 .kachel.neu .plus{font-size:2rem;line-height:1;color:var(--link)}
 .kachel.neu .name{padding:4px 10px 0}
 #ordnerEditor{margin-top:var(--gap)}
-.stil-karte .titel{font-weight:600}
-.stil-karte .hint{overflow-wrap:anywhere}
 details.panel.mehr{padding-top:12px}
 
 /* Ordner, Teil, Papierkorb */
 .kopf{margin-bottom:12px}
 .kopf-zeile{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.kopf-knopf{background:none;border:0;padding:8px 0;color:var(--link);font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.kopf-knopf{background:none;border:0;padding:8px 0;color:var(--link);font:inherit;font-weight:600;cursor:pointer;min-height:44px;min-width:44px}
 /* Vorschläge der App: eingeklappt unter ChatGPT/Gemini, die Zeile zum Aufklappen sieht aus wie eine Karte */
 .klappe{margin:0 0 16px}
 .klappe > summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;min-height:56px;padding:14px 16px;font-weight:700;
@@ -219,7 +216,7 @@ details.panel.mehr{padding-top:12px}
 /* Filter in EINER Zeile zum Wischen, damit sie bei vielen Farben nicht die halbe Seite füllen */
 .filter .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px 2px}
 .filter .chips::-webkit-scrollbar{display:none}
-.filter .chip{flex-shrink:0;white-space:nowrap}
+.filter .chip{flex-shrink:0;white-space:nowrap;max-width:none}
 .filter .field:first-child{border-top:0}
 .gross{display:block;width:100%;max-height:60vh;object-fit:contain;background:var(--chip);border-radius:var(--radius);margin-bottom:var(--gap)}
 .angaben{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
@@ -228,7 +225,7 @@ details.panel.mehr{padding-top:12px}
 /* Suche in der Ordner-Ansicht; 16px, sonst zoomt das iPhone beim Antippen */
 .suche{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:10px 16px;margin:4px 0 8px;-webkit-appearance:none;appearance:none}
 .korb-teil{display:flex;flex-direction:column;gap:6px}
-.btn.klein{min-height:40px;padding:8px 10px;font-size:.9rem}
+.btn.klein{min-height:44px;padding:8px 10px;font-size:.9rem}
 /* Sicherung: Datei-Knopf */
 label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .hint ul{margin:6px 0;padding-left:20px}
@@ -274,7 +271,7 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 /* Für Vinted (seit 0.22): Abschnitt in „Mehr Angaben“, Textfelder, Foto mit Knopf, Optionen unter dem Text */
 .abschnitt{font-weight:700;color:var(--haupt);padding:14px 0 2px;border-top:1px solid var(--line);margin-top:6px}
 .abschnitt + .field{border-top:0}
-.feld-eingabe{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.feld-eingabe{display:block;width:100%;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 12px;min-height:44px}
 .vinted-kopf{display:flex;gap:12px;align-items:center;margin-top:10px}
 .vinted-kopf .actions{margin-top:0;flex:1}
 .vinted-foto{width:84px;height:84px;object-fit:cover;border-radius:16px;background:var(--chip);flex-shrink:0}

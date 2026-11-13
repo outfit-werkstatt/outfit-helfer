@@ -1,10 +1,26 @@
 // Bausteine für die Bedienung, die mehrere Ansichten brauchen: Elemente bauen, Meldungen, Auswahl-Knöpfe, Angaben-Felder.
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
-import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=7";
-import { getCustom, setCustom } from "./speicher.js?v=10";
+import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=8";
+import { getCustom, setCustom } from "./speicher.js?v=11";
 
 export const $ = id => document.getElementById(id);
+// Nachschlage-Listen, in denen eingetippte Wörter gesucht werden, ohne die eingebauten Eigenschaften jedes Objekts
+// (seit 0.25, Durchsicht 11.11.2026): Sonst fand z. B. ein Knopf „constructor“ dort eine Funktion statt nichts.
+export const tabelle = o => Object.assign(Object.create(null), o);
+// Handy oder Tablet (Teilen-Menü statt Herunterladen). Vorher gab es zwei verschiedene Regeln dafür.
+export const mobil = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))
+  || matchMedia("(pointer: coarse)").matches;
+// Datum immer gleich: „07.11.2026“
+export const datumText = d => new Date(d).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+// Bildschirm wach halten, solange etwas Längeres läuft (z. B. Sicherung laden). app.js hält die Sperre und fragt nach.
+let langeArbeit = 0;
+export const laeuftLange = () => langeArbeit > 0;
+export async function mitWachSperre(fn) {
+  langeArbeit++; document.dispatchEvent(new Event("wach-pruefen"));
+  try { return await fn(); }
+  finally { langeArbeit--; document.dispatchEvent(new Event("wach-pruefen")); }
+}
 // Farben: die der KI plus weitere nur zum Antippen. Die KI kennt nur ihre gemessenen Farben und wählt die anderen nie vor
 // (viele ähnliche Töne würden ihre Trefferquote senken). Die Vorschlags-Regeln rechnen mit dem Farbwert, verstehen also alle.
 const MEHR_FARBEN = [
@@ -313,7 +329,7 @@ export function markenFeld(wert = "") {
   return { el: el("div", {}, input, liste), input, get: () => clean(input.value) || null };
 }
 // Wörter von vor 0.6.3 auf die gemeinsamen umstellen (läuft beim Start über alle Teile, ändert nur, was nötig ist)
-const ALTE_WOERTER = { weite: { eng: "figurnah" }, bund: { normal: "normale Höhe", tief: "tief sitzend" } };
+const ALTE_WOERTER = { weite: tabelle({ eng: "figurnah" }), bund: tabelle({ normal: "normale Höhe", tief: "tief sitzend" }) };
 export function teilAngleichen(t) {
   let neu = null;
   for (const [k, alt] of Object.entries(ALTE_WOERTER)) if (t[k] && alt[t[k]]) (neu ??= { ...t })[k] = alt[t[k]];

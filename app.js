@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=7";
-import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwuerfe } from "./speicher.js?v=10";
-import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden } from "./ui.js?v=18";
-import { refresh, initSchrank } from "./schrank.js?v=36";
+import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=8";
+import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=11";
+import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=19";
+import { refresh, initSchrank } from "./schrank.js?v=37";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -76,7 +76,8 @@ const ablegen = (() => { let kette = Promise.resolve(); // Originale nacheinande
    Geht in Safari ab iOS 16.4, in der Home-Bildschirm-App erst ab iOS 18.4; sonst passiert einfach nichts.
    Das Handy gibt die Sperre beim Verlassen der App selbst frei, beim Zurückkommen wird sie neu angefordert. */
 let wachSperre = null, wachAnfrage = false, wachAbgelehnt = false; // abgelehnt: erst nach dem Zurückkommen in die App neu fragen
-const wachNoetig = () => aiState === "lädt" || finished < total;
+// Seit 0.25 auch, während eine Sicherung erstellt oder geladen wird (laeuftLange, siehe ui.js)
+const wachNoetig = () => aiState === "lädt" || finished < total || laeuftLange();
 async function wachPruefen() {
   if (wachAnfrage) return;
   if (wachNoetig() && !wachSperre && !wachAbgelehnt && document.visibilityState === "visible" && navigator.wakeLock) {
@@ -88,6 +89,7 @@ async function wachPruefen() {
   } else if (!wachNoetig() && wachSperre) { const s = wachSperre; wachSperre = null; s.release().catch(() => {}); }
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") wachAbgelehnt = false; wachPruefen(); });
+document.addEventListener("wach-pruefen", () => wachPruefen());
 
 /* ---------- Prüfen-Karte für ein Foto ----------
    e = Entwurf: { id, datei } zum Erkennen, oder ein schon erkannter Entwurf { id, hash, foto, vorschau, r, wahl, ordner, doppeltOk } */
@@ -96,6 +98,12 @@ async function addPhoto(e, card) {
   // Änderungen und Löschen erst, wenn der Entwurf selbst fertig geschrieben ist (sonst käme er hinterher wieder)
   let erstSicherung = Promise.resolve(e.gesichert);
   try {
+    // Entwurf vom letzten Mal: erst jetzt aus dem Speicher holen, einer nach dem anderen (seit 0.25, siehe entwurfIds)
+    if (e.laden) {
+      const geladen = await entwurfLaden(e.id);
+      if (!geladen) { card.remove(); return; } // inzwischen weg
+      e = geladen;
+    }
     if (!e.r) {
       card.replaceChildren(el("div", { class: "wait" }, aiState === "bereit" ? "wird erkannt …" : "wartet, bis die KI bereit ist …"));
       await kiBereit;
@@ -266,15 +274,17 @@ const nachSpeichern = () => { askPersist(); refresh(); };
 // Alle fertig erkannten Karten nacheinander speichern (in der Reihenfolge der Fotos, so steigen die Nummern wie angezeigt)
 $("alleSpeichern").onclick = async () => {
   const b = $("alleSpeichern"); b.disabled = true;
-  const nrs = []; let fehler = 0;
+  const nrs = []; let fehler = 0, ersterFehler = null;
   for (const k of [...karten.values()]) {
     if (!k.bereit()) continue;
-    try { nrs.push(await k.speichern()); } catch (e) { fehler++; console.error(e); }
+    try { nrs.push(await k.speichern()); } catch (e) { fehler++; ersterFehler ??= e; console.error(e); }
   }
   b.disabled = false;
   const ok = nrs.length === 1 ? `Gespeichert als Nr. ${nrText(nrs[0])}`
     : nrs.length ? `${nrs.length} Teile gespeichert (Nr. ${nrText(Math.min(...nrs))} bis ${nrText(Math.max(...nrs))})` : "";
-  toast(fehler ? `${ok}${ok ? ". " : ""}${fehler === 1 ? "1 Teil hat" : fehler + " Teile haben"} nicht geklappt – bitte einzeln speichern.` : ok);
+  // Bei Fehlern auch den Grund nennen, z. B. Speicher voll (seit 0.25), und länger zeigen
+  if (fehler) toast(`${ok}${ok ? ". " : ""}${fehler === 1 ? "1 Teil hat" : fehler + " Teile haben"} nicht geklappt: ${fehlerText(ersterFehler)}`, 9000);
+  else toast(ok);
   if (nrs.length) nachSpeichern();
   updateProgress();
 };
@@ -355,7 +365,7 @@ $("kiRetry").onclick = () => startAI();
    (ca. 100 MB) erst laden, wenn sie sich bewusst für den Browser entscheidet. Am PC kein Hinweis. */
 const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const mobile = ios || matchMedia("(pointer: coarse)").matches;
+const mobile = ios || mobil();
 // Nur eine Bequemlichkeit für dieses Gerät; fehlt der Speicher, kommt der Hinweis eben wieder
 const remember = { get: () => { try { return localStorage.getItem("imBrowserOk") === "1"; } catch { return false; } },
   set: () => { try { localStorage.setItem("imBrowserOk", "1"); } catch {} } };
@@ -372,11 +382,12 @@ if (mobile && !standalone) {
   }
 } else startAI();
 
-// Fotos vom letzten Mal, die noch nicht gespeichert waren (App geschlossen, Handy neu gestartet …): Karten wieder zeigen
-entwuerfe().then(alte => {
-  if (!alte.length) return;
-  naechsteId = Math.max(naechsteId, ...alte.map(x => x.id + 1));
-  total += alte.length; updateProgress();
-  alte.forEach(einreihen);
-  toast(alte.length === 1 ? "1 Foto vom letzten Mal ist noch nicht gespeichert – siehe unten." : `${alte.length} Fotos vom letzten Mal sind noch nicht gespeichert – siehe unten.`);
+// Fotos vom letzten Mal, die noch nicht gespeichert waren (App geschlossen, Handy neu gestartet …): Karten wieder zeigen.
+// Erst nur die Nummern; jedes Foto wird geholt, wenn es an der Reihe ist (addPhoto, „laden“).
+entwurfIds().then(ids => {
+  if (!ids.length) return;
+  naechsteId = Math.max(naechsteId, ...ids.map(id => id + 1));
+  total += ids.length; updateProgress();
+  ids.forEach(id => einreihen({ id, laden: true }));
+  toast(ids.length === 1 ? "1 Foto vom letzten Mal ist noch nicht gespeichert – siehe unten." : `${ids.length} Fotos vom letzten Mal sind noch nicht gespeichert – siehe unten.`);
 }).catch(e => console.error("Entwürfe nicht lesbar", e));

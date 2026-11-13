@@ -5,9 +5,9 @@
 // Aufbau nach Verkaufs-Ratgebern: Titel = Marke + Art + Farbe + Detail + Größe (Suchwörter, kurz, ohne Emojis);
 // Beschreibung = Aufhänger, Details (Marke, Größe, Farbe, Material, Passform, Zustand), Service. Nur ihre eigenen Angaben,
 // nichts dazuerfunden. Die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
-import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf } from "./ui.js?v=18";
-import { updateItem, getPhoto, nrText } from "./speicher.js?v=10";
-import { kopieren, vonHand, bilderWeitergeben, mobil } from "./chatgpt.js?v=15";
+import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=19";
+import { updateItem, getPhoto, nrText } from "./speicher.js?v=11";
+import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=16";
 
 // Länge des Titels: laut einem Ratgeber erlaubt Vinted etwa 50 Zeichen (nicht offiziell bestätigt) → lieber kürzer
 const TITEL_MAX = 50;
@@ -17,26 +17,26 @@ let mitEmojis = true, variante = 0;
 /* ---------- Texte ---------- */
 // Geschlecht der Art für „Schöner Pullover / Schöne Bluse / Schönes Kleid / Schöne Sneaker“ (p = Mehrzahl).
 // Eigene Arten kennt die Liste nicht, dann ein Satz ohne Artikel.
-const GENUS = { "T-Shirt": "n", Poloshirt: "n", Langarmshirt: "n", Top: "n", Bluse: "f", Hemd: "n", Body: "m", Pullover: "m", "Sweatshirt / Hoodie": "n",
+const GENUS = tabelle({ "T-Shirt": "n", Poloshirt: "n", Langarmshirt: "n", Top: "n", Bluse: "f", Hemd: "n", Body: "m", Pullover: "m", "Sweatshirt / Hoodie": "n",
   Strickjacke: "f", Weste: "f", Blazer: "m", Jacke: "f", Mantel: "m", Jeans: "f", Hose: "f", Leggings: "p", Jogginghose: "f", Shorts: "p", Rock: "m",
   Kleid: "n", Jumpsuit: "m", Sneaker: "p", Stiefel: "p", Absatzschuhe: "p", "Flache Schuhe": "p", Sandalen: "p", Tasche: "f", Rucksack: "m",
   Halskette: "f", Ohrringe: "p", Armband: "n", Ring: "m", Uhr: "f", Haarschmuck: "m", Gürtel: "m", "Schal / Tuch": "m", "Hut / Mütze": "m",
-  Sonnenbrille: "f", Handschuhe: "p", Strumpfhose: "f", "Bikini / Badeanzug": "m" };
+  Sonnenbrille: "f", Handschuhe: "p", Strumpfhose: "f", "Bikini / Badeanzug": "m" });
 // [Schön…, mein…, Dies…, Verb]
-const FORM = { m: ["Schöner", "meinen", "Dieser", "sucht"], f: ["Schöne", "meine", "Diese", "sucht"], n: ["Schönes", "mein", "Dieses", "sucht"], p: ["Schöne", "meine", "Diese", "suchen"] };
-const MAT_KURZ = { "Seide / Satin": "Satin", "Strick / Wolle": "Strick", "Denim / Jeansstoff": "Denim", "Kunstfell / Teddy": "Teddy", "Synthetik, glänzend": "", Metall: "" };
-const ZUSTAND_SATZ = {
+const FORM = tabelle({ m: ["Schöner", "meinen", "Dieser", "sucht"], f: ["Schöne", "meine", "Diese", "sucht"], n: ["Schönes", "mein", "Dieses", "sucht"], p: ["Schöne", "meine", "Diese", "suchen"] });
+const MAT_KURZ = tabelle({ "Seide / Satin": "Satin", "Strick / Wolle": "Strick", "Denim / Jeansstoff": "Denim", "Kunstfell / Teddy": "Teddy", "Synthetik, glänzend": "", Metall: "" });
+const ZUSTAND_SATZ = tabelle({
   "Neu mit Etikett": "Neu und ungetragen, das Etikett hängt noch dran.",
   "Neu ohne Etikett": "Neu und ungetragen, nur ohne Etikett.",
   "Sehr gut": "In sehr gutem Zustand, kaum getragen.",
   "Gut": "In gutem Zustand, mit leichten Gebrauchsspuren.",
   "Zufriedenstellend": "Getragen, mit sichtbaren Gebrauchsspuren (siehe Fotos)."
-};
-const SAISON_WORT = { Sommer: "den Sommer", "Übergang": "die Übergangszeit", Winter: "den Winter" };
+});
+const SAISON_WORT = tabelle({ Sommer: "den Sommer", "Übergang": "die Übergangszeit", Winter: "den Winter" });
 // Passform in Worten; „normal“ sagt nichts und fällt weg, eigene Einträge bleiben, wie sie sind
-const PASSFORM = { normal: null, "normale Höhe": null, kurz: "kurz geschnitten", lang: "lang geschnitten", mini: "Mini", midi: "Midi", maxi: "Maxi",
-  eng: "enges Bein", gerade: "gerades Bein", weit: "weites Bein", Schlag: "Schlag (ausgestellt)" };
-const AERMEL = { "ärmellos": "ärmellos", kurz: "kurze Ärmel", "¾": "¾-Ärmel", lang: "lange Ärmel" };
+const PASSFORM = tabelle({ normal: null, "normale Höhe": null, kurz: "kurz geschnitten", lang: "lang geschnitten", mini: "Mini", midi: "Midi", maxi: "Maxi",
+  eng: "enges Bein", gerade: "gerades Bein", weit: "weites Bein", Schlag: "Schlag (ausgestellt)" });
+const AERMEL = tabelle({ "ärmellos": "ärmellos", kurz: "kurze Ärmel", "¾": "¾-Ärmel", lang: "lange Ärmel" });
 const BUNT = "Bunt / mehrfarbig";
 
 const artText = a => String(a || "").replace(/\s*\/\s*/g, "/");
@@ -104,13 +104,18 @@ export function renderVinted(box, kopf, t, bild) {
     fehltBox.textContent = fehlt.length ? `Noch nicht angegeben: ${fehlt.join(", ")}. Damit findet man das Teil bei Vinted leichter.` : "";
     fehltBox.hidden = !fehlt.length;
   }
-  // Angaben für Vinted: sofort am Teil gespeichert (dieselben wie unter „Mehr Angaben“), danach die Texte neu
+  // Angaben für Vinted: sofort am Teil gespeichert (dieselben wie unter „Mehr Angaben“).
+  // Die Texte werden seit 0.25 gleich neu geschrieben, noch vor dem Speichern: Sonst kopierte „Titel kopieren“ direkt nach dem
+  // Eintippen der Marke noch den alten Titel. Klappt das Speichern nicht, kommen die alten Angaben und Texte zurück.
   const speichere = async felder => {
-    try { await updateItem(teil.nr, felder); teil = { ...teil, ...felder }; merkeMarken([teil]); erzeugen(); toast("Gespeichert"); }
-    catch (e) { fehlerToast("Speichern hat nicht geklappt", e); }
+    const vorher = teil;
+    teil = { ...teil, ...felder }; erzeugen();
+    try { await updateItem(teil.nr, felder); merkeMarken([teil]); toast("Gespeichert"); }
+    catch (e) { teil = vorher; erzeugen(); fehlerToast("Speichern hat nicht geklappt", e); }
   };
   const marke = markenFeld(teil.marke);
-  marke.input.onchange = () => { if (marke.get() !== (teil.marke || null)) speichere({ marke: marke.get() }); };
+  const markeUebernehmen = () => { if (marke.get() !== (teil.marke || null)) speichere({ marke: marke.get() }); };
+  marke.input.onchange = markeUebernehmen;
   marke.input.onkeydown = e => { if (e.key === "Enter") marke.input.blur(); };
   const gk = ["groesseKleidung", "groesseSchuhe"].find(k => VINTED_MERKMALE[k].passt(teil.art, g));
   const groesseWahl = gk ? choice({ field: VINTED_MERKMALE[gk].feld, options: VINTED_MERKMALE[gk].werte, more: VINTED_MERKMALE[gk].more,
@@ -122,7 +127,8 @@ export function renderVinted(box, kopf, t, bild) {
   const kopierBox = el("div", {});
   const kopierKnopf = (beschriftung, wert, fertig) => {
     const b = el("button", { type: "button", class: "btn primary" }, beschriftung);
-    b.onclick = async () => { const v = wert(); if (!await kopieren(v)) { vonHand(kopierBox, v); return; } fill(kopierBox); toast(fertig); };
+    // Steht im Marken-Feld noch etwas Neues (auf dem iPhone verlässt man das Feld beim Tippen auf den Knopf nicht immer), erst übernehmen
+    b.onclick = async () => { markeUebernehmen(); const v = wert(); if (!await kopieren(v)) { vonHand(kopierBox, v); return; } fill(kopierBox); toast(fertig); };
     return b;
   };
   const emojiWahl = choice({ options: ["Mit Emojis"], selected: mitEmojis ? ["Mit Emojis"] : [], onChange: sel => { mitEmojis = sel.length > 0; erzeugen(); } });

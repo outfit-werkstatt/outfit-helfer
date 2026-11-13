@@ -2,15 +2,15 @@
 // ChatGPT/Gemini merken, auf Wunsch mit einem Foto vom fertigen Look (Bild aus dem Chat oder Spiegel-Selfie).
 // Gespeichert werden nur Name, Nummern und Text; die Teile selbst bleiben im Kleiderschrank. Der Text aus dem Chat ist
 // fremder Text: nur per textContent anzeigen. Das Foto wird wie alle Fotos neu gezeichnet und bleibt auf dem Gerät.
-import { el, fill, toast, fehlerToast, clean, cleanText, mitInfo, zeigeGross } from "./ui.js?v=18";
-import { getOutfits, saveOutfit, deleteOutfit, getLookFoto, nrText } from "./speicher.js?v=10";
-import { loadImage, alsJpg } from "./ki.js?v=7";
+import { el, fill, toast, fehlerToast, clean, cleanText, mitInfo, zeigeGross, tabelle, datumText } from "./ui.js?v=19";
+import { getOutfits, saveOutfit, deleteOutfit, getLookFoto, nrText } from "./speicher.js?v=11";
+import { loadImage, alsJpg } from "./ki.js?v=8";
 
 export const MAX_NAME = 40, MAX_TEILE = 12;
 const MAX_TEXT = 4000;
-const datum = s => new Date(s).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+const datum = datumText;
 const schluessel = nrs => [...nrs].sort((a, b) => a - b).join(",");
-const HERKUNFT = { app: "Vorschlag der App", eigen: "selbst zusammengestellt", chat: "aus ChatGPT/Gemini" };
+const HERKUNFT = tabelle({ app: "Vorschlag der App", eigen: "selbst zusammengestellt", chat: "aus ChatGPT/Gemini" });
 
 // Ein Outfit speichern. quelle = "app", "chat" oder "eigen" (selbst zusammengestellt, Wunsch 07.11.2026).
 // Dasselbe Outfit (gleiche Nummern) wird nicht doppelt gespeichert: dann { da: das vorhandene }, sonst { neu: das neue }.
@@ -110,15 +110,18 @@ export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, 
   // Umbenennen
   const nameBox = el("div", {});
   const umbenennen = el("button", { type: "button", class: "btn" }, "Umbenennen");
+  // Wie beim Ordner: mit „Abbrechen“, und die Eingabetaste speichert (seit 0.25)
   umbenennen.onclick = () => {
-    const input = el("input", { type: "text", class: "suche", maxLength: MAX_NAME, value: o.name, "aria-label": "Name des Outfits", autocomplete: "off" });
+    const input = el("input", { type: "text", class: "suche", maxLength: MAX_NAME, value: o.name, "aria-label": "Name des Outfits", autocomplete: "off", enterKeyHint: "done" });
     const ok = el("button", { type: "button", class: "btn primary" }, "Speichern");
     ok.onclick = async () => {
       const name = clean(input.value).slice(0, MAX_NAME);
       if (!name) { toast("Bitte einen Namen eintippen."); return; }
-      try { await saveOutfit({ ...o, name }); toast("Gespeichert"); neu(); } catch (e) { fehlerToast("Hat nicht geklappt", e); }
+      ok.disabled = true;
+      try { await saveOutfit({ ...o, name }); toast("Gespeichert"); neu(); } catch (e) { ok.disabled = false; fehlerToast("Hat nicht geklappt", e); }
     };
-    fill(nameBox, input, el("div", { class: "actions" }, ok)); input.focus();
+    input.onkeydown = e => { if (e.key === "Enter") ok.click(); };
+    fill(nameBox, input, el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => fill(nameBox) }, "Abbrechen"), ok)); input.focus();
   };
   const loeschen = el("button", { type: "button", class: "btn" }, "Outfit löschen");
   loeschen.onclick = async () => {

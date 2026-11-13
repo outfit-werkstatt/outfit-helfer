@@ -7,21 +7,19 @@
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
-import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=10";
-import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE } from "./ui.js?v=18";
-import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=19";
-import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=7";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=15";
+import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=11";
+import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=19";
+import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=20";
+import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=8";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=16";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
 // Pro Teil Foto + Vorschau, pro Outfit ein Foto; ein Mac legt je Datei noch eine „._“-Datei dazu
 const MAX_ZIP = 2e9, MAX_TEILE = 3000, MAX_OUTFITS = 1000, MAX_EINTRAEGE = 4 * MAX_TEILE + 2 * MAX_OUTFITS + 100;
 const utf8 = s => new TextEncoder().encode(s);
-const datumText = d => d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const mb = n => (n / 1e6).toFixed(n < 10e6 ? 1 : 0).replace(".", ",") + " MB";
 const anzahl = n => `${n} ${n === 1 ? "Teil" : "Teile"}`;
-const mobil = () => matchMedia("(pointer: coarse)").matches;
 // „Nr. 003, 004 und 3 weitere“
 const nummern = (nrs, max = 12) => nrs.slice(0, max).map(nrText).join(", ") + (nrs.length > max ? ` und ${nrs.length - max} weitere` : "");
 // Dateiname eines Fotos: Nummer vorn, nur Buchstaben, Ziffern und wenige Zeichen, die iPhone-Dateinamen vertragen
@@ -31,7 +29,7 @@ const vorschauName = nr => `Vorschaubilder/${nrText(nr)}.jpg`;
 // „Outfits/03 - Modern Smart Casual.jpg“ (Zähler vorn, damit gleiche Namen sich nicht überschreiben)
 const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSonderzeichen(o.name).slice(0, 50).trim() || "Outfit"}.jpg`;
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
-  "Zum Wiederherstellen: App öffnen, „Sicherung speichern / laden“ antippen, „Sicherung auswählen“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
+  "Zum Wiederherstellen: App öffnen, auf der Startseite unten „💾 Sicherung“ antippen, dann „Sicherung auswählen …“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
   "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits und eigene Knöpfe.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 
@@ -327,8 +325,11 @@ async function laden(datei) {
     // diesem Handy oder aus der Sicherung. Danach vergleicht die App ihn wie immer mit den Teilen.
     const chatJetzt = await getMeta("chatgptStand").catch(() => null);
     const chat = [chatJetzt, s.chatStand].filter(x => typeof x?.zeit === "string" && x.teile).sort((a, b) => b.zeit.localeCompare(a.zeit))[0] || null;
-    await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, chatgptStand: chat,
-      letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr) } } });
+    // Scheitert das Schreiben, bricht replaceAll alles ab: Dann ist wirklich nichts geändert, und das soll auch dastehen
+    try {
+      await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, chatgptStand: chat,
+        letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr) } } });
+    } catch (e) { console.error(e); throw new Error(`Die Sicherung ließ sich nicht speichern. Es wurde nichts geändert, dein Kleiderschrank ist wie vorher. (${fehlerText(e)})`); }
     await askPersist(); // auf einem neuen Handy gleich um dauerhaften Speicher bitten
     sp.weg();
     alert(`Wiederhergestellt: ${anzahl(teile.length)}.` + (unlesbar ? `\n\nNicht übernommen (Foto fehlt oder beschädigt): ${fehlen.length ? "Nr. " + nummern(fehlen, 50) : ""}` +
@@ -354,7 +355,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
   erstellenKnopf.onclick = async () => {
     erstellenKnopf.disabled = true; weiter.replaceChildren();
     try {
-      const z = await erstellen(t => { meldung.textContent = t; });
+      const z = await mitWachSperre(() => erstellen(t => { meldung.textContent = t; }));
       meldung.textContent = `Fertig: „${z.name}“ (${anzahl(z.anzahl)}, ${mb(z.blob.size)}).`;
       // Eigener Knopf zum Weitergeben: „Teilen“ braucht auf dem iPhone ein frisches Antippen
       const sichern = el("button", { type: "button", class: "btn primary" }, mobil() ? "In Dateien sichern …" : "Herunterladen");
@@ -388,7 +389,8 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
     const datei = eingabe.files[0]; eingabe.value = "";
     if (!datei) return;
     ladenStatus.textContent = "";
-    try { const m = await laden(datei); if (m) ladenStatus.textContent = m; }
+    // Bildschirm wach halten: Bei vielen Teilen dauert das Laden einige Minuten (seit 0.25)
+    try { const m = await mitWachSperre(() => laden(datei)); if (m) ladenStatus.textContent = m; }
     catch (e) { ladenStatus.textContent = "❌ " + fehlerText(e); console.error(e); }
   };
   fill(box, kopf,

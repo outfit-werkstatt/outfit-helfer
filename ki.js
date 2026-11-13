@@ -1,7 +1,7 @@
 // Erkennung für die App, Seite der Bedienung: Begriffe (ki-listen.js), Bilder laden und verkleinern, Auftrag an die KI.
 // Die KI rechnet 5–6 Sekunden pro Foto. Täte sie das in der Seite, könnte das iPhone so lange nichts zeichnen und beim
 // Scrollen bliebe alles schwarz. Darum rechnet sie im Hintergrund (ki-arbeiter.js, ki-rechnen.js).
-export * from "./ki-listen.js?v=2";
+export * from "./ki-listen.js?v=3";
 
 /* ---------- Bilder ---------- */
 const canvasToBlob = (c, q = 0.9) => new Promise(r => c.toBlob(r, "image/jpeg", q));
@@ -31,8 +31,6 @@ export async function alsJpg(quelle, max, q = 0.85) {
 }
 
 /* ---------- Auftrag an die KI ---------- */
-// Für die Testanzeige: wo die KI rechnet, warum (falls sie in der Seite rechnet) und wie lange das letzte Foto gedauert hat
-export const kiInfo = { weg: "wird gestartet", grund: "", sekunden: null };
 // Wartezeit, die nur läuft, solange die App sichtbar ist: In einer anderen App friert das iPhone alles ein,
 // und wer zurückkommt, soll nicht wie ein Hintergrund aussehen, der sich nicht meldet. Gibt die Funktion zum Abstellen zurück.
 function sichtbareUhr(ms, dann) {
@@ -46,7 +44,7 @@ const START_ZEIT = 30000, FOTO_ZEIT = 120000; // ein Foto dauert auf dem iPhone 
 // Startet den Hintergrund. blob:-Datei, weil nur so die Hausregel der Seite auch dort gilt (GitHub Pages kann keine Kopfzeile setzen).
 function imHintergrund() {
   return new Promise((res, rej) => {
-    const code = `import ${JSON.stringify(new URL("ki-arbeiter.js?v=3", import.meta.url).href)};`;
+    const code = `import ${JSON.stringify(new URL("ki-arbeiter.js?v=4", import.meta.url).href)};`;
     const adresse = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
     const w = new Worker(adresse, { type: "module" }), offen = new Map();
     let id = 0, bereit = false;
@@ -61,7 +59,6 @@ function imHintergrund() {
       if (d.typ === "da") {
         if (!d.hausregel) { scheitert("Die Hausregel gilt im Hintergrund nicht"); return; }
         uhrAus(); URL.revokeObjectURL(adresse); bereit = true;
-        kiInfo.weg = "Hintergrund"; kiInfo.grund = "";
         res({ loadAI: (fortschritt, erzeugen) => frage({ typ: "laden", erzeugen }, [], fortschritt),
           recognize: bild => frage({ typ: "erkennen", bild }, [bild], null, FOTO_ZEIT), beenden: () => w.terminate() });
         return;
@@ -83,9 +80,7 @@ function imHintergrund() {
 // Geht der Hintergrund nicht, rechnet die KI wie früher in der Seite: stockender zu bedienen, aber sie funktioniert.
 async function inDerSeite(grund) {
   console.warn("KI rechnet in der Seite:", grund);
-  const m = await import("./ki-rechnen.js?v=3");
-  kiInfo.weg = "in der Seite"; kiInfo.grund = grund?.message || String(grund);
-  return m;
+  return import("./ki-rechnen.js?v=4");
 }
 let rechner = null;
 const merke = p => (rechner = p.catch(e => { rechner = null; throw e; }));
@@ -110,7 +105,7 @@ export async function loadAI(onProgress) {
 // Liefert die ausgeschnittene Vorschau (ImageBitmap oder null, danach schließen) und pro Merkmal alle Begriffe sortiert nach Wahrscheinlichkeit.
 export async function recognize(img) {
   const bild = async () => { const c = toCanvas(img, 448), b = await createImageBitmap(c); c.width = c.height = 0; return b; };
-  const erstes = await bild(), start = performance.now(), r = await holeRechner();
+  const erstes = await bild(), r = await holeRechner();
   let ergebnis;
   try { ergebnis = await r.recognize(erstes); }
   catch (e) {
@@ -120,6 +115,5 @@ export async function recognize(img) {
     const seite = await merke(inDerSeite(e).then(async m => { await m.loadAI(() => {}); return m; }));
     ergebnis = await seite.recognize(await bild());
   }
-  kiInfo.sekunden = (performance.now() - start) / 1000;
   return ergebnis;
 }
