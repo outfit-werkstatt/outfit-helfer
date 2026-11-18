@@ -7,7 +7,8 @@
 // nichts dazuerfunden. Die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
 import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=19";
 import { updateItem, getPhoto, nrText } from "./speicher.js?v=11";
-import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=16";
+import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=17";
+import { verkaufFeld } from "./verkauf.js?v=1";
 
 // Länge des Titels: laut einem Ratgeber erlaubt Vinted etwa 50 Zeichen (nicht offiziell bestätigt) → lieber kürzer
 const TITEL_MAX = 50;
@@ -168,5 +169,7 @@ export function renderVinted(box, kopf, t, bild) {
       field("Beschreibung", null, text),
       el("div", { class: "actions" }, kopierKnopf("📋 Beschreibung kopieren", () => text.value, "Beschreibung kopiert – in Vinted einfügen")),
       kopierBox,
-      el("div", { class: "vinted-optionen" }, emojiWahl.el, anders)));
+      el("div", { class: "vinted-optionen" }, emojiWahl.el, anders)),
+    // Seit 0.26: gleich hier eintragen, dass es bei Vinted ist (und später, dass es verkauft ist). Zeichnet sich selbst neu.
+    el("div", { class: "panel" }, verkaufFeld(t)));
 }

@@ -40,7 +40,7 @@ export function speichernKnopf(teile, name, text, quelle) {
 
 // Kachel auf der Startseite: Vorschau der ersten Teile der neuesten Outfits
 export function fertigKachel(outfits, items, bild, oeffnen) {
-  const vorschau = outfits.slice(0, 4).map(o => items.find(t => t.nr === o.nrs[0] && !t.geloescht)).filter(Boolean);
+  const vorschau = outfits.slice(0, 4).map(o => items.find(t => t.nr === o.nrs[0] && !t.geloescht && t.verkauf !== "verkauft")).filter(Boolean);
   return el("button", { type: "button", class: "kachel", onclick: oeffnen },
     el("span", { class: vorschau.length === 1 ? "mosaik eins" : "mosaik" }, ...vorschau.map(t => el("img", { src: bild(t.vorschau), alt: "", loading: "lazy" }))),
     el("span", { class: "name" }, "⭐ Fertige Outfits"),
@@ -83,8 +83,10 @@ async function lookAusDatei(datei) {
 // zurueck() = zur Liste, neu() = diese Ansicht neu zeichnen
 export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, neu) {
   const nachNr = new Map(items.map(t => [t.nr, t]));
-  const teile = o.nrs.map(n => nachNr.get(n)).filter(t => t && !t.geloescht);
+  // Verkaufte Teile (seit 0.26) gehören nicht mehr dazu, wie Teile im Papierkorb: Hinweis statt Kachel
+  const teile = o.nrs.map(n => nachNr.get(n)).filter(t => t && !t.geloescht && t.verkauf !== "verkauft");
   const fehlt = o.nrs.filter(n => !nachNr.has(n)), imKorb = o.nrs.filter(n => nachNr.get(n)?.geloescht), nie = teile.filter(t => t.nichtAnziehen);
+  const verkauft = o.nrs.filter(n => nachNr.get(n) && !nachNr.get(n).geloescht && nachNr.get(n).verkauf === "verkauft"), zumVerkauf = teile.filter(t => t.verkauf);
 
   // Foto vom Look
   const lookBox = el("div", {}), eingabe = el("input", { type: "file", accept: "image/*", hidden: true });
@@ -141,6 +143,8 @@ export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, 
       fehlt.length ? el("p", { class: "hint" }, `${fehlt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es nicht mehr.`) : null,
       imKorb.length ? el("p", { class: "hint" }, `${imKorb.map(n => "Nr. " + nrText(n)).join(", ")} ${imKorb.length === 1 ? "liegt" : "liegen"} im Papierkorb.`) : null,
       nie.length ? el("p", { class: "hint" }, `${nie.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${nie.length === 1 ? "ist" : "sind"} als „🚫 Ziehe ich nicht an“ markiert.`) : null,
+      verkauft.length ? el("p", { class: "hint" }, `${verkauft.map(n => "Nr. " + nrText(n)).join(", ")} ${verkauft.length === 1 ? "ist" : "sind"} verkauft.`) : null,
+      zumVerkauf.length ? el("p", { class: "hint" }, `${zumVerkauf.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${zumVerkauf.length === 1 ? "liegt" : "liegen"} bei „💰 Zum Verkaufen“.`) : null,
       el("p", { class: "hint" }, `Gespeichert am ${datum(o.erstellt)} · ${HERKUNFT[o.quelle] || HERKUNFT.chat}`)),
     o.text ? el("details", { class: "panel mehr" }, el("summary", {}, "Erklärung und Tipps"), el("div", { class: "chatgpt-text" }, o.text)) : null,
     teile.length ? el("div", { class: "panel" }, el("strong", {}, "🖼 Bild vom Outfit"), paket(teile, "diesem Outfit aus meinem Kleiderschrank").el) : null,

@@ -15,9 +15,9 @@
 import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=19";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=11";
 import { stilAktuell, stilZeilen } from "./stil.js?v=20";
-import { kandidaten } from "./regeln.js?v=16";
+import { kandidaten } from "./regeln.js?v=17";
 import { GROUPS, GROUP_OF } from "./ki.js?v=8";
-import { speichernKnopf } from "./fertig.js?v=8";
+import { speichernKnopf } from "./fertig.js?v=9";
 
 const MAX_ANTWORT = 20000;
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -354,6 +354,9 @@ export function antwortLesen(text, items) {
       const t = nachNr.get(n);
       if (!t) { unbekannt.add(n); fremd.push(n); continue; }
       if (t.geloescht) hinweise.push(`Nr. ${nrText(n)} liegt im Papierkorb.`);
+      // Seit 0.26: Der Chat kennt dann meist einen alten Stand (Verkaufen meldet erst „Nur die Änderungen“ in Schritt 1)
+      else if (t.verkauf === "verkauft") hinweise.push(`Nr. ${nrText(n)} ist verkauft. Gib deinem Chat die Änderungen (Schritt 1).`);
+      else if (t.verkauf) hinweise.push(`Nr. ${nrText(n)} liegt bei „💰 Zum Verkaufen“. Gib deinem Chat die Änderungen (Schritt 1).`);
       else if (t.nichtAnziehen) hinweise.push(`Nr. ${nrText(n)} ist als „🚫 Ziehe ich nicht an“ markiert.`);
       if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ In der Antwort steht bei Nr. ${nrText(n)} „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt der Chat einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
       teile.push(t);

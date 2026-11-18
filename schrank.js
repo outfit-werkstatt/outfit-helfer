@@ -5,18 +5,27 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=19";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
 import { renderStil, stilKurz } from "./stil.js?v=20";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=24";
-import { renderPasst, miniKachel } from "./passt.js?v=22";
-import { renderOutfit } from "./outfit.js?v=19";
-import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=8";
-import { bildPaketBereich } from "./chatgpt.js?v=16";
-import { renderVinted } from "./vinted.js?v=6";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=25";
+import { renderPasst, miniKachel } from "./passt.js?v=23";
+import { renderOutfit } from "./outfit.js?v=20";
+import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=9";
+import { bildPaketBereich } from "./chatgpt.js?v=17";
+import { renderVinted } from "./vinted.js?v=7";
 import { GROUPS } from "./ki.js?v=8";
+import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=1";
 
-// Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt)
+// Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
+// Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
 const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
+const L_VERKAUF = "verkaufen", L_VERKAUFT = "verkauft";
+const FESTE_NAMEN = [HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME, "Ohne Ordner", "Fertige Outfits", "⭐ Fertige Outfits",
+  "Zum Verkaufen", VERKAUF_NAME, "Verkauft", VERKAUFT_NAME];
 const GROUP_ORDER = GROUPS.map(([g]) => g);
-const sichtbar = items => items.filter(t => !t.geloescht);
+// Im Kleiderschrank: nicht im Papierkorb und (seit 0.26) nicht verkauft
+const sichtbar = items => items.filter(imSchrank);
+const verkaufteVon = items => items.filter(t => !t.geloescht && istVerkauft(t))
+  .sort((a, b) => (b.verkauftAm || "").localeCompare(a.verkauftAm || "") || b.nr - a.nr);
 const restTage = t => Math.max(0, KORB_TAGE - Math.floor((Date.now() - Date.parse(t.geloescht)) / TAG));
 // „noch 3 Tage“, „noch 1 Tag“, „noch heute“
 const nochTage = t => { const n = restTage(t); return n <= 0 ? "noch heute" : n === 1 ? "noch 1 Tag" : `noch ${n} Tage`; };
@@ -63,10 +72,61 @@ async function show(y) {
   mehrfach = current.zusammenstellen ? new Set() : null; // „＋ Eigenes Outfit zusammenstellen“ beginnt gleich mit dem Antippen
   $("ansichtStart").hidden = current.v !== "start"; $("ansicht").hidden = current.v === "start";
   try { await render(); } catch (e) { fehlerToast("Anzeigen hat nicht geklappt", e); console.error(e); }
-  scrollen(y);
+  scrollen(y); schwebeNeu();
 }
-// Dieselbe Ansicht neu zeichnen, ohne zu springen
-async function neuZeichnen() { const y = scrollStelle(); await render(); scrollen(y); }
+// Dieselbe Ansicht neu zeichnen, ohne zu springen. Seit 0.26 bleibt die Höhe stehen, bis das große Foto wieder geladen ist:
+// Vorher war die Teil-Ansicht kurz ohne Foto zu kurz für die alte Stelle und sprang nach dem Antippen (z. B. „✅ Verkauft“) nach oben.
+async function neuZeichnen() {
+  const y = scrollStelle(), box = $("ansicht");
+  box.style.minHeight = box.offsetHeight ? box.offsetHeight + "px" : "";
+  try { await render(); } finally {
+    scrollen(y); schwebe.letztes = scrollStelle();
+    const frei = () => { box.style.minHeight = ""; };
+    const offen = [...box.querySelectorAll("img.gross")].filter(i => !i.complete);
+    let rest = offen.length;
+    if (!rest) frei();
+    for (const i of offen) for (const art of ["load", "error"]) i.addEventListener(art, () => { if (--rest <= 0) frei(); }, { once: true });
+    setTimeout(frei, 2000); // falls ein Foto nie fertig wird
+  }
+}
+
+/* ---------- Zurück-Leiste beim Hochwischen (seit 0.26, Wunsch 18.11.2026) ----------
+   Ist der Kopf mit „‹ Zurück“ aus dem Bild gescrollt, gleitet beim Hochwischen (ab HOCH Pixeln) eine Leiste mit „‹ Zurück“ und
+   „↑ Nach oben“ von oben herein; beim Runterwischen verschwindet sie wieder. Nicht auf der Startseite und nicht beim Tippen in ein
+   Feld (dort würde sie über der Tastatur springen). */
+const HOCH = 24;
+const schwebe = { an: false, letztes: 0, hoch: 0, ruhe: 0 };
+const tipptGerade = () => !!document.activeElement?.matches?.("input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select");
+function schwebeZeigen(an) {
+  if (schwebe.an === an) return;
+  schwebe.an = an; $("schwebe").classList.toggle("zeigen", an);
+}
+// Nach jedem Ansichtswechsel: Leiste weg, und der Sprung an die gemerkte Stelle zählt nicht als Hochwischen
+function schwebeNeu() { schwebeZeigen(false); schwebe.letztes = scrollStelle(); schwebe.hoch = 0; }
+function schwebePruefen() {
+  const rahmen = $("rahmen"), y = rahmen.scrollTop, unten = rahmen.scrollHeight - rahmen.clientHeight;
+  const d = y - schwebe.letztes; schwebe.letztes = y;
+  if (current.v === "start" || tipptGerade() || Date.now() < schwebe.ruhe) { schwebe.hoch = 0; return schwebeZeigen(false); }
+  // Solange der Kopf mit dem eigenen „‹ Zurück“ noch zu sehen ist, braucht es die Leiste nicht
+  const kopfZeile = $("ansicht").querySelector(".kopf-zeile");
+  const kopfSichtbar = !!kopfZeile && kopfZeile.getBoundingClientRect().bottom > rahmen.getBoundingClientRect().top;
+  if (y <= 0 || kopfSichtbar) { schwebe.hoch = 0; return schwebeZeigen(false); }
+  if (y >= unten - 1) return; // Nachfedern am unteren Rand (iPhone) ist kein Hochwischen
+  if (d < 0) { schwebe.hoch -= d; if (schwebe.hoch >= HOCH) schwebeZeigen(true); }
+  else if (d > 0) { schwebe.hoch = 0; schwebeZeigen(false); }
+}
+function schwebeEinrichten() {
+  const rahmen = $("rahmen");
+  $("schwebeZurueck").onclick = () => { schwebeZeigen(false); zurueckTippen(); };
+  // Beim sanften Hochscrollen nicht gleich wieder einblenden
+  $("schwebeHoch").onclick = () => { schwebeZeigen(false); schwebe.ruhe = Date.now() + 1200; rahmen.scrollTo({ top: 0, behavior: "smooth" }); };
+  let geplant = false;
+  rahmen.addEventListener("scroll", () => {
+    if (geplant) return;
+    geplant = true; requestAnimationFrame(() => { geplant = false; schwebePruefen(); });
+  }, { passive: true });
+  document.addEventListener("focusin", () => { if (tipptGerade()) schwebeZeigen(false); });
+}
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
 export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
@@ -143,7 +203,7 @@ function nummernKarte(items, naechste) {
 const nebenKachel = (name, stand, onclick, faellig = false) => el("button", { type: "button", class: faellig ? "faellig" : "", onclick },
   el("span", { class: "name" }, name), el("span", { class: "stand" }, stand));
 function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
-  const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.length - da.length;
+  const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.filter(t => t.geloescht).length;
   // Oben nur, wenn etwas zu tun ist: Sicherung fällig oder (leerer Kleiderschrank) „Sicherung laden?“
   fill($("startHinweis"), zipHinweis(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
   // „Outfit finden“ braucht gespeicherte Kleidung; vorher nur ein freundlicher Hinweis statt einer leeren Seite
@@ -162,11 +222,13 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
     toast(`Ordner „${name}“ angelegt`);
     go({ v: "liste", id: f.id });
   });
-  const nicht = da.filter(t => t.nichtAnziehen);
+  const nicht = da.filter(t => t.nichtAnziehen), zumVerkauf = da.filter(imVerkauf), verkauft = verkaufteVon(items);
   fill($("kacheln"),
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
     nicht.length ? kachel(NICHT_NAME, nicht, () => go({ v: "liste", id: NICHT })) : null,
+    zumVerkauf.length ? kachel(VERKAUF_NAME, zumVerkauf, () => go({ v: "liste", id: L_VERKAUF })) : null,
+    verkauft.length ? kachel(VERKAUFT_NAME, verkauft, () => go({ v: "liste", id: L_VERKAUFT })) : null,
     da.length || outfits.length ? fertigKachel(outfits, items, url, () => go({ v: "fertig" })) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
@@ -174,13 +236,13 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
 }
 // Name für neuen oder umbenannten Ordner eingeben (max. 30 Zeichen, nicht doppelt)
 function nameEditor(box, start, folders, onOk, selfId = null) {
-  const input = el("input", { type: "text", maxLength: 30, value: start, placeholder: "z. B. Sommer, Arbeit, Zum Verkaufen", "aria-label": "Name des Ordners", autocomplete: "off" });
+  const input = el("input", { type: "text", maxLength: 30, value: start, placeholder: "z. B. Sommer, Arbeit, Urlaub", "aria-label": "Name des Ordners", autocomplete: "off" });
   const msg = el("div", { class: "note" }), ok = el("button", { type: "button", class: "btn primary" }, start ? "Speichern" : "Anlegen");
   const close = () => { box.hidden = true; box.replaceChildren(); };
   ok.onclick = async () => {
     const name = clean(input.value), lower = name.toLowerCase();
     if (!name) { msg.textContent = "Bitte einen Namen eintippen."; return; }
-    if ([HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME, "Ohne Ordner", "Fertige Outfits", "⭐ Fertige Outfits"].some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
+    if (FESTE_NAMEN.some(n => n.toLowerCase() === lower) || folders.some(f => f.id !== selfId && f.name.toLowerCase() === lower)) {
       msg.textContent = "Diesen Namen gibt es schon."; return;
     }
     ok.disabled = true;
@@ -197,10 +259,12 @@ const filters = new Map(); // pro Ordner gemerkt, solange die App offen ist: { g
 const ZUSAMMEN = "zusammenstellen"; // eigene Filter beim „＋ Eigenes Outfit zusammenstellen“
 let auswahl = null;        // „Teile auswählen“: Set der Nummern, die im Ordner sein sollen (sonst null)
 function teilKachel(t, { markiert = null, onclick, extra = null }) {
+  // Zeichen unten rechts: 🚫 Ziehe ich nicht an, dazu seit 0.26 💰 will ich verkaufen / 📦 bei Vinted / ✅ verkauft
+  const zeichen = [t.nichtAnziehen ? "🚫" : null, verkaufZeichen(t)].filter(Boolean).join(" ");
   const b = el("button", { type: "button", class: "teil" + (markiert ? " markiert" : "") },
     el("span", { class: "bild" }, el("img", { src: url(t.vorschau), alt: beschreibung(t), loading: "lazy" }),
       el("span", { class: "plakette" }, nrText(t.nr)), markiert !== null ? el("span", { class: "haken" }, markiert ? "✓" : "") : null,
-      t.nichtAnziehen ? el("span", { class: "nicht", title: "Ziehe ich nicht an" }, "🚫") : null),
+      zeichen ? el("span", { class: "nicht", title: [t.nichtAnziehen ? "Ziehe ich nicht an" : null, verkaufKurz(t)].filter(Boolean).join(", ") }, zeichen) : null),
     el("span", { class: "text" }, `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), extra);
   b.onclick = onclick;
   if (markiert !== null) b.setAttribute("aria-pressed", markiert);
@@ -271,11 +335,30 @@ function passtSuche(t, q) {
     ...(t.stil || []), ...(t.saison || []), t.notiz, t.marke, t.groesse, t.zustand].filter(Boolean).join(" ").toLowerCase();
   return q.split(/\s+/).every(w => text.includes(w));
 }
+// Zeile unter dem Titel der Verkaufs-Ordner (seit 0.26)
+const summeVon = (list, feld) => Math.round(list.reduce((s, t) => s + (t[feld] || 0), 0) * 100) / 100;
+function verkaufUnter(list) {
+  const bei = list.filter(t => t.verkauf === EINGESTELLT), summe = summeVon(bei, "preis");
+  return `${anzahl(list.length)}: ${list.length - bei.length} will ich verkaufen, ${bei.length} bei Vinted${summe ? ` (zusammen ${preisText(summe)})` : ""}.` +
+    (list.length === 1 ? " Es kommt nicht in Outfit-Vorschläge." : " Sie kommen nicht in Outfit-Vorschläge.");
+}
+function verkauftUnter(list) {
+  const mit = list.filter(t => t.erloes != null), ohne = list.length - mit.length;
+  return `${anzahl(list.length)} verkauft${mit.length ? `, zusammen ${preisText(summeVon(mit, "erloes"))}` : ""}${mit.length && ohne ? ` (bei ${ohne} ohne Betrag)` : ""}.` +
+    (list.length === 1 ? " Es ist nicht mehr im Kleiderschrank und kommt in keine Vorschläge." : " Sie sind nicht mehr im Kleiderschrank und kommen in keine Vorschläge.");
+}
 function renderListe(items, folders, id) {
-  const ordner = id === ALLE ? null : folders.find(f => f.id === id);
-  if (id !== ALLE && id !== NICHT && !ordner) { auswahl = null; return back(); }
+  const fest = [ALLE, NICHT, L_VERKAUF, L_VERKAUFT].includes(id), verkaufListe = id === L_VERKAUF || id === L_VERKAUFT;
+  const ordner = fest ? null : folders.find(f => f.id === id);
+  if (!fest && !ordner) { auswahl = null; return back(); }
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr);
-  const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : id === NICHT ? da.filter(t => t.nichtAnziehen) : da;
+  // „Zum Verkaufen“: zuerst, was schon bei Vinted ist (am längsten online oben), dann „will ich verkaufen“
+  const zumVerkauf = () => da.filter(imVerkauf).sort((a, b) => (a.verkauf === EINGESTELLT ? 0 : 1) - (b.verkauf === EINGESTELLT ? 0 : 1)
+    || (a.eingestelltAm || "").localeCompare(b.eingestelltAm || "") || b.nr - a.nr);
+  const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : id === NICHT ? da.filter(t => t.nichtAnziehen)
+    : id === L_VERKAUF ? zumVerkauf() : id === L_VERKAUFT ? verkaufteVon(items) : da;
+  // In den Verkaufs-Ordnern steht unter jedem Foto der Stand („📦 seit 6 Tagen bei Vinted · 15 €“)
+  const standVon = t => verkaufListe ? el("span", { class: "rest" }, verkaufKurz(t)) : null;
   const filterName = current.zusammenstellen ? ZUSAMMEN : id;
   const f = filters.get(filterName) || { gruppe: null, farbe: null, suche: "" };
   filters.set(filterName, f);
@@ -309,10 +392,17 @@ function renderListe(items, folders, id) {
   }
   const leer = basis.length ? (gefiltert.length ? null : "Mit diesem Filter gibt es hier nichts.")
     : ordner ? "Noch keine Teile in diesem Ordner. Tippe auf „Teile hinzufügen / entfernen“."
-    : id === NICHT ? "Keine Teile mehr markiert." : "Noch nichts gespeichert. Füge auf der Startseite Kleidung hinzu.";
+    : id === NICHT ? "Keine Teile mehr markiert."
+    : id === L_VERKAUF ? "Hier ist nichts mehr. Ein Teil kommt hierher, wenn du bei ihm „💰 Will ich verkaufen“ antippst."
+    : id === L_VERKAUFT ? "Noch nichts verkauft." : "Noch nichts gespeichert. Füge auf der Startseite Kleidung hinzu.";
   const unter = auswahl ? null : ordner ? anzahl(drin.length)
     : id === NICHT ? `${anzahl(drin.length)}, ${drin.length === 1 ? "das nie in Outfit-Vorschläge kommt" : "die nie in Outfit-Vorschläge kommen"}. Zum Zurückholen: Teil antippen und „Ziehe ich nicht an“ ausschalten.`
+    : id === L_VERKAUF ? verkaufUnter(drin) : id === L_VERKAUFT ? verkauftUnter(drin)
     : `Alle ${anzahl(drin.length)}`;
+  // Bei Vinted schon lange online: Hinweis oben (nur beim Öffnen der App, eine Mitteilung aufs Handy gibt es nicht)
+  const lange = id === L_VERKAUF && !mehrfach ? drin.filter(langeOnline) : [];
+  const langeHinweis = lange.length ? el("div", { class: "panel hinweis" }, el("strong", {}, "⏰ Schon lange bei Vinted"),
+    el("p", {}, `${lange.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${lange.length === 1 ? "ist" : "sind"} seit über ${LANGE_TAGE} Tagen online. Vielleicht den Preis bei Vinted etwas senken oder den Artikel neu einstellen?`)) : null;
 
   // „＋ Eigenes Outfit zusammenstellen“ (aus „⭐ Fertige Outfits“): alle Teile antippen, unten nur „⭐ Als Outfit speichern“
   const zusammen = !!current.zusammenstellen && id === ALLE && !!mehrfach;
@@ -331,12 +421,12 @@ function renderListe(items, folders, id) {
           if (fertigKnopf) fertigKnopf.textContent = `Fertig (${anzahl(auswahl.size)})`;
         } })
       : mehrfach
-      ? teilKachel(t, { markiert: mehrfach.has(t.nr), onclick: () => { mehrfach.has(t.nr) ? mehrfach.delete(t.nr) : mehrfach.add(t.nr); haken(k, mehrfach.has(t.nr)); leiste.update(); } })
-      : teilKachel(t, { onclick: () => go({ v: "teil", nr: t.nr }) });
+      ? teilKachel(t, { markiert: mehrfach.has(t.nr), extra: standVon(t), onclick: () => { mehrfach.has(t.nr) ? mehrfach.delete(t.nr) : mehrfach.add(t.nr); haken(k, mehrfach.has(t.nr)); leiste.update(); } })
+      : teilKachel(t, { extra: standVon(t), onclick: () => go({ v: "teil", nr: t.nr }) });
     k.dataset.nr = t.nr; return k;
   }));
   if (mehrfach) {
-    const alleTeile = new Map(da.map(t => [t.nr, t])), ordnerVon = nr => alleTeile.get(nr)?.ordner || [];
+    const alleTeile = new Map(items.map(t => [t.nr, t])), ordnerVon = nr => alleTeile.get(nr)?.ordner || [];
     // Ordner zum Verschieben/Hinzufügen erscheint in der Leiste
     const ordnerWahl = (frage, los) => {
       const ziele = folders.filter(f => f.id !== id);
@@ -374,7 +464,44 @@ function renderListe(items, folders, id) {
       leiste.extra.hidden = false;
       name.focus();
     } };
-    leiste = auswahlLeiste(() => [...grid.children].filter(k => !k.hidden), zusammen ? [alsOutfit] : [
+    const loeschen = { text: "Löschen", los: async nrs => {
+      if (!confirm(`${n(nrs)} löschen?\n\n${nrs.length === 1 ? "Es kommt" : "Sie kommen"} in den Papierkorb, ${nrs.length === 1 ? "bleibt" : "bleiben"} dort ${KORB_TAGE} Tage und ${nrs.length === 1 ? "lässt" : "lassen"} sich wiederherstellen.`)) return;
+      const jetzt = new Date().toISOString();
+      await updateItems(nrs.map(nr => ({ nr, geloescht: jetzt })));
+      fertigMit(`${n(nrs)} im Papierkorb`);
+    } };
+    // Verkaufen für mehrere auf einmal (seit 0.26), z. B. beim Ausmisten. Teile, die schon dabei sind, behalten ihren Stand.
+    const verkaufen = { text: "💰 Verkaufen", los: async nrs => {
+      const neu = nrs.filter(nr => !alleTeile.get(nr)?.verkauf);
+      await updateItems(neu.map(nr => ({ nr, ...KEIN_VERKAUF, verkauf: ZUM_VERKAUF })));
+      fertigMit(neu.length ? `${n(neu)} in „${VERKAUF_NAME}“` : "Die ausgewählten Teile sind schon beim Verkaufen");
+    } };
+    const verkaufAktionen = id === L_VERKAUF ? [
+      { text: "📦 Bei Vinted eingestellt", haupt: true, los: async nrs => {
+        const neu = nrs.filter(nr => alleTeile.get(nr)?.verkauf === ZUM_VERKAUF), jetzt = new Date().toISOString();
+        await updateItems(neu.map(nr => ({ nr, verkauf: EINGESTELLT, eingestelltAm: jetzt })));
+        fertigMit(neu.length ? `${n(neu)} bei Vinted eingestellt` : "Die ausgewählten Teile sind schon eingestellt");
+      } },
+      { text: "✅ Verkauft", los: async nrs => {
+        if (!confirm(`${n(nrs)} als verkauft eintragen?\n\nDanach ${nrs.length === 1 ? "ist es" : "sind sie"} nicht mehr im Kleiderschrank, nur noch unter „${VERKAUFT_NAME}“. Als Betrag gilt der Preis bei Vinted (falls eingetragen), ändern kannst du ihn beim Teil.`)) return;
+        const jetzt = new Date().toISOString();
+        await updateItems(nrs.map(nr => ({ nr, verkauf: VERKAUFT, verkauftAm: jetzt, erloes: alleTeile.get(nr)?.preis ?? null })));
+        fertigMit(`${n(nrs)} verkauft 🎉`);
+      } },
+      { text: "Doch behalten", los: async nrs => {
+        await updateItems(nrs.map(nr => ({ nr, ...KEIN_VERKAUF })));
+        fertigMit(`${n(nrs)} ${nrs.length === 1 ? "kommt" : "kommen"} wieder in Vorschläge`);
+      } },
+      loeschen]
+    : id === L_VERKAUFT ? [
+      { text: "Doch nicht verkauft", los: async nrs => {
+        const jetzt = new Date().toISOString();
+        await updateItems(nrs.map(nr => ({ nr, verkauf: EINGESTELLT, verkauftAm: null, erloes: null, eingestelltAm: alleTeile.get(nr)?.eingestelltAm || jetzt })));
+        fertigMit(`${n(nrs)} wieder im Kleiderschrank (in „${VERKAUF_NAME}“)`);
+      } },
+      loeschen]
+    : null;
+    leiste = auswahlLeiste(() => [...grid.children].filter(k => !k.hidden), zusammen ? [alsOutfit] : verkaufAktionen || [
       id !== NICHT && alsOutfit,
       ordner && { text: "Verschieben nach …", los: async nrs => ordnerWahl(`${n(nrs)} aus „${ordner.name}“ verschieben nach:`, async f => {
         await updateItems(nrs.map(nr => ({ nr, ordner: [...new Set([...ordnerVon(nr).filter(o => o !== id), f.id])] })));
@@ -392,12 +519,8 @@ function renderListe(items, folders, id) {
         await updateItems(nrs.map(nr => ({ nr, nichtAnziehen: id !== NICHT })));
         fertigMit(id === NICHT ? `${n(nrs)} ${nrs.length === 1 ? "kommt" : "kommen"} wieder in Vorschläge` : `${n(nrs)} als „Ziehe ich nicht an“ markiert`);
       } },
-      { text: "Löschen", los: async nrs => {
-        if (!confirm(`${n(nrs)} löschen?\n\n${nrs.length === 1 ? "Es kommt" : "Sie kommen"} in den Papierkorb, ${nrs.length === 1 ? "bleibt" : "bleiben"} dort ${KORB_TAGE} Tage und ${nrs.length === 1 ? "lässt" : "lassen"} sich wiederherstellen.`)) return;
-        const jetzt = new Date().toISOString();
-        await updateItems(nrs.map(nr => ({ nr, geloescht: jetzt })));
-        fertigMit(`${n(nrs)} im Papierkorb`);
-      } }
+      verkaufen,
+      loeschen
     ].filter(Boolean));
   }
   // Beim Tippen in die Suche nur Kacheln ein- und ausblenden (neu zeichnen würde die Tastatur schließen)
@@ -415,8 +538,8 @@ function renderListe(items, folders, id) {
   suchen();
   fill($("ansicht"),
     zusammen ? kopf("＋ Eigenes Outfit", `Tippe die Teile an, die zum Outfit gehören (höchstens ${MAX_TEILE}). Dann unten „⭐ Als Outfit speichern“.`, waehlenKnopf)
-      : kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : HAUPT, unter, waehlenKnopf),
-    aktionen, editor,
+      : kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : id === L_VERKAUF ? VERKAUF_NAME : id === L_VERKAUFT ? VERKAUFT_NAME : HAUPT, unter, waehlenKnopf),
+    langeHinweis, aktionen, editor,
     basis.length ? suche : null,
     basis.length ? filterChips(basis, f, nf => { filters.set(filterName, nf); neuZeichnen(); }) : null,
     grid, keinTreffer,
@@ -477,7 +600,8 @@ function renderTeil(items, folders, nr, foto) {
     inhalt.replaceChildren(...form.elements, el("div", { class: "actions" }, abbrechen, speichern));
     // 🚫 steht jetzt im Formular unter „Mehr Angaben“; ein zweiter Schalter würde das Formular verwerfen.
     // „Was passt dazu?“ und „Für Vinted“ während des Änderns ausblenden, sie würden die Ansicht wechseln.
-    aktionen.hidden = true; nichtFeld.hidden = true; if (passt) passt.hidden = true;
+    // Ebenso „Verkaufen“ (zeichnet die Ansicht neu, das Formular wäre weg).
+    aktionen.hidden = true; nichtFeld.hidden = true; verkaufBox.hidden = true; if (passt) passt.hidden = true;
   };
   const korb = el("button", { type: "button", class: "btn" }, t.geloescht ? "Wiederherstellen" : "In den Papierkorb");
   korb.onclick = async () => {
@@ -489,12 +613,16 @@ function renderTeil(items, folders, nr, foto) {
   };
   // wrap: Bei 320 px Breite stehen die zwei Knöpfe untereinander statt zweizeilig beschriftet (seit 0.21)
   const aktionen = el("div", { class: "actions wrap" }, t.geloescht ? null : aendern, korb);
-  // „Für Vinted“ (seit 0.22): Titel und Beschreibung zum Kopieren, Foto zum Sichern
-  const passt = t.geloescht ? null : el("div", { class: "actions wrap" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
+  // „Für Vinted“ (seit 0.22): Titel und Beschreibung zum Kopieren, Foto zum Sichern. Bei verkauften Teilen nicht mehr nötig.
+  const verkauft = istVerkauft(t);
+  const passt = t.geloescht || verkauft ? null : el("div", { class: "actions wrap" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
     el("button", { type: "button", class: "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Für Vinted"));
+  // Verkaufen (seit 0.26): 💰 will ich verkaufen → 📦 bei Vinted eingestellt → ✅ verkauft. Speichert sofort.
+  const verkaufBox = t.geloescht ? el("div", {}) : verkaufFeld(t, () => neuZeichnen());
   fill($("ansicht"),
-    kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : null),
-    bild, passt, inhalt, t.geloescht ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld), aktionen);
+    kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : verkauft ? "✅ Verkauft – nicht mehr im Kleiderschrank" : null),
+    bild, passt, inhalt,
+    t.geloescht ? null : el("div", { class: "panel" }, verkauft ? null : ordnerFeld, verkauft ? null : nichtFeld, verkaufBox), aktionen);
 }
 
 /* ---------- Papierkorb ---------- */
@@ -554,6 +682,7 @@ export async function initSchrank() {
     if (!(await getMeta("woerterAngeglichen"))) { await updateAll(teilAngleichen); await setMeta("woerterAngeglichen", true); }
   } catch (e) { console.error(e); }
   try { await aufraeumen(); } catch (e) { console.error(e); }
+  schwebeEinrichten();
   if (history.state?.v) current = history.state; else history.replaceState(current, "");
   await show(current.y || 0);
 }

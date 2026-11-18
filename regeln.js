@@ -206,10 +206,12 @@ function tipps(teile, extras, s, ideen = []) {
 }
 
 /* ---------- Welche Teile kommen infrage? ---------- */
-// Hartes Nie: Papierkorb und 🚫. Ordner-Auswahl: Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt.
+// Hartes Nie: Papierkorb, 🚫 und (seit 0.26) alles beim Verkaufen (💰 will ich verkaufen, 📦 bei Vinted, ✅ verkauft).
+// Gilt auch für den Chat: Was hier fehlt, meldet „Nur die Änderungen“ als „nicht mehr da“.
+// Ordner-Auswahl: Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt.
 // Teile ohne eigenen Ordner zählen über den eigenen Knopf „Ohne Ordner“. auswahl = { angehakt: Set der Ordner-IDs, ohneOrdner: an/aus }
 export function kandidaten(items, auswahl = null) {
-  const moeglich = items.filter(t => !t.geloescht && !t.nichtAnziehen);
+  const moeglich = items.filter(t => !t.geloescht && !t.nichtAnziehen && !t.verkauf);
   if (!auswahl) return moeglich;
   return moeglich.filter(t => t.ordner?.length ? t.ordner.some(o => auswahl.angehakt.has(o)) : auswahl.ohneOrdner);
 }

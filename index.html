@@ -18,11 +18,16 @@
 <meta name="theme-color" content="#f7e4e3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1514" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=28">
+<link rel="stylesheet" href="app.css?v=29">
 </head>
 <body>
 <!-- Eigener Scroll-Bereich: Inhalt läuft auf dem iPhone sonst beim Scrollen unter Uhrzeit und Akku (siehe app.css) -->
 <div id="rahmen">
+<!-- Zurück-Leiste (seit 0.26): gleitet beim Hochwischen von oben herein, sobald der Kopf mit „‹ Zurück“ nicht mehr zu sehen ist (schrank.js) -->
+<div class="schwebe" id="schwebe"><div class="schwebe-leiste">
+  <button type="button" class="zurueck" id="schwebeZurueck">‹ Zurück</button>
+  <button type="button" class="kopf-knopf" id="schwebeHoch">↑ Nach oben</button>
+</div></div>
 <main>
   <!-- Startseite. Ordner, Teil und Papierkorb zeichnet schrank.js in #ansicht.
        Reihenfolge (04.11.2026): Kopf, Hinweise nur bei Bedarf, zwei Hauptknöpfe, beim Hinzufügen die Karten, Kleiderschrank,
@@ -106,13 +111,13 @@
   <!-- Mein Stil · Sicherung · Papierkorb als kleine Kacheln mit ihrem Stand (schrank.js) -->
   <div class="neben" id="nebenKacheln"></div>
   <div id="nummernKarte"></div>
-  <div class="version" id="version">Version 0.25 (Korrekturen aus der Durchsicht) · 13.11.2026</div>
+  <div class="version" id="version">Version 0.26 (Zurück-Leiste, Verkaufen) · 18.11.2026</div>
   </div>
 
   <section id="ansicht" hidden></section>
 </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=40"></script>
+<script type="module" src="app.js?v=41"></script>
 </body>
 </html>

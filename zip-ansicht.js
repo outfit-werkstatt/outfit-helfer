@@ -1,7 +1,7 @@
 // Etappe 1e: Sicherung als ZIP-Datei speichern und laden („Sicherung vom TT.MM.JJJJ Outfit Helfer.zip“).
 // Inhalt: Fotos als „012 - T-Shirt braun.jpg“, Vorschaubilder, Fotos der fertigen Outfits unter „Outfits/“, angaben.json
 // (Teile, Ordner, Mein Stil, eigene Knöpfe, fertige Outfits, nächste Nummer, seit 0.21 was der Chat kennt) und „Lies mich.txt“.
-// Teile im Papierkorb kommen nicht mit.
+// Teile im Papierkorb kommen nicht mit. Verkaufte Teile (seit 0.26) kommen mit, aber nur mit der kleinen Vorschau als Foto.
 // Laden ERSETZT alles. Die Datei kann von irgendwoher stammen, darum wird sie misstrauisch gelesen: nur erwartete Dateien,
 // Grenzen für Größe und Anzahl, jede Angabe geprüft (nur bekannte Felder, Längen gekürzt), Fotos neu gezeichnet.
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
@@ -11,7 +11,8 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=19";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=20";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=8";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=16";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=17";
+import { VERKAUF_STUFEN, preisPruefen } from "./verkauf.js?v=1";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
@@ -31,6 +32,7 @@ const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSo
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
   "Zum Wiederherstellen: App öffnen, auf der Startseite unten „💾 Sicherung“ antippen, dann „Sicherung auswählen …“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
   "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits und eigene Knöpfe.\r\n\r\n" +
+  "Verkaufte Teile sind auch dabei, aber nur mit einem kleinen Foto. So bleibt deine Übersicht „Verkauft“ erhalten.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 
 // Bild-Vektor (Float32Array) ↔ Text für angaben.json
@@ -54,8 +56,11 @@ export function zipStand(items, letzte, stil, sonst) {
   if (!letzte) return { nie: true, leer: !items.length, aenderungen: [] };
   const drin = new Set(letzte.nrs), jetzt = new Set(da.map(t => t.nr));
   const neu = da.filter(t => !drin.has(t.nr)).length, weg = letzte.nrs.filter(n => !jetzt.has(n)).length;
-  const geaendert = da.filter(t => drin.has(t.nr) && t.geaendert > letzte.zeit).length;
-  const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, geaendert && `${geaendert} geändert`,
+  // Seit 0.26: Verkaufte Teile kommen mit in die Sicherung und heißen hier „verkauft“ statt „geändert“
+  const seitdemVerkauft = t => t.verkauf === "verkauft" && t.verkauftAm > letzte.zeit;
+  const verkauft = da.filter(t => drin.has(t.nr) && seitdemVerkauft(t)).length;
+  const geaendert = da.filter(t => drin.has(t.nr) && t.geaendert > letzte.zeit && !seitdemVerkauft(t)).length;
+  const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, verkauft && `${verkauft} verkauft`, geaendert && `${geaendert} geändert`,
     stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits oder eigene Knöpfe geändert"].filter(Boolean);
   // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
   const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
@@ -91,8 +96,9 @@ async function erstellen(fortschritt) {
   const teile = alle.filter(t => !t.geloescht).sort((a, b) => a.nr - b.nr), dateien = [], angaben = [];
   for (const [i, t] of teile.entries()) {
     fortschritt(`Fotos sammeln: ${i + 1} von ${teile.length} …`);
-    // Fehlt das große Foto (sollte nie passieren), wenigstens die Vorschau mitnehmen, damit das Teil nicht verloren geht
-    const foto = (await getPhoto(t.nr)) || t.vorschau, name = fotoName(t);
+    // Fehlt das große Foto (sollte nie passieren), wenigstens die Vorschau mitnehmen, damit das Teil nicht verloren geht.
+    // Verkaufte Teile (seit 0.26) nur mit der kleinen Vorschau: Für die Übersicht reicht sie, und die Sicherung wächst nicht mit jedem Verkauf.
+    const foto = (t.verkauf === "verkauft" ? null : await getPhoto(t.nr)) || t.vorschau, name = fotoName(t);
     dateien.push({ name, data: foto }, { name: vorschauName(t.nr), data: t.vorschau });
     const { vorschau, vektor, geloescht, ...rest } = t;
     angaben.push({ ...rest, foto: name, vorschau: vorschauName(t.nr), vektor: vektor ? zuB64(vektor) : null });
@@ -160,6 +166,9 @@ function pruefen(j) {
       notiz: typeof t.notiz === "string" ? cleanText(t.notiz).slice(0, 200) || null : null, nichtAnziehen: t.nichtAnziehen === true,
       // Für Vinted (seit 0.22): Marke, Größe, Zustand (nur die Stufen, die es bei Vinted gibt)
       marke: text(t.marke, 40), groesse: text(t.groesse, 30), zustand: ZUSTAENDE.includes(t.zustand) ? t.zustand : null,
+      // Verkaufen (seit 0.26): nur die drei Stufen, Beträge als Zahl in Grenzen, Zeitpunkte als Datum
+      verkauf: VERKAUF_STUFEN.includes(t.verkauf) ? t.verkauf : null, preis: preisPruefen(t.preis), erloes: preisPruefen(t.erloes),
+      eingestelltAm: zeit(t.eingestelltAm), verkauftAm: zeit(t.verkauftAm),
       ordner: liste(t.ordner, 50, 50).filter(id => ids.has(id)), erstellt: zeit(t.erstellt) || new Date().toISOString(),
       ki: Object.fromEntries(["art", "farbe", "muster", "material", "aermel", "schnitt"].map(f => [f, text(k[f], 30)])),
       _foto: typeof t.foto === "string" ? t.foto : null, _vorschau: typeof t.vorschau === "string" ? t.vorschau : null };
@@ -306,8 +315,9 @@ async function laden(datei) {
     const jetzt = await allItems(), kommt = new Set(teile.map(t => t.nr));
     const verloren = jetzt.filter(t => !t.geloescht && !kommt.has(t.nr)).map(t => t.nr).sort((a, b) => a - b);
     const imKorb = jetzt.filter(t => t.geloescht).length, unlesbar = fehlen.length + s.ausgelassen;
+    const verkauft = teile.filter(t => t.verkauf === "verkauft").length;
     const frage = [
-      `Sicherung${s.erstellt ? " vom " + datumText(new Date(s.erstellt)) : ""}: ${anzahl(teile.length)}, ${s.ordner.length} Ordner` +
+      `Sicherung${s.erstellt ? " vom " + datumText(new Date(s.erstellt)) : ""}: ${anzahl(teile.length)}${verkauft ? ` (davon ${verkauft} verkauft)` : ""}, ${s.ordner.length} Ordner` +
         `${outfits.length ? `, ${outfits.length} ${outfits.length === 1 ? "fertiges Outfit" : "fertige Outfits"}` : ""}` +
         `${Object.keys(s.meinStil).some(k => k !== "geaendert") ? ", „Mein Stil“" : ""}.`,
       unlesbar ? `⚠️ ${unlesbar === 1 ? "1 Teil" : unlesbar + " Teile"} aus der Sicherung ${unlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${unlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
@@ -397,6 +407,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
     el("div", { class: "panel" },
       mitInfo(el("strong", {}, "Sicherung speichern"),
         "Packt alle Teile mit Fotos, Ordner, „Mein Stil“, fertige Outfits und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit.",
+        "Verkaufte Teile kommen mit, aber nur mit kleinem Foto. So bleibt deine Übersicht „✅ Verkauft“ erhalten, und die Datei wird nicht mit jedem Verkauf größer.",
         `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“ (nach Name käme der 01.11. vor dem 25.10.).`),
       el("p", { class: "hint" }, stand),
       offen ? el("p", { class: "hint" }, `Noch ${offen} ${offen === 1 ? "Foto" : "Fotos"} auf der Startseite nicht gespeichert – die kommen nicht mit.`) : null,

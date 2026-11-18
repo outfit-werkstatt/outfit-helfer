@@ -4,9 +4,9 @@
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=19";
 import { nrText } from "./speicher.js?v=11";
 import { stilAktuell } from "./stil.js?v=20";
-import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=16";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=16";
-import { speichernKnopf } from "./fertig.js?v=8";
+import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=17";
+import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=17";
+import { speichernKnopf } from "./fertig.js?v=9";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
 // dazu hier in „Was passt dazu?“, ob die Vorschläge der App und „Ordner und Mein Stil“ aufgeklappt sind
@@ -116,6 +116,7 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
 
   fill(box, kopf,
     anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
+    anker.verkauf ? el("p", { class: "hint" }, "Dieses Teil liegt bei „💰 Zum Verkaufen“. Es kommt sonst in keinen Vorschlag, und dein Chat kennt es vielleicht nicht mehr.") : null,
     el("div", { class: "panel" },
       field("Wofür?", null, anlassWahl.el),
       field("Wie schick?", "freiwillig", einer(Object.keys(SCHICK_WAHL), sit.schickWahl, x => { sit.schickWahl = x; }), "Ohne Angabe richtet es sich nach dem Anlass."),

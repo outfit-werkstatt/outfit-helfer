@@ -6,7 +6,7 @@
 import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=8";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=11";
 import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=19";
-import { refresh, initSchrank } from "./schrank.js?v=37";
+import { refresh, initSchrank } from "./schrank.js?v=38";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -185,7 +185,7 @@ async function addPhoto(e, card) {
       doppeltOffen = !!d; doppeltKarte = d?.karte || null;
       if (!d) { doppeltPlatz.replaceChildren(); return; }
       doppeltUrl = d.teil ? URL.createObjectURL(d.teil.vorschau) : null;
-      const wer = d.teil ? `Nr. ${nrText(d.teil.nr)} – ${beschreibung(d.teil)}${d.teil.geloescht ? " (liegt im Papierkorb)" : ""}`
+      const wer = d.teil ? `Nr. ${nrText(d.teil.nr)} – ${beschreibung(d.teil)}${d.teil.geloescht ? " (liegt im Papierkorb)" : d.teil.verkauf === "verkauft" ? " (schon verkauft)" : ""}`
         : `„${d.karte.titel()}“ weiter oben`;
       const text = d.gleich ? (d.teil ? `Dieses Foto ist schon gespeichert: ${wer}.` : `Dieses Foto ist zweimal ausgewählt, siehe ${wer}.`)
         : `Sieht aus wie ${wer}. Ist es dasselbe Teil?`;
