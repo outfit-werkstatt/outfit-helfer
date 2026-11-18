@@ -19,8 +19,15 @@ import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZei
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
 const ALLE = "alle", HAUPT = "Mein Kleiderschrank", NICHT = "nicht", NICHT_NAME = "🚫 Ziehe ich nicht an", TAG = 24 * 3600 * 1000, KORB_TAGE = 30;
 const L_VERKAUF = "verkaufen", L_VERKAUFT = "verkauft";
+// Auf der Startseite stehen 🚫, 💰 und ✅ zusammen in EINER Kachel „♻️ Aussortiert“ (iPhone-Test 18.11.2026: sonst zu viele Ordner).
+// Drinnen schalten drei Knöpfe zwischen den Bereichen um; der zuletzt gewählte gilt beim nächsten Öffnen (pro Sitzung).
+const AUSSORTIERT = [NICHT, L_VERKAUF, L_VERKAUFT], AUSSORTIERT_NAME = "♻️ Aussortiert";
+const BEREICH_NAME = { [NICHT]: ["🚫", "Nicht anziehen"], [L_VERKAUF]: ["💰", "Zum Verkaufen"], [L_VERKAUFT]: ["✅", "Verkauft"] };
+let aussortiertZuletzt = null;
 const FESTE_NAMEN = [HAUPT, "Papierkorb", "Ziehe ich nicht an", NICHT_NAME, "Ohne Ordner", "Fertige Outfits", "⭐ Fertige Outfits",
-  "Zum Verkaufen", VERKAUF_NAME, "Verkauft", VERKAUFT_NAME];
+  "Zum Verkaufen", VERKAUF_NAME, "Verkauft", VERKAUFT_NAME, "Aussortiert", AUSSORTIERT_NAME];
+// „🚫 Ziehe ich nicht an“: ohne Teile, die schon beim Verkaufen sind (die stehen unter „💰 Zum Verkaufen“, sonst doppelt)
+const nichtAn = da => da.filter(t => t.nichtAnziehen && !t.verkauf);
 const GROUP_ORDER = GROUPS.map(([g]) => g);
 // Im Kleiderschrank: nicht im Papierkorb und (seit 0.26) nicht verkauft
 const sichtbar = items => items.filter(imSchrank);
@@ -177,11 +184,18 @@ const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
 const anzahl = n => `${n} ${n === 1 ? "Teil" : "Teile"}`;
 
 /* ---------- Startseite: Ordner-Kacheln ---------- */
-function kachel(name, list, onclick) {
-  const bilder = list.slice(0, 4).map(t => el("img", { src: url(t.vorschau), alt: "", loading: "lazy" }));
+// fotos = welche Teile das Mosaik zeigt (sonst die ersten der Liste)
+function kachel(name, list, onclick, fotos = list) {
+  const bilder = fotos.slice(0, 4).map(t => el("img", { src: url(t.vorschau), alt: "", loading: "lazy" }));
   return el("button", { type: "button", class: "kachel", onclick },
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
     el("span", { class: "name" }, name), el("span", { class: "anzahl" }, anzahl(list.length)));
+}
+// Abwechselnd aus mehreren Listen (je eins, dann das nächste …), damit das Mosaik von „Aussortiert“ von jedem Bereich etwas zeigt
+function gemischt(...listen) {
+  const out = [];
+  for (let i = 0; listen.some(l => i < l.length); i++) for (const l of listen) if (i < l.length) out.push(l[i]);
+  return out;
 }
 // Nummern wieder bei 001 beginnen: nur, wenn es gar keine Teile mehr gibt. Sind sie nur noch im Papierkorb, ein Hinweis darauf.
 function nummernKarte(items, naechste) {
@@ -222,13 +236,14 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
     toast(`Ordner „${name}“ angelegt`);
     go({ v: "liste", id: f.id });
   });
-  const nicht = da.filter(t => t.nichtAnziehen), zumVerkauf = da.filter(imVerkauf), verkauft = verkaufteVon(items);
+  // „♻️ Aussortiert“: öffnet den zuletzt gewählten Bereich, sonst „Zum Verkaufen“, sonst den ersten mit Teilen
+  const bereiche = { [NICHT]: nichtAn(da), [L_VERKAUF]: da.filter(imVerkauf), [L_VERKAUFT]: verkaufteVon(items) };
+  const aussortiert = AUSSORTIERT.flatMap(b => bereiche[b]);
+  const ersterBereich = () => [aussortiertZuletzt, L_VERKAUF, NICHT, L_VERKAUFT].find(b => b && bereiche[b].length);
   fill($("kacheln"),
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
-    nicht.length ? kachel(NICHT_NAME, nicht, () => go({ v: "liste", id: NICHT })) : null,
-    zumVerkauf.length ? kachel(VERKAUF_NAME, zumVerkauf, () => go({ v: "liste", id: L_VERKAUF })) : null,
-    verkauft.length ? kachel(VERKAUFT_NAME, verkauft, () => go({ v: "liste", id: L_VERKAUFT })) : null,
+    aussortiert.length ? kachel(AUSSORTIERT_NAME, aussortiert, () => go({ v: "liste", id: ersterBereich() }), gemischt(...AUSSORTIERT.map(b => bereiche[b]))) : null,
     da.length || outfits.length ? fertigKachel(outfits, items, url, () => go({ v: "fertig" })) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
@@ -337,10 +352,11 @@ function passtSuche(t, q) {
 }
 // Zeile unter dem Titel der Verkaufs-Ordner (seit 0.26)
 const summeVon = (list, feld) => Math.round(list.reduce((s, t) => s + (t[feld] || 0), 0) * 100) / 100;
+// „Will ich verkaufen: 2 · Bei Vinted: 1 (zusammen 15 €)“ – Bereiche mit 0 Teilen fallen weg (iPhone-Test: „0 will ich verkaufen“)
 function verkaufUnter(list) {
-  const bei = list.filter(t => t.verkauf === EINGESTELLT), summe = summeVon(bei, "preis");
-  return `${anzahl(list.length)}: ${list.length - bei.length} will ich verkaufen, ${bei.length} bei Vinted${summe ? ` (zusammen ${preisText(summe)})` : ""}.` +
-    (list.length === 1 ? " Es kommt nicht in Outfit-Vorschläge." : " Sie kommen nicht in Outfit-Vorschläge.");
+  const bei = list.filter(t => t.verkauf === EINGESTELLT), summe = summeVon(bei, "preis"), wollen = list.length - bei.length;
+  const teile = [wollen ? `Will ich verkaufen: ${wollen}` : null, bei.length ? `Bei Vinted: ${bei.length}${summe ? ` (zusammen ${preisText(summe)})` : ""}` : null].filter(Boolean);
+  return (teile.length ? teile.join(" · ") + "." : "") + (list.length === 1 ? " Es kommt nicht in Outfit-Vorschläge." : " Sie kommen nicht in Outfit-Vorschläge.");
 }
 function verkauftUnter(list) {
   const mit = list.filter(t => t.erloes != null), ohne = list.length - mit.length;
@@ -355,8 +371,21 @@ function renderListe(items, folders, id) {
   // „Zum Verkaufen“: zuerst, was schon bei Vinted ist (am längsten online oben), dann „will ich verkaufen“
   const zumVerkauf = () => da.filter(imVerkauf).sort((a, b) => (a.verkauf === EINGESTELLT ? 0 : 1) - (b.verkauf === EINGESTELLT ? 0 : 1)
     || (a.eingestelltAm || "").localeCompare(b.eingestelltAm || "") || b.nr - a.nr);
-  const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : id === NICHT ? da.filter(t => t.nichtAnziehen)
+  const drin = ordner ? da.filter(t => t.ordner?.includes(id)) : id === NICHT ? nichtAn(da)
     : id === L_VERKAUF ? zumVerkauf() : id === L_VERKAUFT ? verkaufteVon(items) : da;
+  // „♻️ Aussortiert“: oben drei Knöpfe zum Umschalten (ersetzt die Ansicht, „Zurück“ führt weiter zur Startseite)
+  const imAussortiert = AUSSORTIERT.includes(id);
+  if (imAussortiert) aussortiertZuletzt = id;
+  const umschalter = imAussortiert ? el("div", { class: "chips umschalter" }, ...AUSSORTIERT.map(b => {
+    const n = (b === NICHT ? nichtAn(da) : b === L_VERKAUF ? da.filter(imVerkauf) : verkaufteVon(items)).length;
+    // Ein Knopf je Bereich: oben Zeichen und Anzahl, darunter der Name (drei passen nebeneinander, auch bei 320 px)
+    const [zeichen, wort] = BEREICH_NAME[b];
+    const k = el("button", { type: "button", class: "chip", "aria-label": `${wort}: ${anzahl(n)}` },
+      el("span", { class: "zahl" }, `${zeichen} ${n}`), el("span", { class: "wort" }, wort));
+    k.setAttribute("aria-pressed", b === id);
+    k.onclick = () => { if (b !== id) ersetze({ v: "liste", id: b }); };
+    return k;
+  })) : null;
   // In den Verkaufs-Ordnern steht unter jedem Foto der Stand („📦 seit 6 Tagen bei Vinted · 15 €“)
   const standVon = t => verkaufListe ? el("span", { class: "rest" }, verkaufKurz(t)) : null;
   const filterName = current.zusammenstellen ? ZUSAMMEN : id;
@@ -396,7 +425,7 @@ function renderListe(items, folders, id) {
     : id === L_VERKAUF ? "Hier ist nichts mehr. Ein Teil kommt hierher, wenn du bei ihm „💰 Will ich verkaufen“ antippst."
     : id === L_VERKAUFT ? "Noch nichts verkauft." : "Noch nichts gespeichert. Füge auf der Startseite Kleidung hinzu.";
   const unter = auswahl ? null : ordner ? anzahl(drin.length)
-    : id === NICHT ? `${anzahl(drin.length)}, ${drin.length === 1 ? "das nie in Outfit-Vorschläge kommt" : "die nie in Outfit-Vorschläge kommen"}. Zum Zurückholen: Teil antippen und „Ziehe ich nicht an“ ausschalten.`
+    : id === NICHT ? `${anzahl(drin.length)}, ${drin.length === 1 ? "das nie in Outfit-Vorschläge kommt" : "die nie in Outfit-Vorschläge kommen"}. Zum Zurückholen: Teil antippen und „Ziehe ich nicht an“ ausschalten. Zum Verkaufen: „Auswählen“ und „💰 Verkaufen“.`
     : id === L_VERKAUF ? verkaufUnter(drin) : id === L_VERKAUFT ? verkauftUnter(drin)
     : `Alle ${anzahl(drin.length)}`;
   // Bei Vinted schon lange online: Hinweis oben (nur beim Öffnen der App, eine Mitteilung aufs Handy gibt es nicht)
@@ -538,7 +567,9 @@ function renderListe(items, folders, id) {
   suchen();
   fill($("ansicht"),
     zusammen ? kopf("＋ Eigenes Outfit", `Tippe die Teile an, die zum Outfit gehören (höchstens ${MAX_TEILE}). Dann unten „⭐ Als Outfit speichern“.`, waehlenKnopf)
-      : kopf(ordner ? ordner.name : id === NICHT ? NICHT_NAME : id === L_VERKAUF ? VERKAUF_NAME : id === L_VERKAUFT ? VERKAUFT_NAME : HAUPT, unter, waehlenKnopf),
+      : kopf(ordner ? ordner.name : imAussortiert ? AUSSORTIERT_NAME : HAUPT, imAussortiert ? null : unter, waehlenKnopf),
+    // In „Aussortiert“ steht die Zeile zum Bereich unter den Knöpfen zum Umschalten
+    imAussortiert && !mehrfach ? umschalter : null, imAussortiert && unter ? el("p", { class: "hint aussortiert-unter" }, unter) : null,
     langeHinweis, aktionen, editor,
     basis.length ? suche : null,
     basis.length ? filterChips(basis, f, nf => { filters.set(filterName, nf); neuZeichnen(); }) : null,
@@ -549,6 +580,7 @@ function renderListe(items, folders, id) {
 
 /* ---------- Teil-Ansicht ---------- */
 const datum = datumText;
+let angabenOffen = false; // „Angaben ansehen“ beim Verkaufen: bleibt pro Sitzung offen, wenn sie es aufgeklappt hat
 function renderTeil(items, folders, nr, foto) {
   const t = items.find(x => x.nr === nr);
   if (!t) return back();
@@ -577,7 +609,12 @@ function renderTeil(items, folders, nr, foto) {
   const nichtFeld = field("Vorschläge", null, choice({
     options: [NICHT_NAME], selected: t.nichtAnziehen ? [NICHT_NAME] : [],
     onChange: async sel => {
-      try { await updateItem(nr, { nichtAnziehen: sel.length > 0 }); toast(sel.length ? "Kommt nicht mehr in Vorschläge" : "Kommt wieder in Vorschläge"); }
+      try {
+        await updateItem(nr, { nichtAnziehen: sel.length > 0 });
+        // Beim Verkaufen kommt es so oder so nicht in Vorschläge (seit 0.26.1)
+        toast(t.verkauf ? (sel.length ? "Gespeichert" : `Gespeichert – kommt erst nach „Doch behalten“ wieder in Vorschläge`)
+          : sel.length ? "Kommt nicht mehr in Vorschläge" : "Kommt wieder in Vorschläge");
+      }
       catch (e) { fehlerToast("Speichern hat nicht geklappt", e); }
       neuZeichnen();
     } }).el, "Das Teil bleibt im Kleiderschrank, kommt aber nie in Outfit-Vorschläge.");
@@ -602,6 +639,7 @@ function renderTeil(items, folders, nr, foto) {
     // „Was passt dazu?“ und „Für Vinted“ während des Änderns ausblenden, sie würden die Ansicht wechseln.
     // Ebenso „Verkaufen“ (zeichnet die Ansicht neu, das Formular wäre weg).
     aktionen.hidden = true; nichtFeld.hidden = true; verkaufBox.hidden = true; if (passt) passt.hidden = true;
+    if (klappe) klappe.open = true; // beim Verkaufen sind die Angaben eingeklappt
   };
   const korb = el("button", { type: "button", class: "btn" }, t.geloescht ? "Wiederherstellen" : "In den Papierkorb");
   korb.onclick = async () => {
@@ -614,15 +652,21 @@ function renderTeil(items, folders, nr, foto) {
   // wrap: Bei 320 px Breite stehen die zwei Knöpfe untereinander statt zweizeilig beschriftet (seit 0.21)
   const aktionen = el("div", { class: "actions wrap" }, t.geloescht ? null : aendern, korb);
   // „Für Vinted“ (seit 0.22): Titel und Beschreibung zum Kopieren, Foto zum Sichern. Bei verkauften Teilen nicht mehr nötig.
-  const verkauft = istVerkauft(t);
-  const passt = t.geloescht || verkauft ? null : el("div", { class: "actions wrap" }, el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
-    el("button", { type: "button", class: "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Für Vinted"));
+  // Beim Verkaufen (seit 0.26, iPhone-Test 18.11.2026): „Für Vinted“ und „Verkaufen“ stehen oben, Angaben, Ordner und 🚫 sind
+  // eingeklappt (die braucht es dann kaum noch), „Was passt dazu?“ fällt weg.
+  const verkauft = istVerkauft(t), beimVerkauf = !t.geloescht && (verkauft || imVerkauf(t));
+  const passt = t.geloescht || verkauft ? null : el("div", { class: "actions wrap" },
+    beimVerkauf ? null : el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
+    el("button", { type: "button", class: beimVerkauf ? "btn primary" : "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Für Vinted"));
   // Verkaufen (seit 0.26): 💰 will ich verkaufen → 📦 bei Vinted eingestellt → ✅ verkauft. Speichert sofort.
   const verkaufBox = t.geloescht ? el("div", {}) : verkaufFeld(t, () => neuZeichnen());
+  const auswahlPanel = t.geloescht || verkauft ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld, beimVerkauf ? null : verkaufBox);
+  const klappe = beimVerkauf ? el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "Angaben ansehen")), inhalt, auswahlPanel) : null;
+  if (klappe) { klappe.open = angabenOffen; klappe.ontoggle = () => { angabenOffen = klappe.open; }; }
   fill($("ansicht"),
     kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : verkauft ? "✅ Verkauft – nicht mehr im Kleiderschrank" : null),
-    bild, passt, inhalt,
-    t.geloescht ? null : el("div", { class: "panel" }, verkauft ? null : ordnerFeld, verkauft ? null : nichtFeld, verkaufBox), aktionen);
+    bild, passt, beimVerkauf ? el("div", { class: "panel" }, verkaufBox) : null,
+    klappe || inhalt, klappe ? null : auswahlPanel, aktionen);
 }
 
 /* ---------- Papierkorb ---------- */
