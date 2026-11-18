@@ -4,12 +4,12 @@
 // Seit 0.28 (Wunsch 18.11.2026, „Kreta Sommer 2026“): mehrere Reisen mit Namen, jede mit eigener Packliste, eigenen Haken und eigener
 // Chat-Antwort. Gespeichert in meta „reisen“ und in der Sicherung (mit Namen sind sie etwas zum Behalten, z. B. als Vorlage fürs nächste Jahr).
 // Texte nur per textContent/DOM, nie per innerHTML (Name und eigene Einträge sind eingetippter Text).
-import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, beschreibung } from "./ui.js?v=19";
+import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, beschreibung } from "./ui.js?v=20";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=11";
-import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=18";
-import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=19";
-import { miniKachel } from "./passt.js?v=25";
-import { stilAktuell } from "./stil.js?v=20";
+import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=19";
+import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=20";
+import { miniKachel } from "./passt.js?v=26";
+import { stilAktuell } from "./stil.js?v=21";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";
 const REIHE = ["oben", "unten", "ganz", "lage", "schuh", "tasche", "zubehoer", "bade", "schmuck", "guertel"];

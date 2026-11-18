@@ -2,19 +2,19 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=19";
+import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=20";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
-import { renderStil, stilKurz } from "./stil.js?v=20";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=28";
-import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=25";
-import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=22";
-import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=9";
-import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=19";
-import { renderVinted } from "./vinted.js?v=10";
-import { GROUPS } from "./ki.js?v=8";
-import { renderKoffer } from "./koffer.js?v=1";
+import { renderStil, stilKurz } from "./stil.js?v=21";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=29";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=26";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=23";
+import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=10";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=20";
+import { renderVinted } from "./vinted.js?v=11";
+import { GROUPS } from "./ki.js?v=9";
+import { renderKoffer } from "./koffer.js?v=2";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
-  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=2";
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=3";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).

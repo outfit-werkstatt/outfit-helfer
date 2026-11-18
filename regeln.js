@@ -3,20 +3,20 @@
 // Vorlieben, keine Verbote: „Mein Stil“ verändert nur die Reihenfolge. Hartes Nie sind nur 🚫 und Papierkorb (siehe kandidaten).
 // Anlass und Wetter dürfen Teile für diese eine Situation weglassen (kein Mantel bei 30 Grad), außer es gibt gar nichts anderes.
 // Selbst eingetippte Einträge zählen über ihr „Ähnlich wie“; ohne das gelten sie als „passt zu vielem“.
-import { GROUP_OF } from "./ki.js?v=8";
-import { farbeRgb, wieVon, saisonVorschlag, groupOf, tabelle } from "./ui.js?v=19";
+import { GROUP_OF } from "./ki.js?v=9";
+import { farbeRgb, wieVon, saisonVorschlag, groupOf, tabelle } from "./ui.js?v=20";
 
 /* ---------- Was ist das für ein Teil? ---------- */
 // Art → [Platz im Outfit, Schick-Stufe 1 (sehr lässig) bis 5 (sehr schick)]
 const ARTEN = tabelle({
   "T-Shirt": ["oben", 2], "Poloshirt": ["oben", 3], "Langarmshirt": ["oben", 2], "Top": ["oben", 2], "Bluse": ["oben", 4], "Hemd": ["oben", 4], "Body": ["oben", 3],
-  "Pullover": ["oben", 3], "Sweatshirt / Hoodie": ["oben", 1], "Strickjacke": ["lage", 3], "Weste": ["lage", 3], "Blazer": ["lage", 5], "Jacke": ["lage", 2], "Mantel": ["lage", 4],
+  "Pullover": ["oben", 3], "Sweatshirt / Hoodie": ["oben", 1], "Strickjacke": ["lage", 3], "Weste": ["lage", 3], "Blazer": ["lage", 5], "Jacke": ["lage", 2], "Steppjacke": ["lage", 2], "Mantel": ["lage", 4], "Parka": ["lage", 2],
   "Jeans": ["unten", 2], "Hose": ["unten", 4], "Leggings": ["unten", 1], "Jogginghose": ["unten", 1], "Shorts": ["unten", 1], "Rock": ["unten", 3],
   "Kleid": ["ganz", 4], "Jumpsuit": ["ganz", 4],
-  "Sneaker": ["schuh", 2], "Stiefel": ["schuh", 3], "Absatzschuhe": ["schuh", 5], "Flache Schuhe": ["schuh", 3], "Sandalen": ["schuh", 2],
+  "Sneaker": ["schuh", 2], "Sportschuhe": ["schuh", 1], "Stiefel": ["schuh", 3], "Halbschuhe": ["schuh", 4], "Absatzschuhe": ["schuh", 5], "Flache Schuhe": ["schuh", 3], "Sandalen": ["schuh", 2],
   "Tasche": ["tasche", 3], "Rucksack": ["tasche", 1], "Halskette": ["schmuck", 3], "Ohrringe": ["schmuck", 3], "Armband": ["schmuck", 3], "Ring": ["schmuck", 3], "Uhr": ["schmuck", 3],
-  "Haarschmuck": ["zubehoer", 3], "Gürtel": ["guertel", 3], "Schal / Tuch": ["zubehoer", 3], "Hut / Mütze": ["zubehoer", 2], "Sonnenbrille": ["zubehoer", 2], "Handschuhe": ["zubehoer", 3], "Strumpfhose": ["zubehoer", 3],
-  "Bikini / Badeanzug": ["bade", 1]
+  "Haarschmuck": ["zubehoer", 3], "Gürtel": ["guertel", 3], "Krawatte / Fliege": ["zubehoer", 5], "Schal / Tuch": ["zubehoer", 3], "Hut / Mütze": ["zubehoer", 2], "Sonnenbrille": ["zubehoer", 2], "Handschuhe": ["zubehoer", 3], "Strumpfhose": ["zubehoer", 3],
+  "Bikini / Badeanzug": ["bade", 1], "Badehose / Badeshorts": ["bade", 1]
 });
 const GRUPPEN_PLATZ = tabelle({ "Oberteile": "oben", "Jacken & Mäntel": "lage", "Unterteile": "unten", "Kleider & Einteiler": "ganz", "Schuhe": "schuh", "Taschen": "tasche", "Schmuck": "schmuck", "Haar": "zubehoer", "Accessoires": "zubehoer", "Bademode": "bade" });
 // Die Art, mit der gerechnet wird: die eigene oder ihr „Ähnlich wie“
@@ -25,7 +25,8 @@ export const platzVon = t => ARTEN[basisArt(t)]?.[0] ?? GRUPPEN_PLATZ[t.gruppe ?
 const SCHICK_PLUS = tabelle({ elegant: 1, Business: 1, klassisch: 0.5, "schick-lässig": 0.5, lässig: -0.5, sportlich: -1, Streetwear: -1 });
 // Material verschiebt die Schick-Stufe (seit 0.15, iPhone-Test: eine Jeansjacke ging bei „schick“ als normale Jacke durch).
 // Bei der Jeans steckt der Jeansstoff schon in der Art.
-const SCHICK_MATERIAL = tabelle({ "Seide / Satin": 0.5, "Samt": 0.5, "Spitze": 0.5, "Chiffon": 0.5, "Tweed": 0.5, "Leder": 0.5, "Denim / Jeansstoff": -0.75, "Kunstfell / Teddy": -0.5 });
+const SCHICK_MATERIAL = tabelle({ "Seide / Satin": 0.5, "Samt": 0.5, "Spitze": 0.5, "Chiffon": 0.5, "Tweed": 0.5, "Leder": 0.5, "Denim / Jeansstoff": -0.75, "Kunstfell / Teddy": -0.5,
+  "Pailletten": 0.5, "Sweatstoff / Fleece": -0.5, "Nylon / Funktionsstoff": -0.5, "Mesh": -0.5 });
 function schick(t) {
   const art = basisArt(t);
   let s = ARTEN[art]?.[1] ?? 3;
@@ -34,7 +35,7 @@ function schick(t) {
   return Math.min(5, Math.max(1, s));
 }
 // Echte Jacken für draußen. Strickjacke, Blazer und Weste sind auch eine Lage, halten aber Kälte, Wind und Nässe kaum ab.
-const AUSSEN = new Set(["Jacke", "Mantel"]);
+const AUSSEN = new Set(["Jacke", "Steppjacke", "Mantel", "Parka"]);
 const aussen = t => AUSSEN.has(basisArt(t));
 const schickWort = s => s >= 3.75 ? "eher schick" : s <= 2.25 ? "eher lässig" : "alltagstauglich";
 const saisonVon = t => t.saison?.length ? t.saison : saisonVorschlag(t.art, t.gruppe, t.material);
@@ -382,7 +383,7 @@ export const ANLAESSE = tabelle({
   "Feier / Hochzeit": { schick: 5, keinBauchfrei: true },
   "Bewerbung / Termin": { schick: 4.5, keinBauchfrei: true, dezent: true },
   "Ausflug / Reise": { schick: 2, nicht: ["Absatzschuhe"] },
-  "Sport": { schick: 1, ohneSchmuck: true, nicht: ["Jeans", "Hose", "Rock", "Kleid", "Jumpsuit", "Bluse", "Hemd", "Poloshirt", "Blazer", "Mantel", "Weste", "Absatzschuhe", "Flache Schuhe", "Stiefel", "Sandalen"] },
+  "Sport": { schick: 1, ohneSchmuck: true, nicht: ["Jeans", "Hose", "Rock", "Kleid", "Jumpsuit", "Bluse", "Hemd", "Poloshirt", "Blazer", "Mantel", "Weste", "Absatzschuhe", "Flache Schuhe", "Halbschuhe", "Stiefel", "Sandalen", "Krawatte / Fliege"] },
   "Zuhause": { schick: 1, ohneSchuhe: true, ohneExtras: true, drinnen: true }
 });
 export const SCHICK_WAHL = tabelle({ "lässig": 2, "gepflegt": 3, "schick": 4, "sehr elegant": 5 });
@@ -421,9 +422,10 @@ function wetterWirkung(wetter) {
   }
   return w;
 }
-const WAERME = tabelle({ "T-Shirt": 1.5, "Poloshirt": 2, "Langarmshirt": 2.5, "Top": 1, "Bluse": 2, "Hemd": 2.5, "Body": 2, "Pullover": 4, "Sweatshirt / Hoodie": 3.5, "Strickjacke": 3, "Weste": 2, "Blazer": 2.5, "Jacke": 3.5, "Mantel": 5,
-  "Jeans": 3, "Hose": 3, "Leggings": 2.5, "Jogginghose": 3.5, "Shorts": 1, "Rock": 2, "Kleid": 2, "Jumpsuit": 2.5, "Sneaker": 3, "Stiefel": 4, "Absatzschuhe": 2, "Flache Schuhe": 2.5, "Sandalen": 1 });
-const MATERIAL_WAERME = tabelle({ "Strick / Wolle": 1, "Kunstfell / Teddy": 1.5, "Leder": 0.5, "Wildleder": 0.5, "Cord": 0.5, "Tweed": 0.5, "Samt": 0.5, "Leinen": -1, "Chiffon": -1, "Spitze": -0.5, "Seide / Satin": -0.5 });
+const WAERME = tabelle({ "T-Shirt": 1.5, "Poloshirt": 2, "Langarmshirt": 2.5, "Top": 1, "Bluse": 2, "Hemd": 2.5, "Body": 2, "Pullover": 4, "Sweatshirt / Hoodie": 3.5, "Strickjacke": 3, "Weste": 2, "Blazer": 2.5, "Jacke": 3.5, "Steppjacke": 5, "Mantel": 5, "Parka": 5,
+  "Jeans": 3, "Hose": 3, "Leggings": 2.5, "Jogginghose": 3.5, "Shorts": 1, "Rock": 2, "Kleid": 2, "Jumpsuit": 2.5, "Sneaker": 3, "Sportschuhe": 2.5, "Stiefel": 4, "Halbschuhe": 2.5, "Absatzschuhe": 2, "Flache Schuhe": 2.5, "Sandalen": 1 });
+const MATERIAL_WAERME = tabelle({ "Strick / Wolle": 1, "Kunstfell / Teddy": 1.5, "Leder": 0.5, "Wildleder": 0.5, "Cord": 0.5, "Tweed": 0.5, "Samt": 0.5, "Leinen": -1, "Chiffon": -1, "Spitze": -0.5, "Seide / Satin": -0.5,
+  "Steppstoff / Daunen": 1.5, "Sweatstoff / Fleece": 0.5, "Mesh": -1, "Stroh / Bast": -1 });
 const LAENGE_WAERME = tabelle({ "bauchfrei": -0.5, "mini": -0.5, "maxi": 0.5, "knöchellang": 0.5 }), AERMEL_WAERME = tabelle({ "ärmellos": -1, "kurz": -0.5, "lang": 0.25 });
 // Wie warm hält ein Teil? 1 = sehr luftig, 5 = sehr warm. Was sie selbst als „nur Sommer“ oder „nur Winter“ eingestellt hat, geht vor.
 function waerme(t) {
@@ -459,7 +461,7 @@ function passtZu(t, sit) {
     const w = waerme(t), kalt = sit.temp.ideal >= 3.6, warm = sit.temp.ideal <= 2;
     if (kalt && (nur("Sommer") || w <= 1 || (p === "lage" && w < 3))) return false; // ein Blazer ersetzt bei Kälte keine Jacke
     if (sit.temp.ideal === 2.8 && (w < 1 || ["Shorts", "Sandalen"].includes(a))) return false; // 13–19°: kein bauchfreies Top, keine Sandalen
-    if (warm && (nur("Winter") || a === "Mantel")) return false;
+    if (warm && (nur("Winter") || ["Mantel", "Parka", "Steppjacke"].includes(a))) return false;
     if (sit.temp.ohneLage && (p === "lage" || w >= 3.5)) return false;
   }
   if (sit.w.nass >= 2 && (a === "Sandalen" || t.material === "Wildleder")) return false;
@@ -480,12 +482,12 @@ function situationsPunkte(teile, sit) {
     const a = basisArt(t);
     if (sit.anlass?.dezent && gemustert(t)) p -= 1;
     if (sit.w.nass && (t.material === "Seide / Satin" || (sit.w.nass >= 2 ? a === "Absatzschuhe" : a === "Sandalen" || t.material === "Wildleder"))) p -= 0.5;
-    if ((sit.w.nass || sit.w.wind) && platzVon(t) === "lage" && !["Jacke", "Mantel"].includes(a)) p -= sit.w.nass >= 2 || sit.w.wind >= 2 ? 1 : 0.5; // Strickjacke und Blazer halten Nässe und Wind kaum ab
+    if ((sit.w.nass || sit.w.wind) && platzVon(t) === "lage" && !AUSSEN.has(a)) p -= sit.w.nass >= 2 || sit.w.wind >= 2 ? 1 : 0.5; // Strickjacke und Blazer halten Nässe und Wind kaum ab
     if (sit.w.nass >= 3 && (a === "Flache Schuhe" || t.laenge === "maxi" || t.laenge === "knöchellang")) p -= 0.5; // lange Säume und dünne Sohlen werden schnell nass
     if ((sit.w.glatt || sit.w.nass >= 3) && a === "Stiefel") p += 1;
     if (sit.w.wind && (a === "Rock" || a === "Kleid")) p -= sit.w.wind >= 2 ? 1 : 0.3;
     if (sit.w.schwuel && (t.material === "Baumwolle" || t.material === "Leinen")) p += 0.3;
-    if (sit.w.schwuel && ["Synthetik, glänzend", "Leder", "Wildleder", "Samt", "Kunstfell / Teddy"].includes(t.material)) p -= 0.5;
+    if (sit.w.schwuel && ["Synthetik, glänzend", "Leder", "Wildleder", "Samt", "Kunstfell / Teddy", "Nylon / Funktionsstoff", "Steppstoff / Daunen"].includes(t.material)) p -= 0.5;
     if (sit.anlass?.schick === 1 && (t.stil || []).includes("sportlich")) p += 0.5;
   }
   return p;
@@ -740,7 +742,7 @@ export function kofferVorschlaege(platz, imKoffer, alle, e, meinStil = null) {
 function kofferTipps(teile, e, lage, n) {
   const o = [], hat = (...arten) => teile.some(t => arten.includes(basisArt(t)));
   for (const name of e.wetter || []) if (WETTER_WIRKUNG[name]?.tipp && !o.includes(WETTER_WIRKUNG[name].tipp)) o.push(WETTER_WIRKUNG[name].tipp);
-  if (n.hand || hat("Mantel", "Stiefel")) o.push("Das Schwerste (Jacke, Mantel, Stiefel) am Reisetag anziehen, das spart Platz im Koffer.");
+  if (n.hand || hat("Mantel", "Parka", "Steppjacke", "Stiefel")) o.push("Das Schwerste (Jacke, Mantel, Stiefel) am Reisetag anziehen, das spart Platz im Koffer.");
   if (e.waschen && n.tage > n.vorrat) o.push(`Mit Waschen reichen Sachen für ${n.vorrat} Tage, danach geht es wieder von vorn.`);
   o.push("Kleidung rollen statt falten spart Platz und gibt weniger Falten.");
   return o.slice(0, 4);
@@ -768,7 +770,7 @@ export function kaufideen(anker, alle, stil = null) {
   const grund = (pl, name) => andere.some(t => platzVon(t) === pl) ? `Keine ${name} passen wirklich gut dazu.` : `Es fehlen noch ${name}.`;
   if (p !== "schuh" && p !== "schmuck" && p !== "tasche" && !gute("schuh")) {
     const gern = (stil?.schuhe || []).find(a => !(herren && a === "Absatzschuhe"));
-    const art = gern || (sch >= 4 ? (herren ? "Flache Schuhe (z. B. Loafer)" : "Absatzschuhe") : sch <= 2.5 ? "Sneaker" : "Flache Schuhe");
+    const art = gern || (sch >= 4 ? (herren ? "Halbschuhe" : "Absatzschuhe") : sch <= 2.5 ? "Sneaker" : "Flache Schuhe");
     dazu(inFarbe(art, neutral()), grund("schuh", "Schuhe"));
   }
   if (["oben", "lage", "schuh"].includes(p) && !gute("unten")) {

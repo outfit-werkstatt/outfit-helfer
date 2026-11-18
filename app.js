@@ -3,10 +3,10 @@
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // ?v= bei jeder Änderung von ki.js/speicher.js/ui.js hochzählen – in ALLEN Dateien gleich (und in index.html den von app.js/app.css),
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
-import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=8";
+import { loadAI, recognize, loadImage, alsJpg, AERMEL_FEST } from "./ki.js?v=9";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=11";
-import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=19";
-import { refresh, initSchrank } from "./schrank.js?v=41";
+import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=20";
+import { refresh, initSchrank } from "./schrank.js?v=42";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -135,8 +135,9 @@ async function addPhoto(e, card) {
       muster: { options: r.muster.map(c => c.label), selected: [r.muster[0].label] },
       // Material: KI wählt nichts vor (zu unsicher), wahrscheinlichste zuerst
       material: { options: top(r.material, 5), selected: [], note: "Bitte selbst antippen – die KI ist hier unsicher. Das Wahrscheinlichste steht vorn." },
-      // Ärmel und Hosenschnitt: gemessen zuverlässig → vorwählen
-      aermel: { selected: [r.aermel[0].label] }, schnitt: { selected: [r.schnitt[0].label] },
+      // Ärmel und Hosenschnitt: gemessen zuverlässig → vorwählen. Bei Arten mit immer gleichen Ärmeln (T-Shirt kurz, Weste ärmellos)
+      // gilt das statt der Schätzung (seit 18.11.2026: eine Weste auf dem Bügel hielt die KI sonst für langärmlig).
+      aermel: { selected: [Object.hasOwn(AERMEL_FEST, r.art[0].label) ? AERMEL_FEST[r.art[0].label] : r.aermel[0].label] }, schnitt: { selected: [r.schnitt[0].label] },
       // Weitere Merkmale ohne KI-Vorwahl; nur die Saison wird nach Art und Material vorgeschlagen
       saisonAuto: true
     };

@@ -1,7 +1,7 @@
 // Bausteine für die Bedienung, die mehrere Ansichten brauchen: Elemente bauen, Meldungen, Auswahl-Knöpfe, Angaben-Felder.
 // Sicherheitsregel: Texte immer per textContent/DOM einsetzen, nie per innerHTML (gilt besonders für Eingetipptes).
 // Alle Dateien müssen ki.js und speicher.js mit GLEICHEM ?v= laden, sonst lädt der Browser sie doppelt.
-import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=8";
+import { GROUPS, GROUP_OF, COLORS, MATERIALS, PATTERNS, SLEEVES, LEGS, HAS_SLEEVES, HAS_LEGS } from "./ki.js?v=9";
 import { getCustom, setCustom } from "./speicher.js?v=11";
 
 export const $ = id => document.getElementById(id);
@@ -336,10 +336,10 @@ export function teilAngleichen(t) {
   return neu;
 }
 // Saison-Vorschlag nach einfachen Regeln aus Art und Material (sie kann ihn jederzeit ändern)
-const WARM = ["Strick / Wolle", "Kunstfell / Teddy", "Tweed", "Samt", "Cord", "Wildleder"], LEICHT = ["Leinen", "Chiffon", "Seide / Satin", "Spitze"];
+const WARM = ["Strick / Wolle", "Kunstfell / Teddy", "Tweed", "Samt", "Cord", "Wildleder", "Steppstoff / Daunen"], LEICHT = ["Leinen", "Chiffon", "Seide / Satin", "Spitze", "Mesh", "Stroh / Bast"];
 export function saisonVorschlag(a, g, material) {
   if (["Shorts", "Top", "Sandalen"].includes(a) || g === "Bademode") return ["Sommer"];
-  if (["Mantel", "Stiefel", "Handschuhe"].includes(a)) return ["Übergang", "Winter"];
+  if (["Mantel", "Parka", "Steppjacke", "Stiefel", "Handschuhe"].includes(a)) return ["Übergang", "Winter"];
   if (WARM.includes(material) || ["Pullover", "Strickjacke"].includes(a)) return ["Übergang", "Winter"];
   if (LEICHT.includes(material)) return ["Sommer"];
   if (a === "Jacke") return ["Übergang"];

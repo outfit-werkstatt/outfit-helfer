@@ -5,10 +5,10 @@
 // Aufbau nach Verkaufs-Ratgebern: Titel = Marke + Art + Farbe + Detail + Größe (Suchwörter, kurz, ohne Emojis);
 // Beschreibung = Aufhänger, Details (Marke, Größe, Farbe, Material, Passform, Zustand), Service. Nur ihre eigenen Angaben,
 // nichts dazuerfunden. Die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
-import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=19";
+import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=20";
 import { updateItem, getPhoto, nrText } from "./speicher.js?v=11";
-import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=19";
-import { verkaufFeld } from "./verkauf.js?v=2";
+import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=20";
+import { verkaufFeld } from "./verkauf.js?v=3";
 
 // Länge des Titels: laut einem Ratgeber erlaubt Vinted etwa 50 Zeichen (nicht offiziell bestätigt) → lieber kürzer
 const TITEL_MAX = 50;
@@ -19,13 +19,14 @@ let mitEmojis = true, variante = 0;
 // Geschlecht der Art für „Schöner Pullover / Schöne Bluse / Schönes Kleid / Schöne Sneaker“ (p = Mehrzahl).
 // Eigene Arten kennt die Liste nicht, dann ein Satz ohne Artikel.
 const GENUS = tabelle({ "T-Shirt": "n", Poloshirt: "n", Langarmshirt: "n", Top: "n", Bluse: "f", Hemd: "n", Body: "m", Pullover: "m", "Sweatshirt / Hoodie": "n",
-  Strickjacke: "f", Weste: "f", Blazer: "m", Jacke: "f", Mantel: "m", Jeans: "f", Hose: "f", Leggings: "p", Jogginghose: "f", Shorts: "p", Rock: "m",
-  Kleid: "n", Jumpsuit: "m", Sneaker: "p", Stiefel: "p", Absatzschuhe: "p", "Flache Schuhe": "p", Sandalen: "p", Tasche: "f", Rucksack: "m",
-  Halskette: "f", Ohrringe: "p", Armband: "n", Ring: "m", Uhr: "f", Haarschmuck: "m", Gürtel: "m", "Schal / Tuch": "m", "Hut / Mütze": "m",
-  Sonnenbrille: "f", Handschuhe: "p", Strumpfhose: "f", "Bikini / Badeanzug": "m" });
+  Strickjacke: "f", Weste: "f", Blazer: "m", Jacke: "f", Steppjacke: "f", Mantel: "m", Parka: "m", Jeans: "f", Hose: "f", Leggings: "p", Jogginghose: "f", Shorts: "p", Rock: "m",
+  Kleid: "n", Jumpsuit: "m", Sneaker: "p", Sportschuhe: "p", Stiefel: "p", Halbschuhe: "p", Absatzschuhe: "p", "Flache Schuhe": "p", Sandalen: "p", Tasche: "f", Rucksack: "m",
+  Halskette: "f", Ohrringe: "p", Armband: "n", Ring: "m", Uhr: "f", Haarschmuck: "m", Gürtel: "m", "Krawatte / Fliege": "f", "Schal / Tuch": "m", "Hut / Mütze": "m",
+  Sonnenbrille: "f", Handschuhe: "p", Strumpfhose: "f", "Bikini / Badeanzug": "m", "Badehose / Badeshorts": "f" });
 // [Schön…, mein…, Dies…, Verb]
 const FORM = tabelle({ m: ["Schöner", "meinen", "Dieser", "sucht"], f: ["Schöne", "meine", "Diese", "sucht"], n: ["Schönes", "mein", "Dieses", "sucht"], p: ["Schöne", "meine", "Diese", "suchen"] });
-const MAT_KURZ = tabelle({ "Seide / Satin": "Satin", "Strick / Wolle": "Strick", "Denim / Jeansstoff": "Denim", "Kunstfell / Teddy": "Teddy", "Synthetik, glänzend": "", Metall: "" });
+const MAT_KURZ = tabelle({ "Seide / Satin": "Satin", "Strick / Wolle": "Strick", "Denim / Jeansstoff": "Denim", "Kunstfell / Teddy": "Teddy", "Synthetik, glänzend": "", Metall: "",
+  "Sweatstoff / Fleece": "Sweat", "Nylon / Funktionsstoff": "Nylon", "Steppstoff / Daunen": "Daunen", "Stroh / Bast": "Stroh", "Gummi / Kunststoff": "" });
 const ZUSTAND_SATZ = tabelle({
   "Neu mit Etikett": "Neu und ungetragen, das Etikett hängt noch dran.",
   "Neu ohne Etikett": "Neu und ungetragen, nur ohne Etikett.",

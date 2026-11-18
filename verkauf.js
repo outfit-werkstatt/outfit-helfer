@@ -6,7 +6,7 @@
 // Sie bleiben mit Nummer gespeichert (Nummern werden ohnehin nie neu vergeben) und kommen mit kleinem Foto in die Sicherung,
 // damit die Übersicht erhalten bleibt. Die App schickt nichts an Vinted; Einstellen und Verkaufen macht sie selbst in der Vinted-App.
 // Texte nur als Text (textContent/value), nie per innerHTML.
-import { el, fill, toast, fehlerToast, field, datumText } from "./ui.js?v=19";
+import { el, fill, toast, fehlerToast, field, datumText } from "./ui.js?v=20";
 import { updateItem, nrText } from "./speicher.js?v=11";
 
 export const ZUM_VERKAUF = "zumVerkauf", EINGESTELLT = "eingestellt", VERKAUFT = "verkauft";
