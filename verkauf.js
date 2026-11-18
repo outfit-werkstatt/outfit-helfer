@@ -134,7 +134,11 @@ export function verkaufFeld(t, nachher = null) {
           langeOnline(teil) ? el("p", { class: "hint" }, `⏰ Schon über ${LANGE_TAGE} Tage online. Vielleicht den Preis bei Vinted etwas senken?`) : null,
           preisFeld(teil.preis, "Preis bei Vinted (freiwillig)", n => setzen({ preis: n }, n == null ? "Preis entfernt" : `Preis: ${preisText(n)}`, false)),
           el("div", { class: "actions wrap" }, verkauftKnopf,
-            knopf("Doch behalten", () => setzen(NICHTS, `${nr()} kommt wieder in Vorschläge. Nimm es auch bei Vinted heraus.`))),
+            // Rückfrage, weil Preis und Datum verloren gehen (Durchsicht vor dem Hochladen, 18.11.2026)
+            knopf("Doch behalten", () => {
+              if (!confirm("Doch behalten?\n\nDer Preis und das Datum bei Vinted werden gelöscht, das Teil kommt wieder in Vorschläge. Nimm es auch bei Vinted heraus.")) return;
+              setzen(NICHTS, `${nr()} kommt wieder in Vorschläge. Nimm es auch bei Vinted heraus.`);
+            })),
           verkaufBox)));
       return;
     }
@@ -142,8 +146,11 @@ export function verkaufFeld(t, nachher = null) {
     fill(box, field("Verkaufen", `✅ Verkauft${teil.verkauftAm ? " am " + datumText(teil.verkauftAm) : ""}.`,
       el("div", {},
         preisFeld(teil.erloes, "Verkauft für (freiwillig)", n => setzen({ erloes: n }, n == null ? "Betrag entfernt" : `Gespeichert: ${preisText(n)}`, false)),
-        el("div", { class: "actions" }, knopf("Doch nicht verkauft", () => setzen({ verkauf: EINGESTELLT, verkauftAm: null, erloes: null, eingestelltAm: teil.eingestelltAm || new Date().toISOString() },
-          `${nr()} ist wieder im Kleiderschrank (bei Vinted eingestellt)`)))),
+        el("div", { class: "actions" }, knopf("Doch nicht verkauft", () => {
+          if (!confirm("Doch nicht verkauft?\n\nDas Teil kommt zurück in den Kleiderschrank (unter „💰 Zum Verkaufen“). Verkaufsdatum und Betrag werden gelöscht.")) return;
+          setzen({ verkauf: EINGESTELLT, verkauftAm: null, erloes: null, eingestelltAm: teil.eingestelltAm || new Date().toISOString() },
+            `${nr()} ist wieder im Kleiderschrank (bei Vinted eingestellt)`);
+        }))),
       "Zum Beispiel, wenn der Kauf abgebrochen wurde. Das Teil kommt dann zurück in den Kleiderschrank, unter „💰 Zum Verkaufen“."));
   }
   zeichnen();

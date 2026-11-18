@@ -12,7 +12,7 @@ import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleic
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=20";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=8";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=17";
-import { VERKAUF_STUFEN, preisPruefen } from "./verkauf.js?v=1";
+import { VERKAUF_STUFEN, preisPruefen } from "./verkauf.js?v=2";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos

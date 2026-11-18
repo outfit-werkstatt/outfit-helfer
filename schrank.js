@@ -5,15 +5,15 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=19";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
 import { renderStil, stilKurz } from "./stil.js?v=20";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=25";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=26";
 import { renderPasst, miniKachel } from "./passt.js?v=23";
 import { renderOutfit } from "./outfit.js?v=20";
 import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=9";
 import { bildPaketBereich } from "./chatgpt.js?v=17";
-import { renderVinted } from "./vinted.js?v=7";
+import { renderVinted } from "./vinted.js?v=8";
 import { GROUPS } from "./ki.js?v=8";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
-  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=1";
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=2";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -518,12 +518,16 @@ function renderListe(items, folders, id) {
         fertigMit(`${n(nrs)} verkauft 🎉`);
       } },
       { text: "Doch behalten", los: async nrs => {
+        // Rückfrage, wenn dabei Preis oder Datum bei Vinted verloren gehen (Durchsicht vor dem Hochladen, 18.11.2026)
+        const bei = nrs.filter(nr => alleTeile.get(nr)?.verkauf === EINGESTELLT || alleTeile.get(nr)?.preis != null).length;
+        if (bei && !confirm(`${n(nrs)} doch behalten?\n\nBei ${bei === 1 ? "1 Teil gehen" : bei + " Teilen gehen"} der Preis und das Datum bei Vinted verloren. Nimm ${bei === 1 ? "es" : "sie"} auch bei Vinted heraus.`)) return;
         await updateItems(nrs.map(nr => ({ nr, ...KEIN_VERKAUF })));
         fertigMit(`${n(nrs)} ${nrs.length === 1 ? "kommt" : "kommen"} wieder in Vorschläge`);
       } },
       loeschen]
     : id === L_VERKAUFT ? [
       { text: "Doch nicht verkauft", los: async nrs => {
+        if (!confirm(`${n(nrs)} doch nicht verkauft?\n\n${nrs.length === 1 ? "Es kommt" : "Sie kommen"} zurück in den Kleiderschrank (unter „${VERKAUF_NAME}“). Verkaufsdatum und Betrag werden gelöscht.`)) return;
         const jetzt = new Date().toISOString();
         await updateItems(nrs.map(nr => ({ nr, verkauf: EINGESTELLT, verkauftAm: null, erloes: null, eingestelltAm: alleTeile.get(nr)?.eingestelltAm || jetzt })));
         fertigMit(`${n(nrs)} wieder im Kleiderschrank (in „${VERKAUF_NAME}“)`);
