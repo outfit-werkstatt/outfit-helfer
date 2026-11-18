@@ -15,18 +15,18 @@
 import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=19";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=11";
 import { stilAktuell, stilZeilen } from "./stil.js?v=20";
-import { kandidaten } from "./regeln.js?v=17";
+import { kandidaten } from "./regeln.js?v=18";
 import { GROUPS, GROUP_OF } from "./ki.js?v=8";
 import { speichernKnopf } from "./fertig.js?v=9";
 
-const MAX_ANTWORT = 20000;
+const MAX_ANTWORT = 20000, MAX_ZUSATZ = 500; // Zusatz: beim Koffer bis 500 Zeichen (Reise beschreiben), sonst 300
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
 // damit nichts in die falsche Ansicht wandert.
 // „Meinen Stil mitschicken“ ist seit 0.22 standardmäßig aus (Wunsch 06.11.2026): Sie hakt es an, wenn sie es will
 let stilMit = false, vorbereitet = null, vorschauUrls = [];
 // offen = welche Schritte 2–4 aufgeklappt sind, anfrageFuer = wofür die Anfrage zuletzt kopiert wurde, bildKopiert = Schritt 4 erledigt
 const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt, bildOutfit, offen, anfrageFuer, bildKopiert }
-const merkSchluessel = frage => frage.teil ? "teil:" + frage.teil.nr : "situation";
+const merkSchluessel = frage => frage.koffer ? "koffer" : frage.teil ? "teil:" + frage.teil.nr : "situation";
 const merker = frage => {
   const k = merkSchluessel(frage);
   if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1", offen: { 2: true, 3: false, 4: false }, anfrageFuer: null, bildKopiert: false });
@@ -41,9 +41,9 @@ export function chatMerkLaden(o) {
   if (!o || typeof o !== "object") return;
   const txt = (v, max) => typeof v === "string" ? v.slice(0, max) : "";
   for (const [k, m] of Object.entries(o).slice(0, MAX_MERK)) {
-    if (!/^(situation|teil:\d{1,6})$/.test(k) || !m || typeof m !== "object" || merk.has(k)) continue;
+    if (!/^(situation|koffer|teil:\d{1,6})$/.test(k) || !m || typeof m !== "object" || merk.has(k)) continue;
     const offen = m.offen && typeof m.offen === "object" ? m.offen : {};
-    merk.set(k, { zusatz: txt(m.zusatz, 300), antwort: txt(m.antwort, MAX_ANTWORT), angezeigt: txt(m.angezeigt, MAX_ANTWORT), bildOutfit: txt(m.bildOutfit, 40) || "Outfit 1",
+    merk.set(k, { zusatz: txt(m.zusatz, MAX_ZUSATZ), antwort: txt(m.antwort, MAX_ANTWORT), angezeigt: txt(m.angezeigt, MAX_ANTWORT), bildOutfit: txt(m.bildOutfit, 40) || "Outfit 1",
       offen: { 2: offen[2] === true, 3: offen[3] === true, 4: offen[4] === true }, anfrageFuer: typeof m.anfrageFuer === "string" ? m.anfrageFuer.slice(0, 2000) : null,
       bildKopiert: m.bildKopiert === true });
   }
@@ -105,7 +105,28 @@ function aenderungText(neu, weg) {
     "", "Antworte bitte nur kurz mit „Verstanden“."].filter(z => z !== null).join("\n");
 }
 const temperaturText = t => t ? t.replace("°", " °C") : null;
+// Koffer packen (seit 0.28): Packliste nur aus ihren Teilen, dazu ein Outfit pro Tag („Tag 1: …“, die App liest das wie Outfits)
+function kofferText(k, freitext, stil) {
+  const s = stilAktuell(stil), zeilen = stilMit ? stilZeilen(s) : [];
+  const angaben = [["Dauer", k.tage ? `${k.tage} ${k.tage === 1 ? "Tag" : "Tage"}` : null], ["Temperatur", temperaturText(k.temperatur)], ["Wetter", k.wetter?.join(", ")],
+    ["Was ich vorhabe", k.anlaesse?.join(", ")], ["Waschen möglich", k.waschen ? "ja" : null], ["Gepäck", k.handgepaeck ? "nur Handgepäck, bitte wenig und leicht" : null]].filter(([, v]) => v);
+  return [
+    "Hallo! Ich packe meinen Koffer und möchte nur Sachen aus meinem Kleiderschrank mitnehmen (die Bilder und die Liste weiter oben in diesem Chat).", "",
+    "Meine Reise:",
+    ...angaben.map(([a, v]) => `- ${a}: ${v}`),
+    freitext ? `- Dazu: ${ohneUmbruch(freitext)}` : null,
+    MODE_TEXT[s.mode] ? `- Mode: ${MODE_TEXT[s.mode]}` : null,
+    zeilen.length ? "\nMein Stil (Vorlieben, keine Verbote):" : null, ...zeilen.map(z => "- " + z), "",
+    "Bitte:",
+    "1. Stell mir eine Packliste nur aus meinen Teilen zusammen, die sich gut untereinander kombinieren lässt, so wenig wie möglich und so viel wie nötig. Schreib sie unter „Packliste:“ und nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“).",
+    `2. Schreib danach für jeden Tag ein Outfit nur aus dieser Packliste, jedes als eigene Zeile „Tag 1: …“, „Tag 2: …“${k.tage ? ` bis „Tag ${k.tage}“` : ""}, mit den Nummern.`,
+    "3. Gib ein paar kurze Tipps zum Kombinieren und Packen.",
+    "4. Fehlt etwas Wichtiges, schreib ganz unten eine Zeile „Kaufidee: …“ (höchstens 3, ohne Nummer, ohne Shops und ohne Links). Schreib Kaufideen nie in die Packliste.", "",
+    "Antworte bitte nur mit Text und erstelle kein Bild."
+  ].filter(z => z !== null).join("\n");
+}
 function anfrageText(frage, freitext, stil) {
+  if (frage.koffer) return kofferText(frage.koffer, freitext, stil);
   const s = stilAktuell(stil), zeilen = stilMit ? stilZeilen(s) : [], q = frage.situation || {};
   // Seit 0.23 auch bei „Was passt dazu?“ (dort gibt es jetzt dieselben Knöpfe für die Situation)
   const angaben = [["Anlass", q.anlass], ["Wie schick", q.schickWahl], ["Temperatur", temperaturText(q.temperatur)], ["Wetter", q.wetter?.join(", ")]].filter(([, v]) => v);
@@ -316,7 +337,8 @@ export const vonHand = (box, text) => fill(box, el("div", { class: "hint" }, "Ko
 // Seit 0.21 (Durchsicht 04.11.2026) auch „Outfit #2“, „Outfit Nummer 2“, „Option zwei“, „Outfit B:“ und „Zweites Outfit“: Vorher
 // landeten solche Outfits alle in EINER Karte, und Bild-Paket und „Outfit speichern“ mischten ihre Teile.
 // Ein Buchstabe zählt nur allein („Outfit A“, „Look B –“), nicht als Wortanfang („Outfit am Abend“, „Look an“).
-const WORT = "outfit|kombination|kombi|option|look|vorschlag|variante|idee";
+// „Tag 1: …“ seit 0.28 (Koffer packen: ein Outfit pro Tag)
+const WORT = "outfit|kombination|kombi|option|look|vorschlag|variante|idee|tag";
 const ZAHLWORT = "eins|zwei|drei|vier|fünf", ORDNUNG = "erste[nrs]?|zweite[nrs]?|dritte[nrs]?|vierte[nrs]?|fünfte[nrs]?";
 const KOPF = new RegExp(`^[^\\p{L}]*(\\d+[^\\p{L}\\d]*(${WORT})\\b|(${WORT})\\s*(nr\\.?|nummer|#)?\\s*(\\d+|(${ZAHLWORT})\\b|[a-c](?![\\p{L}\\d]))|(${ORDNUNG})\\s+(${WORT})\\b|kaufideen?[^\\p{L}\\d]*$)`, "iu");
 // Kaufidee beim Outfit: „Kaufidee: …“, „**Kaufideen:** …“, „🛍 Kaufidee (optional): …“ → der Text nach dem Doppelpunkt
@@ -493,16 +515,22 @@ export function chatgptPanel(items, stil, frage, kachel) {
 
   // Schritt 2: Anfrage. Was gerade gefragt würde; ändert es sich nach dem Kopieren (z. B. anderes Wetter oben), ist die
   // kopierte Anfrage veraltet und Schritt 2 geht wieder auf.
-  const q = frage.situation || {}, nichtsAngetippt = !frage.teil && !q.anlass && !q.schickWahl && !q.temperatur && !q.wetter?.length;
-  const schluessel = () => JSON.stringify([frage.teil?.nr ?? null, q.anlass, q.schickWahl, q.temperatur, q.wetter, cleanText(m.zusatz), stilMit]);
+  const q = frage.situation || {}, k = frage.koffer || null;
+  const nichtsAngetippt = k ? !k.tage && !k.temperatur && !k.wetter?.length && !k.anlaesse?.length : !frage.teil && !q.anlass && !q.schickWahl && !q.temperatur && !q.wetter?.length;
+  const schluessel = () => JSON.stringify([frage.teil?.nr ?? null, q.anlass, q.schickWahl, q.temperatur, q.wetter, k, cleanText(m.zusatz), stilMit]);
   if (m.anfrageFuer && m.anfrageFuer !== schluessel()) m.offen[2] = true;
-  const freitext = el("textarea", { class: "notiz", maxLength: 300, rows: 2, value: m.zusatz, placeholder: frage.teil ? "z. B. fürs Büro, eher locker" : "z. B. Italiener, Freitagabend, will nicht frieren", "aria-label": "Noch etwas dazu" });
+  // Beim Koffer (seit 0.28, Wunsch 18.11.2026) ist das Textfeld größer: Dort beschreibt sie ihre Reise mit eigenen Worten
+  const freitext = el("textarea", { class: "notiz", maxLength: k ? MAX_ZUSATZ : 300, rows: k ? 3 : 2, value: m.zusatz,
+    placeholder: k ? "z. B. Städtetrip nach Rom, viel zu Fuß, abends schick essen, ein Tag am Meer" : frage.teil ? "z. B. fürs Büro, eher locker" : "z. B. Italiener, Freitagabend, will nicht frieren",
+    "aria-label": k ? "Was soll die KI noch wissen?" : "Noch etwas dazu" });
   const STIL = "Meinen Stil mitschicken";
   const optionen = choice({ options: [STIL], selected: stilMit ? [STIL] : [], max: 0, onChange: sel => { stilMit = sel.includes(STIL); stand2(); } });
   const knopfAnfrage = el("button", { type: "button", class: "btn primary" }, "📋 Anfrage kopieren");
-  const s2 = schritt(2, frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen",
-    field("Noch etwas dazu?", "freiwillig", freitext),
-    nichtsAngetippt ? el("p", { class: "hint" }, "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
+  const s2 = schritt(2, k ? "2. Nach einer Packliste fragen" : frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen",
+    k ? field("Was soll die KI noch wissen?", "freiwillig, in deinen Worten", freitext, "Alles, was oben nicht steht: Wohin es geht, was du vorhast, was du auf keinen Fall vergessen willst. Das kommt mit in die Anfrage.")
+      : field("Noch etwas dazu?", "freiwillig", freitext),
+    nichtsAngetippt ? el("p", { class: "hint" }, k ? "Tipp: Oben ist noch nichts angetippt. Tipp Tage, Temperatur und was du vorhast an, dann packt der Chat passender."
+      : "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
     optionen.el,
     el("div", { class: "actions" }, knopfAnfrage), kopierBox);
   const stand2 = () => { s2.stand.textContent = m.anfrageFuer === schluessel() ? "✓ kopiert" : m.anfrageFuer ? "neu kopieren" : ""; };
@@ -579,7 +607,20 @@ export function chatgptPanel(items, stil, frage, kachel) {
     bildSchritt(gruppen);
     const outfits = outfitsAus(gruppen, frage.teil), outfitVon = new Map(outfits.map(o => [o.gruppe, o]));
     s3.stand.textContent = outfits.length ? `✓ ${outfits.length} ${outfits.length === 1 ? "Outfit" : "Outfits"}` : "✓ eingefügt";
-    fill(ergebnis,
+    // Koffer packen (seit 0.28): alle Teile aus der Antwort mit einem Tippen als Packliste übernehmen (nur, was noch im Kleiderschrank ist),
+    // dazu die Tage („Tag 1: …“). Was schon abgehakt war und wieder dabei ist, bleibt abgehakt (koffer.js).
+    let uebernahme = null;
+    if (k && frage.uebernehmen) {
+      const nrs = [...new Set(gruppen.flatMap(g => g.teile).filter(t => !t.geloescht && t.verkauf !== "verkauft").map(t => t.nr))];
+      const tage = outfits.filter(o => /^[^\p{L}]*tag\b/iu.test(o.name) && o.teile.length).map(o => ({ titel: o.name.slice(0, 30), nrs: o.teile.map(t => t.nr) }));
+      if (nrs.length) {
+        const knopf = el("button", { type: "button", class: "btn primary" }, `🧳 ${nrs.length === 1 ? "1 Teil" : nrs.length + " Teile"} als Packliste übernehmen`);
+        knopf.onclick = () => frage.uebernehmen(nrs, tage);
+        uebernahme = el("div", { class: "panel hinweis" }, el("p", {}, "Die Antwort als deine Packliste übernehmen? Deine bisherige Liste wird ersetzt, abgehakte Teile bleiben abgehakt."),
+          el("div", { class: "actions" }, knopf));
+      }
+    }
+    fill(ergebnis, uebernahme,
       unbekannt.length ? el("p", { class: "hint" }, `${unbekannt.map(n => "Nr. " + nrText(n)).join(", ")} gibt es in deinem Kleiderschrank nicht. Vielleicht kennt der Chat noch einen alten Stand: Gib ihm die Änderungen (Schritt 1).`) : null,
       !gruppen.some(g => g.teile.length) ? el("p", { class: "hint" }, "In der Antwort stehen keine Nummern von deinen Teilen. Bitte im Chat: „Nenne bitte jedes Teil mit seiner Nummer.“") : null,
       ...gruppen.map((g, i) => {
@@ -616,5 +657,5 @@ export function chatgptPanel(items, stil, frage, kachel) {
       "Was an den Anbieter geht: die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst.",
       "In den Einstellungen kannst du ausschalten, dass deine Chats zum Verbessern der KI genutzt werden. ChatGPT: „Datenkontrollen“, der Chat bleibt erhalten. Gemini: „Gemini-Apps-Aktivität“ bzw. „Aktivität speichern“; ist sie aus, bleibt ein Chat dort aber nur wenige Tage, danach den Kleiderschrank neu geben."),
     el("div", { class: "hint" }, "Was du dort hochlädst, geht an OpenAI (ChatGPT) bzw. Google (Gemini)."),
-    schrank, s2.d, s3.d, ergebnis, s4.d);
+    schrank, s2.d, s3.d, ergebnis, k ? null : s4.d); // beim Koffer kein Bild-Schritt (dort geht es ums Packen)
 }

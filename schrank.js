@@ -5,13 +5,14 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=19";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
 import { renderStil, stilKurz } from "./stil.js?v=20";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=27";
-import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=24";
-import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=21";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=28";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=25";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=22";
 import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=9";
-import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=18";
-import { renderVinted } from "./vinted.js?v=9";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=19";
+import { renderVinted } from "./vinted.js?v=10";
 import { GROUPS } from "./ki.js?v=8";
+import { renderKoffer, kofferHatEtwas, kofferMitListe, kofferNeu } from "./koffer.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=2";
 
@@ -161,6 +162,9 @@ async function render() {
     return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`,
       neuKnopf(() => passtHatEtwas(t.nr), () => chatHatAntwort({ teil: t }), () => passtNeu(t.nr))), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
+  if (s.v === "koffer") return renderKoffer(box, kopf("🧳 Koffer packen", null, neuKnopf(kofferHatEtwas, kofferMitListe, kofferNeu, "↺ Neu packen",
+    "Neu packen?\n\nDie Reise, die Packliste mit allen Haken und die eingefügte Antwort aus dem Chat werden geleert. Deine Kleidung bleibt, wie sie ist.")),
+    items, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
     items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "vinted") {
@@ -226,9 +230,9 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
   const outfitKnopf = $("outfitKnopf");
   outfitKnopf.classList.toggle("leer", !da.length);
   outfitKnopf.onclick = () => da.length ? go({ v: "outfit" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
-  // Zweite Reihe (seit 0.28): „Koffer packen“ wird gerade gebaut, „Sachen im Haushalt“ ist ein Platzhalter für später
+  // Zweite Reihe (seit 0.28): „Koffer packen“ und „Sachen im Haushalt“ (Platzhalter für später)
   $("kofferKnopf").classList.toggle("leer", !da.length);
-  $("kofferKnopf").onclick = () => toast("🧳 Koffer packen kommt als Nächstes.");
+  $("kofferKnopf").onclick = () => da.length ? go({ v: "koffer" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
   $("haushaltKnopf").onclick = () => toast("🏠 Sachen im Haushalt kommt später.");
   const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst);
   fill($("nebenKacheln"),
@@ -754,7 +758,7 @@ export async function initSchrank() {
    sie gerade in einer der beiden Ansichten (höchstens 2 Stunden her), öffnet sich diese wieder. */
 const SITZUNG_STUNDEN = 24, WIEDER_STUNDEN = 2, STUNDE = 3600 * 1000;
 function sitzungMerken() {
-  const ansicht = current.v === "outfit" ? { v: "outfit" } : current.v === "passt" ? { v: "passt", nr: current.nr } : null;
+  const ansicht = ["outfit", "koffer"].includes(current.v) ? { v: current.v } : current.v === "passt" ? { v: "passt", nr: current.nr } : null;
   setMeta("sitzung", { zeit: new Date().toISOString(), ansicht, outfit: outfitStand(), passt: passtStand(), chat: chatMerkStand() })
     .catch(e => console.error("Merken ging nicht", e));
 }
@@ -769,17 +773,19 @@ async function sitzungLaden() {
   if (!(alter >= 0 && alter < SITZUNG_STUNDEN * STUNDE)) return null;
   outfitLaden(s.outfit); passtLaden(s.passt); chatMerkLaden(s.chat);
   if (alter >= WIEDER_STUNDEN * STUNDE || !s.ansicht) return null;
-  if (s.ansicht.v === "outfit") return { v: "outfit" };
+  if (s.ansicht.v === "outfit" || s.ansicht.v === "koffer") return { v: s.ansicht.v };
   if (s.ansicht.v === "passt" && Number.isInteger(s.ansicht.nr) && s.ansicht.nr > 0) return { v: "passt", nr: s.ansicht.nr };
   return null;
 }
 // Knopf „↺ Neu anfangen“ oben rechts bei „Outfit finden“ und „Was passt dazu?“ (Wunsch 18.11.2026: bisher musste man die App
 // schließen). hatEtwas() = ist etwas angetippt oder eingefügt?, leeren() = alles zurücksetzen. Rückfrage nur, wenn eine Antwort da ist.
-function neuKnopf(hatEtwas, mitAntwort, leeren) {
-  const b = el("button", { type: "button", class: "kopf-knopf" }, "↺ Neu anfangen");
+// Seit 0.28 auch beim Koffer („↺ Neu packen“, eigener Text für Knopf und Rückfrage).
+function neuKnopf(hatEtwas, mitAntwort, leeren, text = "↺ Neu anfangen",
+  frage = "Neu anfangen?\n\nDie Auswahl oben und die eingefügte Antwort aus dem Chat werden geleert. Gespeicherte Outfits bleiben.") {
+  const b = el("button", { type: "button", class: "kopf-knopf" }, text);
   b.onclick = () => {
     if (!hatEtwas()) return toast("Es ist noch nichts ausgewählt.");
-    if (mitAntwort() && !confirm("Neu anfangen?\n\nDie Auswahl oben und die eingefügte Antwort aus dem Chat werden geleert. Gespeicherte Outfits bleiben.")) return;
+    if (mitAntwort() && !confirm(frage)) return;
     leeren(); sitzungMerken(); toast("Alles zurückgesetzt");
     neuZeichnen().then(() => scrollen(0));
   };

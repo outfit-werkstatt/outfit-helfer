@@ -4,8 +4,8 @@
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=19";
 import { nrText } from "./speicher.js?v=11";
 import { stilAktuell } from "./stil.js?v=20";
-import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=17";
-import { chatgptPanel, bildPaketBereich, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=18";
+import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=18";
+import { chatgptPanel, bildPaketBereich, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=19";
 import { speichernKnopf } from "./fertig.js?v=9";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,

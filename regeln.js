@@ -613,6 +613,146 @@ export function kombinationenSituation(anker, alle, wahl, meinStil = null) {
   return { kombis, anders, hinweis: hinweis || null };
 }
 
+/* ---------- Koffer packen (seit 0.28, Wunsch 18.11.2026) ----------
+   Eine kleine Auswahl, die sich gut untereinander kombinieren lässt („Capsule“): erst die Unterteile (sie bestimmen die Farben),
+   dann Oberteile, Kleider, Jacke, Schuhe, Tasche und je nach Wetter Kleinkram. Jedes Teil muss zu mindestens einer Unternehmung
+   passen; jede Unternehmung soll mindestens ein passendes Teil je Platz bekommen. Die Menge richtet sich nach den Tagen
+   (mit Waschen höchstens Sachen für 4 Tage, mit Handgepäck weniger). Dazu ein Vorschlag pro Tag aus genau diesen Teilen.
+   e = { tage, temperatur, wetter: [], anlaesse: [], waschen, handgepaeck } (Namen wie die Knöpfe). Schlicht, aber solide;
+   kreativere Ideen kommen über die Chat-Anfrage. */
+export const KOFFER_ANLAESSE = ["Alltag", "Essen gehen", "Party / Ausgehen", "Arbeit / Büro", "Feier / Hochzeit", "Ausflug / Reise", "Sport", "Strand / Pool"];
+export const KOFFER_TAGE = [1, 2, 3, 4, 5, 6, 7, 10, 14];
+const STRAND = "Strand / Pool";
+const KOFFER_ALS = tabelle({ [STRAND]: "Alltag" }); // gerechnet wird wie mit diesem Anlass (plus Bademode)
+const KOFFER_PLAETZE = ["oben", "unten", "ganz", "lage", "schuh", "tasche", "zubehoer", "bade"];
+export const KOFFER_PLATZ_NAME = tabelle({ oben: "Oberteile", unten: "Hosen und Röcke", ganz: "Kleider und Einteiler", lage: "Jacken", schuh: "Schuhe",
+  tasche: "Taschen", zubehoer: "Accessoires", bade: "Bademode", schmuck: "Schmuck", guertel: "Gürtel" });
+function kofferLage(e, stil) {
+  const anl = (e.anlaesse?.length ? e.anlaesse : ["Alltag"]).filter(a => KOFFER_ANLAESSE.includes(a));
+  const sits = (anl.length ? anl : ["Alltag"]).map(name => ({ name, sit: situation({ anlass: KOFFER_ALS[name] || name, temperatur: e.temperatur, wetter: e.wetter || [] }) }));
+  return { anl: anl.length ? anl : ["Alltag"], sits, strand: anl.includes(STRAND) };
+}
+// Wie viele Teile je Platz? Unterteile und Schuhe wiederholen sich, Oberteile kaum.
+function kofferMengen(e, lage) {
+  const tage = Math.max(1, Math.min(30, e.tage || 3)), vorrat = e.waschen ? Math.min(tage, 4) : tage, hand = !!e.handgepaeck;
+  const sits = lage.sits.map(s => s.sit), schickDabei = sits.some(s => s.ziel >= 3.5), kalt = sits.some(s => s.temp?.jacke);
+  const nass = sits.some(s => s.w.nass || s.w.wind), kuehl = e.temperatur === "13–19°";
+  return {
+    tage, vorrat, hand,
+    oben: Math.max(1, hand ? Math.ceil(vorrat * 0.75) : vorrat),
+    unten: Math.max(1, Math.min(hand ? 2 : 4, Math.ceil(vorrat / 3) + (schickDabei && vorrat >= 3 ? 1 : 0))),
+    // „Damen/Herren/beides“ zählt hier nicht (wie bei den Outfits seit 30.10.): Was im Kleiderschrank liegt, gehört ihr bzw. ihm
+    ganz: schickDabei ? (vorrat >= 6 && !hand ? 2 : 1) : 0,
+    lage: kalt || nass || kuehl ? (schickDabei && vorrat >= 3 && !hand ? 2 : 1) : (schickDabei && vorrat >= 3 ? 1 : 0),
+    schuh: Math.min(hand ? 2 : 3, lage.sits.length + (lage.strand ? 1 : 0)),
+    tasche: 1, bade: lage.strand ? (vorrat >= 5 && !hand ? 2 : 1) : 0
+  };
+}
+export function kofferPacken(e, alle, meinStil = null) {
+  const lage = kofferLage(e, meinStil), n = kofferMengen(e, lage), stil = meinStil;
+  const nutzbar = alle.filter(t => platzVon(t) !== "bade" || lage.strand);
+  const passtIrgendwo = t => lage.sits.some(s => passtZu(t, s.sit));
+  const nachPlatz = platzListe(nutzbar.filter(passtIrgendwo)), allePlaetze = platzListe(nutzbar);
+  const gewaehlt = [], deckt = (t, s) => passtZu(t, s.sit);
+  // Wie gut passt ein Teil zu dem, was schon im Koffer ist? Plus: passt zu vielen Unternehmungen, deckt eine noch offene ab.
+  const wert = (t, platz) => {
+    const kleidung = gewaehlt.filter(x => KLEIDUNG.has(platzVon(x)) || platzVon(x) === "schuh");
+    const komp = kleidung.length ? kleidung.reduce((s, x) => s + paar(t, x), 0) / kleidung.length : 0;
+    const viele = lage.sits.filter(s => deckt(t, s)).length;
+    const offen = lage.sits.filter(s => deckt(t, s) && !gewaehlt.some(x => platzVon(x) === platz && deckt(x, s))).length;
+    const beste = Math.max(...lage.sits.map(s => deckt(t, s) ? situationsPunkte([t], s.sit) : -5));
+    const doppelt = gewaehlt.some(x => basisArt(x) === basisArt(t) && hauptFarbe(x).basis === hauptFarbe(t).basis) ? 1.5 : 0;
+    return komp + viele * 0.6 + offen * 2 + beste * 0.5 - doppelt + stilPunkte(t, stil) * 0.2;
+  };
+  const nimm = (platz, anzahl, filter = () => true) => {
+    let pool = (nachPlatz[platz] || []).filter(filter);
+    if (!pool.length) pool = (allePlaetze[platz] || []).filter(filter); // nichts passt richtig: lieber das Nächstbeste als nichts
+    for (let i = 0; i < anzahl; i++) {
+      const frei = pool.filter(t => !gewaehlt.includes(t));
+      if (!frei.length) break;
+      gewaehlt.push(frei.reduce((a, b) => wert(b, platz) > wert(a, platz) ? b : a));
+    }
+  };
+  // Erst ein Unterteil (bestimmt die Farben), dann Oberteile, dann die übrigen Unterteile, Kleider, Jacke, Schuhe …
+  nimm("unten", 1); nimm("oben", n.oben); nimm("unten", n.unten - 1); nimm("ganz", n.ganz);
+  const braucheAussen = lage.sits.some(s => s.sit.temp?.jacke || s.sit.w.nass >= 2 || s.sit.w.wind);
+  if (n.lage) { nimm("lage", 1, t => !braucheAussen || aussen(t) || !(allePlaetze.lage || []).some(aussen)); nimm("lage", n.lage - 1); }
+  nimm("schuh", n.schuh);
+  nimm("tasche", n.tasche);
+  if (n.bade) nimm("bade", n.bade);
+  // Kleinkram nach Wetter: Sonnenbrille bei Sonne/Hitze/Strand, Schal, Mütze und Handschuhe bei Kälte
+  const sonne = lage.strand || lage.sits.some(s => s.sit.w.sonne || s.sit.temp?.ideal <= 2), kaelte = lage.sits.some(s => s.sit.temp?.ideal >= 3.6);
+  if (sonne) nimm("zubehoer", 1, t => basisArt(t) === "Sonnenbrille");
+  if (kaelte) for (const a of ["Schal / Tuch", "Hut / Mütze", "Handschuhe"]) nimm("zubehoer", 1, t => basisArt(t) === a);
+  const teile = KOFFER_PLAETZE.flatMap(p => gewaehlt.filter(t => platzVon(t) === p));
+  // Was fehlt? Je Unternehmung etwas Passendes zum Anziehen und Schuhe
+  const luecken = [];
+  for (const s of lage.sits) {
+    const kl = teile.filter(t => deckt(t, s)), hat = p => kl.some(t => platzVon(t) === p);
+    const fehlt = [!(hat("ganz") || (hat("oben") && hat("unten"))) && "Kleidung", !hat("schuh") && !s.sit.anlass?.ohneSchuhe && "Schuhe"].filter(Boolean);
+    if (fehlt.length) luecken.push(`Für „${s.name}“ fehlen passende ${fehlt.join(" und ")}.`);
+  }
+  if (braucheAussen && !teile.some(aussen)) luecken.push("Für Kälte, Regen oder Wind fehlt eine richtige Jacke.");
+  // Zu wenige passende Oberteile für die Tage (ein Kleid ersetzt ein Oberteil)
+  const obenZahl = teile.filter(t => platzVon(t) === "oben").length + teile.filter(t => platzVon(t) === "ganz").length;
+  if (obenZahl < n.vorrat && obenZahl > 0) luecken.push(`Für ${n.vorrat} Tage passen nur ${obenZahl} ${obenZahl === 1 ? "Oberteil oder Kleid" : "Oberteile oder Kleider"} aus deinem Kleiderschrank. Einmal waschen oder ein Teil zweimal tragen hilft.`);
+  if (lage.strand && !teile.some(t => platzVon(t) === "bade")) luecken.push("Bademode hast du noch nicht im Kleiderschrank.");
+  return { nrs: teile.map(t => t.nr), tage: kofferTage(teile, e, meinStil), luecken, tipps: kofferTipps(teile, e, lage, n), mengen: n };
+}
+// Ein Vorschlag pro Tag aus genau diesen Teilen. Jede Unternehmung kommt einmal dran, die übrigen Tage sind wie die erste.
+// Oberteile und Kleider möglichst nicht doppelt (erst wenn alle dran waren), Unterteile und Schuhe dürfen sich wiederholen.
+export function kofferTage(teile, e, meinStil = null) {
+  const lage = kofferLage(e, meinStil), tage = Math.max(1, Math.min(30, e.tage || 3));
+  const folge = Array.from({ length: tage }, (_, i) => lage.sits[i] || lage.sits[0]);
+  const nachPlatz = platzListe(teile), oft = new Map(), plan = [];
+  for (const [i, s] of folge.entries()) {
+    const jacke = s.sit.temp?.jacke || s.sit.w.nass >= 2 ? ["lage"] : [], schuh = s.sit.anlass?.ohneSchuhe ? [] : ["schuh"];
+    const vorlagen = [["oben", "unten", ...schuh, ...jacke], ["ganz", ...schuh, ...jacke]];
+    let beste = null, besterWert = -Infinity;
+    for (const v of vorlagen) {
+      if (v.some(p => !["schuh", "lage"].includes(p) && !nachPlatz[p]?.length)) continue;
+      const listen = v.filter(p => nachPlatz[p]?.length).map(p => nachPlatz[p]);
+      const weiter = (j, weg) => {
+        if (j === listen.length) {
+          if (!weg.length) return;
+          const wiederholt = weg.reduce((x, t) => x + (oft.get(t) || 0) * (["oben", "ganz"].includes(platzVon(t)) ? 3 : 0.3), 0);
+          const w = stimmig(weg) + situationsPunkte(weg, s.sit) + weg.filter(t => passtZu(t, s.sit)).length * 0.3 - wiederholt;
+          if (w > besterWert) { besterWert = w; beste = weg; }
+          return;
+        }
+        for (const t of listen[j]) weiter(j + 1, [...weg, t]);
+      };
+      weiter(0, []);
+    }
+    if (!beste) continue;
+    for (const t of beste) oft.set(t, (oft.get(t) || 0) + 1);
+    plan.push({ tag: i + 1, anlass: s.name, nrs: beste.map(t => t.nr) });
+  }
+  return plan;
+}
+// Bis zu 6 weitere Teile für einen Platz, die gut zum Rest im Koffer passen (zum Dazulegen beim Ändern)
+export function kofferVorschlaege(platz, imKoffer, alle, e, meinStil = null) {
+  const lage = kofferLage(e, meinStil), drin = new Set(imKoffer.map(t => t.nr));
+  const kleidung = imKoffer.filter(t => KLEIDUNG.has(platzVon(t)) || platzVon(t) === "schuh");
+  const wert = t => (kleidung.length ? kleidung.reduce((s, x) => s + paar(t, x), 0) / kleidung.length : 0) + lage.sits.filter(s => passtZu(t, s.sit)).length * 0.6;
+  return alle.filter(t => platzVon(t) === platz && !drin.has(t.nr)).sort((a, b) => wert(b) - wert(a)).slice(0, 6);
+}
+function kofferTipps(teile, e, lage, n) {
+  const o = [], hat = (...arten) => teile.some(t => arten.includes(basisArt(t)));
+  for (const name of e.wetter || []) if (WETTER_WIRKUNG[name]?.tipp && !o.includes(WETTER_WIRKUNG[name].tipp)) o.push(WETTER_WIRKUNG[name].tipp);
+  if (n.hand || hat("Mantel", "Stiefel")) o.push("Das Schwerste (Jacke, Mantel, Stiefel) am Reisetag anziehen, das spart Platz im Koffer.");
+  if (e.waschen && n.tage > n.vorrat) o.push(`Mit Waschen reichen Sachen für ${n.vorrat} Tage, danach geht es wieder von vorn.`);
+  o.push("Kleidung rollen statt falten spart Platz und gibt weniger Falten.");
+  return o.slice(0, 4);
+}
+// Was nicht im Kleiderschrank ist, aber in den Koffer gehört (zum Abhaken, eigene Einträge möglich)
+export function kofferExtras(e) {
+  const lage = kofferLage(e), sits = lage.sits.map(s => s.sit);
+  return ["Unterwäsche", "Socken", "Schlafsachen", "Kulturbeutel", "Ladekabel", "Ausweis / Pass", "Medikamente",
+    lage.strand || sits.some(s => s.w.sonne || s.temp?.ideal <= 2) ? "Sonnencreme" : null,
+    sits.some(s => s.w.nass) ? "Regenschirm" : null, lage.anl.includes("Sport") ? "Sportsachen, die nicht im Kleiderschrank sind" : null].filter(Boolean);
+}
+
 /* ---------- Kaufideen: schlicht nach Lücken ---------- */
 export function kaufideen(anker, alle, stil = null) {
   const mode = stil?.mode || "beides", herren = mode === "Herren", f = hauptFarbe(anker), p = platzVon(anker), sch = schick(anker);

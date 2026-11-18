@@ -300,5 +300,18 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .umschalter .zahl{font-weight:700}
 .umschalter .wort{font-size:.82rem}
 .aussortiert-unter{margin:0 0 10px}
+/* Koffer packen (seit 0.28): Stand oben, Gruppen je Platz, Haken auf kleinen Kacheln, Liste „Außerdem einpacken“ */
+.koffer-stand{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.koffer-stand span{color:var(--muted);font-size:.92rem}
+.koffer-gruppe{margin-top:14px}
+.koffer-gruppe-kopf{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--haupt);margin-bottom:6px}
+.teil.mini .haken{width:24px;height:24px;right:5px;top:5px;font-size:.85rem}
+.extra-liste{margin:6px 0 10px}
+.extra-zeile{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);min-height:44px}
+.extra-zeile label{display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;padding:8px 0;overflow-wrap:anywhere}
+.extra-zeile input{width:22px;height:22px;accent-color:var(--accent);flex-shrink:0}
+.extra-zeile.erledigt span{color:var(--muted);text-decoration:line-through}
+.extra-neu{display:flex;gap:8px;align-items:center}
+.extra-neu .feld-eingabe{flex:1;min-width:0}
 /* Allein in einer Karte (unter „🏷 Für Vinted“): ohne Trennlinie oben */
 .panel > .verkauf-box:first-child > .field{border-top:0}
