@@ -313,5 +313,7 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .extra-zeile.erledigt span{color:var(--muted);text-decoration:line-through}
 .extra-neu{display:flex;gap:8px;align-items:center}
 .extra-neu .feld-eingabe{flex:1;min-width:0}
+/* „Deine Reisen“: Reise ohne Packliste bekommt statt eines Fotos ein Zeichen */
+.outfit-karte .look .koffer-zeichen{display:flex;align-items:center;justify-content:center;height:100%;font-size:1.8rem;color:var(--link)}
 /* Allein in einer Karte (unter „🏷 Für Vinted“): ohne Trennlinie oben */
 .panel > .verkauf-box:first-child > .field{border-top:0}

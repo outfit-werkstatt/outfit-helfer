@@ -13,6 +13,7 @@ import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=20";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=8";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=19";
 import { VERKAUF_STUFEN, preisPruefen, tageSeit } from "./verkauf.js?v=2";
+import { reisenPruefen } from "./koffer.js?v=1";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
 // Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)
@@ -33,7 +34,7 @@ const vorschauName = nr => `Vorschaubilder/${nrText(nr)}.jpg`;
 const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSonderzeichen(o.name).slice(0, 50).trim() || "Outfit"}.jpg`;
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
   "Zum Wiederherstellen: App öffnen, auf der Startseite unten „💾 Sicherung“ antippen, dann „Sicherung auswählen …“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
-  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits und eigene Knöpfe.\r\n\r\n" +
+  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits, Reisen aus „Koffer packen“ und eigene Knöpfe.\r\n\r\n" +
   "Verkaufte Teile sind auch dabei, damit deine Übersicht „Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit einem kleinen Foto.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 
@@ -94,8 +95,8 @@ export function zipKurz(items, letzte, stil, sonst) {
 
 /* ---------- Sicherung erstellen ---------- */
 async function erstellen(fortschritt) {
-  const [alle, ordner, stil, eigene, naechste, outfits, chat] = await Promise.all([allItems(), getFolders(), getStil(), getCustom(), getMeta("naechsteNr"), getOutfits(),
-    getMeta("chatgptStand").catch(() => null)]);
+  const [alle, ordner, stil, eigene, naechste, outfits, chat, reisen] = await Promise.all([allItems(), getFolders(), getStil(), getCustom(), getMeta("naechsteNr"), getOutfits(),
+    getMeta("chatgptStand").catch(() => null), getMeta("reisen").catch(() => null)]);
   const teile = alle.filter(t => !t.geloescht).sort((a, b) => a.nr - b.nr), dateien = [], angaben = [];
   for (const [i, t] of teile.entries()) {
     fortschritt(`Fotos sammeln: ${i + 1} von ${teile.length} …`);
@@ -120,7 +121,9 @@ async function erstellen(fortschritt) {
     teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits: outfitAngaben,
     // Was der Chat zuletzt vom Kleiderschrank bekommen hat (seit 0.21): Der Chat liegt in ihrem Konto, nicht auf dem Handy,
     // und kennt nach dem Wiederherstellen (auch auf einem neuen Handy) noch denselben Stand. Ältere Versionen lesen das Feld nicht.
-    chatStand: chat?.zeit && chat?.teile ? { zeit: chat.zeit, teile: chat.teile } : null };
+    chatStand: chat?.zeit && chat?.teile ? { zeit: chat.zeit, teile: chat.teile } : null,
+    // Reisen aus „Koffer packen“ (seit 0.28, mit Namen und Packliste). Ältere Versionen lesen das Feld nicht.
+    reisen: reisenPruefen(reisen) };
   dateien.unshift({ name: "angaben.json", data: utf8(JSON.stringify(json)) }, { name: "Lies mich.txt", data: utf8(LIES_MICH) });
   const blob = await zipErstellen(dateien, jetzt, (i, n) => fortschritt(`Sicherung packen: ${Math.round(100 * i / n)} % …`));
   return { blob, name: `Sicherung vom ${datumText(jetzt)} Outfit Helfer.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length };
@@ -220,7 +223,9 @@ function pruefen(j) {
     for (const [k, v] of Object.entries(cs.teile).slice(0, MAX_TEILE)) if (/^\d{1,6}$/.test(k) && typeof v === "string" && /^[0-9a-z]{1,8}$/.test(v)) st[k] = v;
     chatStand = { zeit: zeit(cs.zeit), teile: st };
   }
-  return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, chatStand, ausgelassen };
+  // Reisen (seit 0.28): erst in laden() geprüft, wenn feststeht, welche Teile wirklich übernommen werden
+  return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, chatStand, ausgelassen,
+    reisenRoh: Array.isArray(j.reisen) ? j.reisen.slice(0, 100) : [] };
 }
 // Nur echte JPG-Bilder mit vernünftiger Größe annehmen (Größe steht im Kopf der Datei, vor dem Entschlüsseln prüfbar).
 // Fotos der App haben höchstens etwa 1,5 Megapixel; 16 sind großzügig und für das Handy noch gut zu entpacken.
@@ -316,6 +321,8 @@ async function laden(datei) {
       } catch (e) { console.error(e); }
       outfits.push({ ...outfit, nrs: onrs, foto });
     }
+    // Reisen (seit 0.28): nur bekannte Felder, Nummern nur von Teilen, die übernommen werden
+    const reisen = reisenPruefen(s.reisenRoh, kommtNr);
     // 2. Ehrlich fragen: was kommt, was fehlt, was ginge verloren
     const jetzt = await allItems(), kommt = new Set(teile.map(t => t.nr));
     const verloren = jetzt.filter(t => !t.geloescht && !kommt.has(t.nr)).map(t => t.nr).sort((a, b) => a - b);
@@ -324,12 +331,13 @@ async function laden(datei) {
     const frage = [
       `Sicherung${s.erstellt ? " vom " + datumText(new Date(s.erstellt)) : ""}: ${anzahl(teile.length)}${verkauft ? ` (davon ${verkauft} verkauft)` : ""}, ${s.ordner.length} Ordner` +
         `${outfits.length ? `, ${outfits.length} ${outfits.length === 1 ? "fertiges Outfit" : "fertige Outfits"}` : ""}` +
+        `${reisen.length ? `, ${reisen.length} ${reisen.length === 1 ? "Reise" : "Reisen"}` : ""}` +
         `${Object.keys(s.meinStil).some(k => k !== "geaendert") ? ", „Mein Stil“" : ""}.`,
       unlesbar ? `⚠️ ${unlesbar === 1 ? "1 Teil" : unlesbar + " Teile"} aus der Sicherung ${unlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${unlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
         (fehlen.length ? `: Nr. ${nummern(fehlen)}` : "") + (s.ausgelassen ? `${fehlen.length ? " und " : ": "}${s.ausgelassen} ohne gültige Nummer oder Art` : "") + "." : null,
       verloren.length ? `⚠️ ${verloren.length === 1 ? "Dieses Teil ist" : `Diese ${verloren.length} Teile sind`} jetzt in der App, aber nicht in der Sicherung und ${verloren.length === 1 ? "wäre" : "wären"} danach weg: Nr. ${nummern(verloren)}.` : null,
       imKorb ? `Der Papierkorb (${anzahl(imKorb)}) wird geleert.` : null,
-      "Das ERSETZT alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, eigene Knöpfe).",
+      "Das ERSETZT alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, Reisen, eigene Knöpfe).",
       verloren.length ? "Tipp: Willst du den jetzigen Stand behalten, tippe auf „Abbrechen“ und erstelle zuerst eine Sicherung davon." : null,
       "Wiederherstellen?"].filter(Boolean).join("\n\n");
     if (!confirm(frage)) return "Abgebrochen – es wurde nichts geändert.";
@@ -342,7 +350,7 @@ async function laden(datei) {
     const chat = [chatJetzt, s.chatStand].filter(x => typeof x?.zeit === "string" && x.teile).sort((a, b) => b.zeit.localeCompare(a.zeit))[0] || null;
     // Scheitert das Schreiben, bricht replaceAll alles ab: Dann ist wirklich nichts geändert, und das soll auch dastehen
     try {
-      await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, chatgptStand: chat,
+      await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, reisen, chatgptStand: chat,
         letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr) } } });
     } catch (e) { console.error(e); throw new Error(`Die Sicherung ließ sich nicht speichern. Es wurde nichts geändert, dein Kleiderschrank ist wie vorher. (${fehlerText(e)})`); }
     await askPersist(); // auf einem neuen Handy gleich um dauerhaften Speicher bitten
@@ -411,7 +419,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
   fill(box, kopf,
     el("div", { class: "panel" },
       mitInfo(el("strong", {}, "Sicherung speichern"),
-        "Packt alle Teile mit Fotos, Ordner, „Mein Stil“, fertige Outfits und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit.",
+        "Packt alle Teile mit Fotos, Ordner, „Mein Stil“, fertige Outfits, deine Reisen aus „Koffer packen“ und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit.",
         "Verkaufte Teile kommen mit, damit deine Übersicht „✅ Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit kleinem Foto (bis dahin kann noch etwas zurückkommen), so wird die Datei nicht mit jedem Verkauf größer.",
         `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“ (nach Name käme der 01.11. vor dem 25.10.).`),
       el("p", { class: "hint" }, stand),
@@ -428,6 +436,6 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
       mitInfo(el("strong", {}, "Sicherung laden"),
         "Holt den Stand aus einer Sicherung zurück, z. B. auf einem neuen Handy.",
         "Vorher prüft die App die Datei und sagt dir genau, was übernommen wird und was verloren ginge."),
-      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, Papierkorb)."),
+      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, Reisen, Papierkorb)."),
       el("label", { class: "btn datei" }, "Sicherung auswählen …", eingabe), ladenStatus));
 }

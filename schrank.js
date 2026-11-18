@@ -12,7 +12,7 @@ import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEI
 import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=19";
 import { renderVinted } from "./vinted.js?v=10";
 import { GROUPS } from "./ki.js?v=8";
-import { renderKoffer, kofferHatEtwas, kofferMitListe, kofferNeu } from "./koffer.js?v=1";
+import { renderKoffer } from "./koffer.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=2";
 
@@ -162,9 +162,9 @@ async function render() {
     return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`,
       neuKnopf(() => passtHatEtwas(t.nr), () => chatHatAntwort({ teil: t }), () => passtNeu(t.nr))), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
-  if (s.v === "koffer") return renderKoffer(box, kopf("🧳 Koffer packen", null, neuKnopf(kofferHatEtwas, kofferMitListe, kofferNeu, "↺ Neu packen",
-    "Neu packen?\n\nDie Reise, die Packliste mit allen Haken und die eingefügte Antwort aus dem Chat werden geleert. Deine Kleidung bleibt, wie sie ist.")),
-    items, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
+  // Koffer packen (seit 0.28): ohne id die Liste „Deine Reisen“, mit id eine Reise. Den Kopf baut koffer.js selbst (Titel = Name der Reise).
+  if (s.v === "koffer") return renderKoffer(box, (titel, unter) => kopf(titel, unter), s.id || null, items, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen,
+    { go, ersetze, back });
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
     items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "vinted") {
@@ -758,7 +758,8 @@ export async function initSchrank() {
    sie gerade in einer der beiden Ansichten (höchstens 2 Stunden her), öffnet sich diese wieder. */
 const SITZUNG_STUNDEN = 24, WIEDER_STUNDEN = 2, STUNDE = 3600 * 1000;
 function sitzungMerken() {
-  const ansicht = ["outfit", "koffer"].includes(current.v) ? { v: current.v } : current.v === "passt" ? { v: "passt", nr: current.nr } : null;
+  const ansicht = current.v === "outfit" ? { v: "outfit" } : current.v === "koffer" ? { v: "koffer", id: current.id ?? null }
+    : current.v === "passt" ? { v: "passt", nr: current.nr } : null;
   setMeta("sitzung", { zeit: new Date().toISOString(), ansicht, outfit: outfitStand(), passt: passtStand(), chat: chatMerkStand() })
     .catch(e => console.error("Merken ging nicht", e));
 }
@@ -773,7 +774,8 @@ async function sitzungLaden() {
   if (!(alter >= 0 && alter < SITZUNG_STUNDEN * STUNDE)) return null;
   outfitLaden(s.outfit); passtLaden(s.passt); chatMerkLaden(s.chat);
   if (alter >= WIEDER_STUNDEN * STUNDE || !s.ansicht) return null;
-  if (s.ansicht.v === "outfit" || s.ansicht.v === "koffer") return { v: s.ansicht.v };
+  if (s.ansicht.v === "outfit") return { v: "outfit" };
+  if (s.ansicht.v === "koffer") return typeof s.ansicht.id === "string" && /^r[a-z0-9]{1,40}$/.test(s.ansicht.id) ? { v: "koffer", id: s.ansicht.id } : { v: "koffer" };
   if (s.ansicht.v === "passt" && Number.isInteger(s.ansicht.nr) && s.ansicht.nr > 0) return { v: "passt", nr: s.ansicht.nr };
   return null;
 }

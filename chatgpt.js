@@ -26,7 +26,8 @@ const MAX_ANTWORT = 20000, MAX_ZUSATZ = 500; // Zusatz: beim Koffer bis 500 Zeic
 let stilMit = false, vorbereitet = null, vorschauUrls = [];
 // offen = welche Schritte 2–4 aufgeklappt sind, anfrageFuer = wofür die Anfrage zuletzt kopiert wurde, bildKopiert = Schritt 4 erledigt
 const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt, bildOutfit, offen, anfrageFuer, bildKopiert }
-const merkSchluessel = frage => frage.koffer ? "koffer" : frage.teil ? "teil:" + frage.teil.nr : "situation";
+// Beim Koffer je Reise eine eigene Antwort (seit 0.28: mehrere Reisen mit Namen)
+const merkSchluessel = frage => frage.koffer ? "koffer:" + (frage.koffer.id || "neu") : frage.teil ? "teil:" + frage.teil.nr : "situation";
 const merker = frage => {
   const k = merkSchluessel(frage);
   if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1", offen: { 2: true, 3: false, 4: false }, anfrageFuer: null, bildKopiert: false });
@@ -41,7 +42,7 @@ export function chatMerkLaden(o) {
   if (!o || typeof o !== "object") return;
   const txt = (v, max) => typeof v === "string" ? v.slice(0, max) : "";
   for (const [k, m] of Object.entries(o).slice(0, MAX_MERK)) {
-    if (!/^(situation|koffer|teil:\d{1,6})$/.test(k) || !m || typeof m !== "object" || merk.has(k)) continue;
+    if (!/^(situation|koffer:r[a-z0-9]{1,40}|teil:\d{1,6})$/.test(k) || !m || typeof m !== "object" || merk.has(k)) continue;
     const offen = m.offen && typeof m.offen === "object" ? m.offen : {};
     merk.set(k, { zusatz: txt(m.zusatz, MAX_ZUSATZ), antwort: txt(m.antwort, MAX_ANTWORT), angezeigt: txt(m.angezeigt, MAX_ANTWORT), bildOutfit: txt(m.bildOutfit, 40) || "Outfit 1",
       offen: { 2: offen[2] === true, 3: offen[3] === true, 4: offen[4] === true }, anfrageFuer: typeof m.anfrageFuer === "string" ? m.anfrageFuer.slice(0, 2000) : null,
@@ -108,7 +109,7 @@ const temperaturText = t => t ? t.replace("°", " °C") : null;
 // Koffer packen (seit 0.28): Packliste nur aus ihren Teilen, dazu ein Outfit pro Tag („Tag 1: …“, die App liest das wie Outfits)
 function kofferText(k, freitext, stil) {
   const s = stilAktuell(stil), zeilen = stilMit ? stilZeilen(s) : [];
-  const angaben = [["Dauer", k.tage ? `${k.tage} ${k.tage === 1 ? "Tag" : "Tage"}` : null], ["Temperatur", temperaturText(k.temperatur)], ["Wetter", k.wetter?.join(", ")],
+  const angaben = [["Reise", k.name ? ohneUmbruch(k.name) : null], ["Dauer", k.tage ? `${k.tage} ${k.tage === 1 ? "Tag" : "Tage"}` : null], ["Temperatur", temperaturText(k.temperatur)], ["Wetter", k.wetter?.join(", ")],
     ["Was ich vorhabe", k.anlaesse?.join(", ")], ["Waschen möglich", k.waschen ? "ja" : null], ["Gepäck", k.handgepaeck ? "nur Handgepäck, bitte wenig und leicht" : null]].filter(([, v]) => v);
   return [
     "Hallo! Ich packe meinen Koffer und möchte nur Sachen aus meinem Kleiderschrank mitnehmen (die Bilder und die Liste weiter oben in diesem Chat).", "",

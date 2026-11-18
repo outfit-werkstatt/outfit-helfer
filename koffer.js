@@ -1,23 +1,28 @@
 // „🧳 Koffer packen“ (seit 0.28, Wunsch 18.11.2026): Reise antippen → die App packt eine kleine Auswahl, die sich gut kombinieren
 // lässt (regeln.js kofferPacken), oder der Chat (Anfrage mit eigenem Text, Antwort als Packliste übernehmen). Dann eine Liste zum
 // Abhaken, auch über mehrere Tage, dazu ein Outfit-Vorschlag pro Tag und Dinge, die nicht im Kleiderschrank sind (Ladekabel …).
-// Ein Koffer zur Zeit, gespeichert in meta „koffer“: nur auf dem Gerät und nicht in der Sicherung (ein Koffer ist etwas Vorübergehendes).
-// Texte nur per textContent/DOM, nie per innerHTML (eigene Einträge sind eingetippter Text).
+// Seit 0.28 (Wunsch 18.11.2026, „Kreta Sommer 2026“): mehrere Reisen mit Namen, jede mit eigener Packliste, eigenen Haken und eigener
+// Chat-Antwort. Gespeichert in meta „reisen“ und in der Sicherung (mit Namen sind sie etwas zum Behalten, z. B. als Vorlage fürs nächste Jahr).
+// Texte nur per textContent/DOM, nie per innerHTML (Name und eigene Einträge sind eingetippter Text).
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, beschreibung } from "./ui.js?v=19";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=11";
 import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=18";
-import { chatgptPanel, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=19";
+import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=19";
 import { miniKachel } from "./passt.js?v=25";
 import { stilAktuell } from "./stil.js?v=20";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";
 const REIHE = ["oben", "unten", "ganz", "lage", "schuh", "tasche", "zubehoer", "bade", "schmuck", "guertel"];
-const MAX_EXTRAS = 40, MAX_EXTRA_TEXT = 60, MAX_TEILE = 80;
+const MAX_EXTRAS = 40, MAX_EXTRA_TEXT = 60, MAX_TEILE = 80, MAX_REISEN = 30, MAX_NAME = 40;
 const leer = () => ({ eingaben: { tage: null, temperatur: null, wetter: [], anlaesse: [], waschen: false, handgepaeck: false },
   nrs: null, gepackt: [], tage: null, luecken: [], tipps: [], extras: null, quelle: null, gepacktFuer: null });
-let koffer = null;           // aus meta „koffer“, beim ersten Öffnen geladen
+let reisen = null;           // [{ id, name, erstellt, geaendert, ...wie leer() }] aus meta „reisen“, beim ersten Öffnen geladen
 let aendern = false;         // „✏️ Teile ändern“ ist an (pro Sitzung)
 let reiseOffen = false, tageOffen = false, chatOffen = false;
+const neueId = () => "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const ID = /^r[a-z0-9]{1,40}$/;
+// Eine Reise ohne Namen, ohne Angaben und ohne Packliste (z. B. „＋ Neue Reise“ angetippt und gleich wieder zurück) zählt nicht
+const leerReise = r => !r.name && r.nrs === null && !r.extras && !r.eingaben.tage && !r.eingaben.temperatur && !r.eingaben.wetter.length && !r.eingaben.anlaesse.length;
 
 /* ---------- Speichern und Laden ---------- */
 const zahlen = (v, max) => Array.isArray(v) ? [...new Set(v.filter(n => Number.isInteger(n) && n > 0 && n <= 999999))].slice(0, max) : [];
@@ -40,27 +45,59 @@ function pruefen(o) {
   k.gepacktFuer = typeof o.gepacktFuer === "string" ? o.gepacktFuer.slice(0, 1000) : null;
   return k;
 }
-async function laden() {
-  if (!koffer) { try { koffer = pruefen(await getMeta("koffer")); } catch (e) { console.error(e); koffer = leer(); } }
-  return koffer;
+const zeit = v => typeof v === "string" && v.length < 40 && !isNaN(Date.parse(v)) ? new Date(v).toISOString() : null;
+// Liste der Reisen prüfen, auch beim Laden einer Sicherung (zip-ansicht.js). gibtEs = Set der Nummern, die es gibt (sonst alle lassen)
+export function reisenPruefen(liste, gibtEs = null) {
+  const ids = new Set(), jetzt = new Date().toISOString();
+  return (Array.isArray(liste) ? liste : []).slice(0, MAX_REISEN).map(o => {
+    const r = pruefen(o);
+    let id = typeof o?.id === "string" && ID.test(o.id) ? o.id : neueId();
+    while (ids.has(id)) id = neueId();
+    ids.add(id);
+    const da = n => !gibtEs || gibtEs.has(n);
+    if (r.nrs) r.nrs = r.nrs.filter(da);
+    r.gepackt = r.gepackt.filter(n => da(n) && (!r.nrs || r.nrs.includes(n))); // Haken nur für Teile auf der Liste
+    if (r.tage) r.tage = r.tage.map(t => ({ ...t, nrs: t.nrs.filter(da) })).filter(t => t.nrs.length);
+    return { id, name: typeof o?.name === "string" ? clean(o.name).slice(0, MAX_NAME) || null : null, erstellt: zeit(o?.erstellt) || jetzt, geaendert: zeit(o?.geaendert) || jetzt, ...r };
+  }).filter(r => !leerReise(r));
 }
-const speichern = () => setMeta("koffer", koffer).catch(e => fehlerToast("Speichern hat nicht geklappt", e));
+async function laden() {
+  if (reisen) return reisen;
+  try {
+    let roh = await getMeta("reisen");
+    // Vor den Namen gab es (nur in der Testkopie) einen einzigen Koffer in meta „koffer“: wird zur ersten Reise
+    if (!Array.isArray(roh)) { const alt = await getMeta("koffer"); roh = alt && typeof alt === "object" ? [alt] : []; }
+    reisen = reisenPruefen(roh);
+  } catch (e) { console.error(e); reisen = []; }
+  return reisen;
+}
+// r = die geänderte Reise (bekommt den Zeitpunkt, die Liste „Deine Reisen“ sortiert danach)
+const speichern = (r = null) => {
+  if (r) r.geaendert = new Date().toISOString();
+  return setMeta("reisen", reisen.filter(x => !leerReise(x))).catch(e => fehlerToast("Speichern hat nicht geklappt", e));
+};
 const eingabenSchluessel = e => JSON.stringify([e.tage, e.temperatur, e.wetter, e.anlaesse, e.waschen, e.handgepaeck]);
-
-// Für „↺ Neu packen“ oben rechts (schrank.js)
-export const kofferHatEtwas = () => !!koffer && (koffer.nrs !== null || !!koffer.eingaben.tage || !!koffer.eingaben.temperatur
-  || koffer.eingaben.wetter.length > 0 || koffer.eingaben.anlaesse.length > 0 || chatHatAntwort({ koffer: true }));
-export const kofferMitListe = () => !!koffer && (koffer.nrs !== null || chatHatAntwort({ koffer: true }));
-export function kofferNeu() { koffer = leer(); aendern = false; reiseOffen = false; chatMerkLeeren({ koffer: true }); speichern(); }
+const fuerText = e => [e.tage && `${e.tage} ${e.tage === 1 ? "Tag" : "Tage"}`, e.temperatur, ...e.wetter, ...e.anlaesse].filter(Boolean).join(" · ");
+function neueReise() {
+  if (reisen.filter(r => !leerReise(r)).length >= MAX_REISEN) { toast(`Höchstens ${MAX_REISEN} Reisen. Lösch zuerst eine alte.`); return null; }
+  const jetzt = new Date().toISOString(), r = { id: neueId(), name: null, erstellt: jetzt, geaendert: jetzt, ...leer() };
+  reisen.unshift(r);
+  aendern = false; reiseOffen = false; tageOffen = false; chatOffen = false;
+  return r;
+}
 
 /* ---------- Ansicht ---------- */
-// bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen frei), oeffnen(nr) = Teil ansehen
-export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZeichnen) {
+// id = die geöffnete Reise (ohne id: Liste „Deine Reisen“). kopf(titel, unter) baut den Kopf mit „‹ Zurück“ (schrank.js).
+// bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen frei), oeffnen(nr) = Teil ansehen, nav = { go, ersetze, back }
+export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, neuZeichnen, nav) {
   await laden();
+  if (!id) return renderUebersicht(box, kopf, items, bild, nav);
+  const koffer = reisen.find(r => r.id === id);
+  if (!koffer) return nav.ersetze({ v: "koffer" });
   const e = koffer.eingaben, pool = kandidaten(items), nachNr = new Map(items.map(t => [t.nr, t]));
   const mitStil = { mode: stilAktuell(stil).mode };
   const gepackt = koffer.nrs !== null;
-  const aenderung = felder => { Object.assign(e, felder); speichern(); neuZeichnen(); };
+  const aenderung = felder => { Object.assign(e, felder); speichern(koffer); neuZeichnen(); };
 
   // --- Die Reise ---
   const einer = (werte, wert, setzen) => choice({ options: werte, selected: wert ? [wert] : [], onChange: sel => setzen(sel[0] || null) }).el;
@@ -75,11 +112,17 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
     if (!r.nrs.length) return toast("Dafür passt noch nichts aus deinem Kleiderschrank.");
     Object.assign(koffer, { nrs: r.nrs, gepackt: koffer.gepackt.filter(n => r.nrs.includes(n)), tage: null, luecken: r.luecken, tipps: r.tipps,
       extras: koffer.extras || kofferExtras(e).map(text => ({ text, gepackt: false })), quelle: "app", gepacktFuer: eingabenSchluessel(e) });
-    reiseOffen = false; aendern = false; speichern();
+    reiseOffen = false; aendern = false; speichern(koffer);
     toast(`${r.nrs.length} Teile eingepackt – jetzt abhaken, was im Koffer ist`);
     neuZeichnen();
   };
+  // Name der Reise (Wunsch 18.11.2026): gespeichert beim Verlassen des Felds; steht dann oben als Überschrift und in der Chat-Anfrage
+  const name = el("input", { type: "text", class: "feld-eingabe", maxLength: MAX_NAME, value: koffer.name || "", placeholder: "z. B. Kreta Sommer 2026",
+    autocomplete: "off", enterKeyHint: "done", "aria-label": "Name der Reise" });
+  name.onkeydown = ev => { if (ev.key === "Enter") name.blur(); };
+  name.onchange = () => { koffer.name = clean(name.value).slice(0, MAX_NAME) || null; speichern(koffer); neuZeichnen(); };
   const reiseInhalt = [
+    field("Name der Reise", "freiwillig", name),
     field("Wie viele Tage?", null, einer(KOFFER_TAGE.map(String), e.tage ? String(e.tage) : null, x => aenderung({ tage: x ? Number(x) : null }))),
     field("Temperatur", "ungefähr, am Reiseziel", einer(Object.keys(TEMPERATUREN), e.temperatur, x => aenderung({ temperatur: x }))),
     field("Wetter", "Mehrere möglich.", choice({ options: WETTER, selected: e.wetter, max: 0, onChange: sel => aenderung({ wetter: sel }) }).el),
@@ -90,7 +133,7 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
     mitInfo(el("p", { class: "hint" }, "Die App kennt nur deine Angaben, nicht die Fotos."),
       "Darum packt sie solide, aber schlicht: Teile, die farblich und von der Schick-Stufe gut zusammenpassen, zum Wetter und zu dem, was du vorhast.",
       "Kreativere Ideen (und eigene Wünsche in deinen Worten) bekommst du über ChatGPT oder Gemini weiter unten.")];
-  const fuer = [e.tage && `${e.tage} ${e.tage === 1 ? "Tag" : "Tage"}`, e.temperatur, ...e.wetter, ...e.anlaesse].filter(Boolean).join(" · ");
+  const fuer = fuerText(e);
   let reise;
   if (gepackt) {
     reise = el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "Deine Reise"), el("span", { class: "klappe-zahl" }, fuer || "ändern")), el("div", { class: "panel" }, ...reiseInhalt));
@@ -98,11 +141,12 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
   } else reise = el("div", { class: "panel" }, el("strong", {}, "Deine Reise"), ...reiseInhalt);
 
   // --- Mit ChatGPT oder Gemini ---
-  const frage = { koffer: { ...e }, uebernehmen: (nrs, tage) => {
+  // id: Jede Reise hat ihre eigene Chat-Antwort; name kommt mit in die Anfrage („Reise: Kreta Sommer 2026“)
+  const frage = { koffer: { ...e, id: koffer.id, name: koffer.name }, uebernehmen: (nrs, tage) => {
     const neu = nrs.filter(n => nachNr.has(n)).slice(0, MAX_TEILE);
     Object.assign(koffer, { nrs: neu, gepackt: koffer.gepackt.filter(n => neu.includes(n)), tage: tage.length ? tage : null, luecken: [], tipps: [],
       extras: koffer.extras || kofferExtras(e).map(text => ({ text, gepackt: false })), quelle: "chat", gepacktFuer: eingabenSchluessel(e) });
-    aendern = false; chatOffen = false; speichern();
+    aendern = false; chatOffen = false; speichern(koffer);
     toast(`${neu.length} Teile aus der Antwort eingepackt`);
     Promise.resolve(neuZeichnen()).then(() => document.getElementById("rahmen")?.scrollTo(0, 0)); // oben steht jetzt die Packliste
   } };
@@ -113,7 +157,26 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
     chatTeil.open = chatOffen; chatTeil.ontoggle = () => { chatOffen = chatTeil.open; };
   }
 
-  if (!gepackt) { fill(box, kopf, reise, chatTeil); return; }
+  // Ganz unten: Kopie für eine neue Reise (z. B. nächstes Jahr wieder Kreta) und Löschen
+  const kopieren = el("button", { type: "button", class: "btn" }, "📋 Als neue Reise kopieren");
+  kopieren.onclick = () => {
+    const neu = neueReise();
+    if (!neu) return;
+    const kopie = JSON.parse(JSON.stringify({ eingaben: e, nrs: koffer.nrs, tage: koffer.tage, luecken: koffer.luecken, tipps: koffer.tipps, quelle: koffer.quelle, gepacktFuer: koffer.gepacktFuer }));
+    Object.assign(neu, kopie, { name: koffer.name ? `${koffer.name} (Kopie)`.slice(0, MAX_NAME) : null, gepackt: [], extras: koffer.extras ? koffer.extras.map(x => ({ text: x.text, gepackt: false })) : null });
+    speichern(neu); toast("Kopie angelegt, alle Haken sind wieder offen. Den Namen änderst du unter „Deine Reise“.");
+    reiseOffen = true; nav.ersetze({ v: "koffer", id: neu.id });
+  };
+  const loeschen = el("button", { type: "button", class: "btn" }, "🗑 Reise löschen");
+  loeschen.onclick = () => {
+    if (!leerReise(koffer) && !confirm(`${koffer.name ? `„${koffer.name}“` : "Diese Reise"} löschen?\n\nPackliste, Haken und die Chat-Antwort dazu sind dann weg. Deine Kleidung bleibt, wie sie ist.`)) return;
+    reisen = reisen.filter(r => r !== koffer); chatMerkLeeren({ koffer: { id: koffer.id } }); speichern();
+    toast("Reise gelöscht"); nav.back();
+  };
+  const unten = leerReise(koffer) ? null : el("div", { class: "actions wrap" }, gepackt ? kopieren : null, loeschen);
+  const kopfEl = kopf(koffer.name || "Neue Reise", gepackt ? fuer || null : "Tipp an, wie lange und wofür, dann packt die App oder der Chat.");
+
+  if (!gepackt) { fill(box, kopfEl, reise, chatTeil, unten); return; }
 
   // --- Packliste ---
   const drin = koffer.nrs.map(n => nachNr.get(n)), fehlt = koffer.nrs.filter((n, i) => !drin[i] || drin[i].geloescht || drin[i].verkauf === "verkauft");
@@ -129,9 +192,9 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
     b.onclick = onclick;
     return b;
   };
-  const umschalten = t => { hak.has(t.nr) ? hak.delete(t.nr) : hak.add(t.nr); koffer.gepackt = [...hak]; speichern(); neuZeichnen(); };
-  const raus = t => { koffer.nrs = koffer.nrs.filter(n => n !== t.nr); koffer.gepackt = koffer.gepackt.filter(n => n !== t.nr); koffer.tage = null; speichern(); toast(`Nr. ${nrText(t.nr)} aus dem Koffer genommen`); neuZeichnen(); };
-  const dazu = t => { if (koffer.nrs.length >= MAX_TEILE) return toast(`Höchstens ${MAX_TEILE} Teile.`); koffer.nrs = [...koffer.nrs, t.nr]; koffer.tage = null; speichern(); toast(`Nr. ${nrText(t.nr)} eingepackt`); neuZeichnen(); };
+  const umschalten = t => { hak.has(t.nr) ? hak.delete(t.nr) : hak.add(t.nr); koffer.gepackt = [...hak]; speichern(koffer); neuZeichnen(); };
+  const raus = t => { koffer.nrs = koffer.nrs.filter(n => n !== t.nr); koffer.gepackt = koffer.gepackt.filter(n => n !== t.nr); koffer.tage = null; speichern(koffer); toast(`Nr. ${nrText(t.nr)} aus dem Koffer genommen`); neuZeichnen(); };
+  const dazu = t => { if (koffer.nrs.length >= MAX_TEILE) return toast(`Höchstens ${MAX_TEILE} Teile.`); koffer.nrs = [...koffer.nrs, t.nr]; koffer.tage = null; speichern(koffer); toast(`Nr. ${nrText(t.nr)} eingepackt`); neuZeichnen(); };
   const plaetze = [...new Set([...REIHE, ...teile.map(platzVon)])];
   const zeigen = aendern ? plaetze.filter(p => teile.some(t => platzVon(t) === p) || pool.some(t => platzVon(t) === p && ["oben", "unten", "ganz", "lage", "schuh", "tasche", "bade"].includes(p)))
     : plaetze.filter(p => teile.some(t => platzVon(t) === p));
@@ -174,9 +237,9 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
   // --- Außerdem einpacken (nicht im Kleiderschrank) ---
   const extraListe = el("div", { class: "extra-liste" }, ...extras.map((x, i) => {
     const box2 = el("input", { type: "checkbox", checked: x.gepackt, "aria-label": x.text });
-    box2.onchange = () => { x.gepackt = box2.checked; speichern(); neuZeichnen(); };
+    box2.onchange = () => { x.gepackt = box2.checked; speichern(koffer); neuZeichnen(); };
     const weg = el("button", { type: "button", class: "link", "aria-label": `„${x.text}“ entfernen` }, "✕");
-    weg.onclick = () => { koffer.extras = extras.filter((_, j) => j !== i); speichern(); neuZeichnen(); };
+    weg.onclick = () => { koffer.extras = extras.filter((_, j) => j !== i); speichern(koffer); neuZeichnen(); };
     return el("div", { class: "extra-zeile" + (x.gepackt ? " erledigt" : "") }, el("label", {}, box2, el("span", {}, x.text)), weg);
   }));
   const neuText = el("input", { type: "text", class: "feld-eingabe", maxLength: MAX_EXTRA_TEXT, placeholder: "z. B. Reiseadapter", autocomplete: "off", enterKeyHint: "done", "aria-label": "Eigener Eintrag" });
@@ -185,7 +248,7 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
     const text = clean(neuText.value).slice(0, MAX_EXTRA_TEXT);
     if (!text) return toast("Bitte etwas eintippen.");
     if (extras.length >= MAX_EXTRAS) return toast(`Höchstens ${MAX_EXTRAS} Einträge.`);
-    koffer.extras = [...extras, { text, gepackt: false }]; speichern(); neuZeichnen();
+    koffer.extras = [...extras, { text, gepackt: false }]; speichern(koffer); neuZeichnen();
   };
   neuText.onkeydown = ev => { if (ev.key === "Enter") neuKnopf.click(); };
   const sonstiges = el("div", { class: "panel" }, el("strong", {}, "Außerdem einpacken"),
@@ -193,5 +256,28 @@ export async function renderKoffer(box, kopf, items, stil, bild, oeffnen, neuZei
     extraListe, el("div", { class: "extra-neu" }, neuText, neuKnopf));
 
   const tipps = koffer.tipps.length ? el("div", { class: "panel" }, el("strong", {}, "Tipps"), el("ul", { class: "tipps" }, ...koffer.tipps.map(x => el("li", {}, x)))) : null;
-  fill(box, kopf, liste, tage, sonstiges, tipps, reise, chatTeil);
+  fill(box, kopfEl, liste, tage, sonstiges, tipps, reise, chatTeil, unten);
+}
+
+/* ---------- „Deine Reisen“ ---------- */
+function renderUebersicht(box, kopf, items, bild, nav) {
+  reisen = reisen.filter(r => !leerReise(r)); // „＋ Neue Reise“ angetippt und ohne Angabe zurück: weg damit
+  if (!reisen.length) { const r = neueReise(); return nav.ersetze({ v: "koffer", id: r.id }); } // noch keine Reise: gleich eine neue
+  const nachNr = new Map(items.map(t => [t.nr, t]));
+  const neu = el("button", { type: "button", class: "btn primary" }, "＋ Neue Reise");
+  neu.onclick = () => { const r = neueReise(); if (r) nav.go({ v: "koffer", id: r.id }); };
+  const karte = r => {
+    const teile = (r.nrs || []).map(n => nachNr.get(n)).filter(t => t && !t.geloescht && t.verkauf !== "verkauft");
+    const hak = new Set(r.gepackt), extras = r.extras || [];
+    const zahl = teile.filter(t => hak.has(t.nr)).length + extras.filter(x => x.gepackt).length, gesamt = teile.length + extras.length;
+    const stand = r.nrs === null ? "noch nicht gepackt" : zahl === gesamt && gesamt ? "✓ alles eingepackt" : `${zahl} von ${gesamt} eingepackt`;
+    return el("button", { type: "button", class: "outfit-karte", onclick: () => nav.go({ v: "koffer", id: r.id }) },
+      el("span", { class: "look" }, teile[0] ? el("img", { src: bild(teile[0].vorschau), alt: "" }) : el("span", { class: "koffer-zeichen" }, "✈︎")),
+      el("span", { class: "outfit-info" },
+        el("span", { class: "name" }, r.name || "Reise ohne Namen"),
+        el("span", { class: "anzahl" }, [fuerText(r.eingaben), stand].filter(Boolean).join(" · ")),
+        el("span", { class: "outfit-mini" }, ...teile.slice(1, 7).map(t => el("img", { src: bild(t.vorschau), alt: `Nr. ${nrText(t.nr)}`, loading: "lazy" })))));
+  };
+  fill(box, kopf("🧳 Koffer packen", "Deine Reisen. Tippe eine an, um weiterzupacken."), el("div", { class: "actions" }, neu),
+    ...[...reisen].sort((a, b) => b.geaendert.localeCompare(a.geaendert)).map(karte));
 }
