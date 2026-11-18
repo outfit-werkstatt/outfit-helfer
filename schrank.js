@@ -226,6 +226,10 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
   const outfitKnopf = $("outfitKnopf");
   outfitKnopf.classList.toggle("leer", !da.length);
   outfitKnopf.onclick = () => da.length ? go({ v: "outfit" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
+  // Zweite Reihe (seit 0.28): „Koffer packen“ wird gerade gebaut, „Sachen im Haushalt“ ist ein Platzhalter für später
+  $("kofferKnopf").classList.toggle("leer", !da.length);
+  $("kofferKnopf").onclick = () => toast("🧳 Koffer packen kommt als Nächstes.");
+  $("haushaltKnopf").onclick = () => toast("🏠 Sachen im Haushalt kommt später.");
   const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst);
   fill($("nebenKacheln"),
     nebenKachel("✨ Mein Stil", kurz.length ? `${kurz.length} ${kurz.length === 1 ? "Angabe" : "Angaben"}` : "einstellen", () => go({ v: "stil" })),

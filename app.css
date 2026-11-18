@@ -46,13 +46,17 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 /* Startseite: Kopf mit Symbol, zwei gleich große Hauptknöpfe, darunter der Kleiderschrank, ganz unten Mein Stil · Sicherung · Papierkorb */
 .kopfbereich{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 18px}
 .kopfbereich .logo{width:40px;height:40px;border-radius:11px;display:block}
-.haupt-knoepfe{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Seit 0.28 zwei Reihen, alle vier Knöpfe gleich hoch (der Platzhalter hat eine Zeile mehr) */
+.haupt-knoepfe{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:10px}
 .haupt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:100px;padding:14px 10px;border:0;border-radius:var(--radius);
   font:inherit;font-weight:700;line-height:1.25;text-align:center;cursor:pointer;box-shadow:var(--schatten)}
 .haupt .sym{font-size:1.6rem;line-height:1;font-weight:400}
 .haupt.upload{background:var(--haupt);color:var(--haupt-ink)}
 .haupt.outfit{background:var(--accent);color:var(--accent-ink)}
 .haupt.leer{opacity:.55}
+/* Platzhalter für eine spätere Idee (seit 0.28): gestrichelt wie „Neuer Ordner“, damit er nicht wie ein fertiger Knopf aussieht */
+.haupt.platzhalter{background:transparent;border:1.5px dashed var(--accent);color:var(--muted);box-shadow:none}
+.haupt .bald{font-size:.78rem;font-weight:600;color:var(--link)}
 label.upload input{display:none}
 .foto-tipp{margin:10px 0 18px}
 .foto-tipp .info-zeile{justify-content:center}
