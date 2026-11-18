@@ -6,7 +6,7 @@
 import { loadAI, recognize, loadImage, alsJpg } from "./ki.js?v=8";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=11";
 import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=19";
-import { refresh, initSchrank } from "./schrank.js?v=39";
+import { refresh, initSchrank } from "./schrank.js?v=40";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -316,14 +316,19 @@ function einreihen(entwurf) {
 $("files").addEventListener("change", ev => {
   const list = [...ev.target.files]; ev.target.value = "";
   if (!list.length) return;
+  startAI(); // seit 0.27 lädt die KI erst jetzt (siehe unten „KI erst bei Bedarf“)
   total += list.length; updateProgress();
   for (const f of list) { const id = naechsteId++; einreihen({ id, datei: f, gesichert: ablegen(id, f) }); }
 });
-// Häufigster Fehler beim ersten Start: der Download (ca. 100 MB) reißt ab, z. B. weil die App kurz verlassen,
+// Häufigster Fehler beim ersten Laden der KI: der Download (ca. 100 MB) reißt ab, z. B. weil die App kurz verlassen,
 // der Bildschirm gesperrt wurde oder das WLAN weg war. Dann einmal von selbst neu versuchen, sobald die App
 // wieder im Vordergrund ist, sonst per Knopf. Schon fertig geladene Dateien bleiben im Speicher.
 let aiState = "aus", aiTries = 0; // aus | lädt | bereit
 let kiIstBereit; const kiBereit = new Promise(r => { kiIstBereit = r; }); // erfüllt, sobald Fotos erkannt werden können
+// KI erst bei Bedarf (seit 0.27, Wunsch 18.11.2026): Vorher lud sie bei jedem Start, auch wenn sie nur Outfits ansehen wollte.
+// Das kostet Speicher, und das iPhone schloss die App dann eher beim Wechsel zu ChatGPT. Jetzt startet sie, sobald Fotos
+// ausgewählt sind oder Entwürfe vom letzten Mal warten (später auch für „Hab ich sowas schon?“). Einmal geladen, bleibt sie
+// bis zum Schließen der App. Der Knopf „Kleidung hinzufügen“ geht darum sofort; die Fotos warten, bis die KI fertig ist.
 async function startAI() {
   if (aiState !== "aus") return;
   aiState = "lädt"; aiTries++; wachPruefen();
@@ -339,7 +344,6 @@ async function startAI() {
     if (msg) { $("status").textContent = msg; }
     else {
       $("status").textContent = "✅ KI ist bereit.";
-      $("uploadLabel").classList.remove("disabled");
       setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
       kiIstBereit(); warteBox();
     }
@@ -361,8 +365,8 @@ $("kiRetry").onclick = () => startAI();
 
 /* ---------- Home-Bildschirm ----------
    Im normalen Safari darf das iPhone die Daten nach 7 Tagen ohne Nutzung löschen, als App auf dem Home-Bildschirm nicht.
-   Die App dort hat ihren eigenen Speicher. Darum: im Browser auf dem Handy zuerst den Hinweis zeigen und die KI
-   (ca. 100 MB) erst laden, wenn sie sich bewusst für den Browser entscheidet. Am PC kein Hinweis. */
+   Die App dort hat ihren eigenen Speicher. Darum: im Browser auf dem Handy zuerst den Hinweis zeigen. Am PC kein Hinweis.
+   Die KI (ca. 100 MB) lädt seit 0.27 nicht mehr beim Start, sondern erst beim Hinzufügen (startAI oben). */
 const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const mobile = ios || mobil();
@@ -375,18 +379,21 @@ if (mobile && !standalone) {
   $("warnMehr").onclick = () => { $("homeHinweis").hidden = !$("homeHinweis").hidden; };
   const browserOk = () => { $("homeHinweis").hidden = true; $("warnzeile").hidden = false; };
   $("imBrowser").onclick = browserOk;
-  if (remember.get()) { browserOk(); startAI(); }
+  if (remember.get()) browserOk();
   else {
-    $("homeHinweis").hidden = false; $("kiPanel").hidden = true;
-    $("imBrowser").onclick = () => { remember.set(); browserOk(); $("imBrowser").onclick = browserOk; startAI(); };
+    $("homeHinweis").hidden = false;
+    $("imBrowser").onclick = () => { remember.set(); browserOk(); $("imBrowser").onclick = browserOk; };
   }
-} else startAI();
+}
+// Nur lokal: Begriffe neu umrechnen (index.html?begriffe-erzeugen, siehe ki-rechnen.js) braucht die KI gleich beim Start
+if (new URLSearchParams(location.search).has("begriffe-erzeugen")) startAI();
 
 // Fotos vom letzten Mal, die noch nicht gespeichert waren (App geschlossen, Handy neu gestartet …): Karten wieder zeigen.
 // Erst nur die Nummern; jedes Foto wird geholt, wenn es an der Reihe ist (addPhoto, „laden“).
 entwurfIds().then(ids => {
   if (!ids.length) return;
   naechsteId = Math.max(naechsteId, ...ids.map(id => id + 1));
+  startAI(); // Entwürfe, die noch nicht erkannt sind, brauchen die KI
   total += ids.length; updateProgress();
   ids.forEach(id => einreihen({ id, laden: true }));
   toast(ids.length === 1 ? "1 Foto vom letzten Mal ist noch nicht gespeichert – siehe unten." : `${ids.length} Fotos vom letzten Mal sind noch nicht gespeichert – siehe unten.`);

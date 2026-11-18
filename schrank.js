@@ -5,12 +5,12 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=19";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
 import { renderStil, stilKurz } from "./stil.js?v=20";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=26";
-import { renderPasst, miniKachel } from "./passt.js?v=23";
-import { renderOutfit } from "./outfit.js?v=20";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=27";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=24";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=21";
 import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=9";
-import { bildPaketBereich } from "./chatgpt.js?v=17";
-import { renderVinted } from "./vinted.js?v=8";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=18";
+import { renderVinted } from "./vinted.js?v=9";
 import { GROUPS } from "./ki.js?v=8";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=2";
@@ -158,9 +158,11 @@ async function render() {
   if (s.v === "passt") {
     const t = items.find(x => x.nr === s.nr);
     if (!t) return back();
-    return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
+    return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`,
+      neuKnopf(() => passtHatEtwas(t.nr), () => chatHatAntwort({ teil: t }), () => passtNeu(t.nr))), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
-  if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden"), items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
+  if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
+    items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "vinted") {
     const t = items.find(x => x.nr === s.nr);
     if (!t || t.geloescht) return back();
@@ -731,6 +733,51 @@ export async function initSchrank() {
   } catch (e) { console.error(e); }
   try { await aufraeumen(); } catch (e) { console.error(e); }
   schwebeEinrichten();
-  if (history.state?.v) current = history.state; else history.replaceState(current, "");
+  const wieder = await sitzungLaden().catch(e => { console.error(e); return null; });
+  sitzungEinrichten();
+  const neuGestartet = !history.state?.v;
+  if (!neuGestartet) current = history.state; else history.replaceState(current, "");
   await show(current.y || 0);
+  // Neu gestartet (z. B. vom iPhone im Hintergrund geschlossen) und sie war gerade bei „Outfit finden“ / „Was passt dazu?“:
+  // gleich wieder dorthin, „Zurück“ führt zur Startseite
+  if (neuGestartet && wieder) go(wieder);
+}
+
+/* ---------- Merken über einen Neustart (seit 0.27, Wunsch 18.11.2026) ----------
+   Das iPhone schließt die App oft im Hintergrund, z. B. beim Wechsel zu ChatGPT. Dann waren Anlass, Wetter und die eingefügte
+   Antwort weg. Jetzt wird beim Verlassen der App gemerkt, was bei „Outfit finden“ und „Was passt dazu?“ steht (meta „sitzung“,
+   nur auf dem Gerät, nicht in der Sicherung). Beim nächsten Start kommt es zurück, wenn es höchstens einen Tag alt ist; war
+   sie gerade in einer der beiden Ansichten (höchstens 2 Stunden her), öffnet sich diese wieder. */
+const SITZUNG_STUNDEN = 24, WIEDER_STUNDEN = 2, STUNDE = 3600 * 1000;
+function sitzungMerken() {
+  const ansicht = current.v === "outfit" ? { v: "outfit" } : current.v === "passt" ? { v: "passt", nr: current.nr } : null;
+  setMeta("sitzung", { zeit: new Date().toISOString(), ansicht, outfit: outfitStand(), passt: passtStand(), chat: chatMerkStand() })
+    .catch(e => console.error("Merken ging nicht", e));
+}
+function sitzungEinrichten() {
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sitzungMerken(); });
+  addEventListener("pagehide", sitzungMerken);
+}
+// Gibt die Ansicht zurück, die wieder geöffnet werden soll (oder null)
+async function sitzungLaden() {
+  const s = await getMeta("sitzung");
+  const alter = s && typeof s.zeit === "string" ? Date.now() - Date.parse(s.zeit) : Infinity;
+  if (!(alter >= 0 && alter < SITZUNG_STUNDEN * STUNDE)) return null;
+  outfitLaden(s.outfit); passtLaden(s.passt); chatMerkLaden(s.chat);
+  if (alter >= WIEDER_STUNDEN * STUNDE || !s.ansicht) return null;
+  if (s.ansicht.v === "outfit") return { v: "outfit" };
+  if (s.ansicht.v === "passt" && Number.isInteger(s.ansicht.nr) && s.ansicht.nr > 0) return { v: "passt", nr: s.ansicht.nr };
+  return null;
+}
+// Knopf „↺ Neu anfangen“ oben rechts bei „Outfit finden“ und „Was passt dazu?“ (Wunsch 18.11.2026: bisher musste man die App
+// schließen). hatEtwas() = ist etwas angetippt oder eingefügt?, leeren() = alles zurücksetzen. Rückfrage nur, wenn eine Antwort da ist.
+function neuKnopf(hatEtwas, mitAntwort, leeren) {
+  const b = el("button", { type: "button", class: "kopf-knopf" }, "↺ Neu anfangen");
+  b.onclick = () => {
+    if (!hatEtwas()) return toast("Es ist noch nichts ausgewählt.");
+    if (mitAntwort() && !confirm("Neu anfangen?\n\nDie Auswahl oben und die eingefügte Antwort aus dem Chat werden geleert. Gespeicherte Outfits bleiben.")) return;
+    leeren(); sitzungMerken(); toast("Alles zurückgesetzt");
+    neuZeichnen().then(() => scrollen(0));
+  };
+  return b;
 }

@@ -53,7 +53,6 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 .haupt.upload{background:var(--haupt);color:var(--haupt-ink)}
 .haupt.outfit{background:var(--accent);color:var(--accent-ink)}
 .haupt.leer{opacity:.55}
-label.upload.disabled{opacity:.45;pointer-events:none}
 label.upload input{display:none}
 .foto-tipp{margin:10px 0 18px}
 .foto-tipp .info-zeile{justify-content:center}

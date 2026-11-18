@@ -3,11 +3,23 @@
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
 import { el, fill, field, choice } from "./ui.js?v=19";
 import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=17";
-import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=23";
-import { chatgptPanel } from "./chatgpt.js?v=17";
+import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=24";
+import { chatgptPanel, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=18";
 
-// Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt
+// Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt.
+// Seit 0.27 auch über einen Neustart (schrank.js: outfitStand/outfitLaden) und mit „↺ Neu anfangen“ (outfitNeu).
 let anlass = null, schickWahl = null, temperatur = null, wetter = [], einstellOffen = false, appOffen = false;
+export const outfitStand = () => ({ anlass, schickWahl, temperatur, wetter });
+export function outfitLaden(o) {
+  if (!o || typeof o !== "object") return;
+  anlass = typeof o.anlass === "string" && o.anlass.length <= 40 ? o.anlass : null; // auch ein selbst eingetippter Anlass
+  schickWahl = Object.hasOwn(SCHICK_WAHL, o.schickWahl) ? o.schickWahl : null;
+  temperatur = Object.hasOwn(TEMPERATUREN, o.temperatur) ? o.temperatur : null;
+  wetter = Array.isArray(o.wetter) ? o.wetter.filter(w => WETTER.includes(w)) : [];
+}
+// Alles leeren: Auswahl oben und die Schritte mit ChatGPT/Gemini (Zusatz, eingefügte Antwort)
+export function outfitNeu() { anlass = schickWahl = temperatur = null; wetter = []; chatMerkLeeren({}); }
+export const outfitHatEtwas = () => !!(anlass || schickWahl || temperatur || wetter.length || chatHatAntwort({}));
 
 // bild(blob) = Bild-Adresse (schrank.js gibt sie beim nächsten Zeichnen wieder frei), oeffnen(nr) = Teil ansehen
 export function renderOutfit(box, kopf, items, folders, stil, bild, oeffnen, neuZeichnen) {

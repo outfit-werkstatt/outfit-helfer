@@ -5,7 +5,7 @@ import { el, fill, field, choice, beschreibung } from "./ui.js?v=19";
 import { nrText } from "./speicher.js?v=11";
 import { stilAktuell } from "./stil.js?v=20";
 import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=17";
-import { chatgptPanel, bildPaketBereich } from "./chatgpt.js?v=17";
+import { chatgptPanel, bildPaketBereich, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=18";
 import { speichernKnopf } from "./fertig.js?v=9";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
@@ -16,6 +16,18 @@ let abgewaehlt = new Set(), ohneOrdnerAn = true, stilAn = false, appOffen = fals
 // Situation für „Was passt dazu?“ (seit 0.23, Wunsch 06.11.2026): dieselben Knöpfe wie bei „Outfit finden“, aber eigene Auswahl
 // (pro Sitzung gemerkt, unabhängig von „Outfit finden“). Nichts angetippt = wie bisher ohne Situation.
 const sit = { anlass: null, schickWahl: null, temperatur: null, wetter: [] };
+// Seit 0.27 auch über einen Neustart (schrank.js) und mit „↺ Neu anfangen“
+export const passtStand = () => ({ ...sit });
+export function passtLaden(o) {
+  if (!o || typeof o !== "object") return;
+  sit.anlass = typeof o.anlass === "string" && o.anlass.length <= 40 ? o.anlass : null;
+  sit.schickWahl = Object.hasOwn(SCHICK_WAHL, o.schickWahl) ? o.schickWahl : null;
+  sit.temperatur = Object.hasOwn(TEMPERATUREN, o.temperatur) ? o.temperatur : null;
+  sit.wetter = Array.isArray(o.wetter) ? o.wetter.filter(w => WETTER.includes(w)) : [];
+}
+// Situation leeren und die Chat-Schritte zu diesem Teil vergessen
+export function passtNeu(nr) { Object.assign(sit, { anlass: null, schickWahl: null, temperatur: null, wetter: [] }); chatMerkLeeren({ teil: { nr } }); }
+export const passtHatEtwas = nr => !!(sit.anlass || sit.schickWahl || sit.temperatur || sit.wetter.length || chatHatAntwort({ teil: { nr } }));
 
 // Seit 0.17 (iPhone-Test 04.11.2026): Die Vorschläge der App stehen eingeklappt UNTER ChatGPT/Gemini. Die App kennt nur die
 // Angaben, nicht die Fotos (z. B. fehlt fast immer das Material), darum passten sie oft nicht zum Anlass; der Chat sieht die Fotos.

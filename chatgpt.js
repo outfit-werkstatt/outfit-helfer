@@ -26,11 +26,31 @@ const MAX_ANTWORT = 20000;
 let stilMit = false, vorbereitet = null, vorschauUrls = [];
 // offen = welche Schritte 2–4 aufgeklappt sind, anfrageFuer = wofür die Anfrage zuletzt kopiert wurde, bildKopiert = Schritt 4 erledigt
 const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt, bildOutfit, offen, anfrageFuer, bildKopiert }
+const merkSchluessel = frage => frage.teil ? "teil:" + frage.teil.nr : "situation";
 const merker = frage => {
-  const k = frage.teil ? "teil:" + frage.teil.nr : "situation";
+  const k = merkSchluessel(frage);
   if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1", offen: { 2: true, 3: false, 4: false }, anfrageFuer: null, bildKopiert: false });
   return merk.get(k);
 };
+// Merken über einen Neustart (seit 0.27, Wunsch 18.11.2026): schrank.js legt das beim Verlassen der App in meta „sitzung“ ab
+// und gibt es beim nächsten Start zurück. Nur einfache Daten; beim Zurückholen geprüft (Texte gekürzt, nur bekannte Felder).
+const MAX_MERK = 30;
+export const chatMerkStand = () => Object.fromEntries([...merk].slice(-MAX_MERK).map(([k, m]) => [k,
+  { zusatz: m.zusatz, antwort: m.antwort, angezeigt: m.angezeigt, bildOutfit: m.bildOutfit, offen: m.offen, anfrageFuer: m.anfrageFuer, bildKopiert: m.bildKopiert }]));
+export function chatMerkLaden(o) {
+  if (!o || typeof o !== "object") return;
+  const txt = (v, max) => typeof v === "string" ? v.slice(0, max) : "";
+  for (const [k, m] of Object.entries(o).slice(0, MAX_MERK)) {
+    if (!/^(situation|teil:\d{1,6})$/.test(k) || !m || typeof m !== "object" || merk.has(k)) continue;
+    const offen = m.offen && typeof m.offen === "object" ? m.offen : {};
+    merk.set(k, { zusatz: txt(m.zusatz, 300), antwort: txt(m.antwort, MAX_ANTWORT), angezeigt: txt(m.angezeigt, MAX_ANTWORT), bildOutfit: txt(m.bildOutfit, 40) || "Outfit 1",
+      offen: { 2: offen[2] === true, 3: offen[3] === true, 4: offen[4] === true }, anfrageFuer: typeof m.anfrageFuer === "string" ? m.anfrageFuer.slice(0, 2000) : null,
+      bildKopiert: m.bildKopiert === true });
+  }
+}
+// „↺ Neu anfangen“: Zusatz, Antwort und Schritte dieser Frage vergessen (frage wie bei chatgptPanel)
+export const chatMerkLeeren = frage => { merk.delete(merkSchluessel(frage)); };
+export const chatHatAntwort = frage => !!merk.get(merkSchluessel(frage))?.angezeigt?.trim() || !!merk.get(merkSchluessel(frage))?.antwort?.trim();
 
 /* ---------- Texte ---------- */
 const datum = datumText;

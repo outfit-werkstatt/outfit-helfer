@@ -1,7 +1,7 @@
 // Etappe 1e: Sicherung als ZIP-Datei speichern und laden („Sicherung vom TT.MM.JJJJ Outfit Helfer.zip“).
 // Inhalt: Fotos als „012 - T-Shirt braun.jpg“, Vorschaubilder, Fotos der fertigen Outfits unter „Outfits/“, angaben.json
 // (Teile, Ordner, Mein Stil, eigene Knöpfe, fertige Outfits, nächste Nummer, seit 0.21 was der Chat kennt) und „Lies mich.txt“.
-// Teile im Papierkorb kommen nicht mit. Verkaufte Teile (seit 0.26) kommen mit, aber nur mit der kleinen Vorschau als Foto.
+// Teile im Papierkorb kommen nicht mit. Verkaufte Teile (seit 0.26) kommen mit, 30 Tage nach dem Verkauf nur noch mit der kleinen Vorschau als Foto.
 // Laden ERSETZT alles. Die Datei kann von irgendwoher stammen, darum wird sie misstrauisch gelesen: nur erwartete Dateien,
 // Grenzen für Größe und Anzahl, jede Angabe geprüft (nur bekannte Felder, Längen gekürzt), Fotos neu gezeichnet.
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
@@ -11,10 +11,12 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=19";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=20";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=8";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=17";
-import { VERKAUF_STUFEN, preisPruefen } from "./verkauf.js?v=2";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=18";
+import { VERKAUF_STUFEN, preisPruefen, tageSeit } from "./verkauf.js?v=2";
 
-const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14;
+const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
+// Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)
+const KLEIN_NACH_TAGEN = 30;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
 // Pro Teil Foto + Vorschau, pro Outfit ein Foto; ein Mac legt je Datei noch eine „._“-Datei dazu
 const MAX_ZIP = 2e9, MAX_TEILE = 3000, MAX_OUTFITS = 1000, MAX_EINTRAEGE = 4 * MAX_TEILE + 2 * MAX_OUTFITS + 100;
@@ -32,7 +34,7 @@ const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSo
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
   "Zum Wiederherstellen: App öffnen, auf der Startseite unten „💾 Sicherung“ antippen, dann „Sicherung auswählen …“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
   "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits und eigene Knöpfe.\r\n\r\n" +
-  "Verkaufte Teile sind auch dabei, aber nur mit einem kleinen Foto. So bleibt deine Übersicht „Verkauft“ erhalten.\r\n\r\n" +
+  "Verkaufte Teile sind auch dabei, damit deine Übersicht „Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit einem kleinen Foto.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 
 // Bild-Vektor (Float32Array) ↔ Text für angaben.json
@@ -65,11 +67,12 @@ export function zipStand(items, letzte, stil, sonst) {
   // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
   const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
   const tage = Math.max(0, Math.round((tagAnfang(Date.now()) - tagAnfang(letzte.zeit)) / TAG));
-  return { nie: false, tage, datum: datumText(new Date(letzte.zeit)), aenderungen };
+  return { nie: false, tage, neu, datum: datumText(new Date(letzte.zeit)), aenderungen };
 }
 const tageText = n => n === 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`;
-// Fällig: noch nie gesichert (und es gibt Teile) oder die letzte Sicherung ist über 14 Tage alt und seitdem hat sich etwas geändert
-const faellig = s => !s.leer && (s.nie || (s.aenderungen.length > 0 && s.tage >= ERINNERN_TAGE));
+// Fällig: noch nie gesichert (und es gibt Teile), die letzte Sicherung ist über 14 Tage alt und seitdem hat sich etwas geändert,
+// oder (seit 0.27, Wunsch 18.11.2026) seitdem sind schon 6 neue Teile dazugekommen – egal, wie lange die Sicherung her ist
+const faellig = s => !s.leer && (s.nie || (s.aenderungen.length > 0 && s.tage >= ERINNERN_TAGE) || s.neu >= ERINNERN_NEU);
 // Startseite oben, nur wenn etwas zu tun ist: Sicherung fällig, oder leerer Kleiderschrank („Sicherung laden?“). Sonst null.
 export function zipHinweis(items, letzte, stil, sonst, oeffnen) {
   const s = zipStand(items, letzte, stil, sonst);
@@ -98,7 +101,9 @@ async function erstellen(fortschritt) {
     fortschritt(`Fotos sammeln: ${i + 1} von ${teile.length} …`);
     // Fehlt das große Foto (sollte nie passieren), wenigstens die Vorschau mitnehmen, damit das Teil nicht verloren geht.
     // Verkaufte Teile (seit 0.26) nur mit der kleinen Vorschau: Für die Übersicht reicht sie, und die Sicherung wächst nicht mit jedem Verkauf.
-    const foto = (t.verkauf === "verkauft" ? null : await getPhoto(t.nr)) || t.vorschau, name = fotoName(t);
+    // Seit 0.27 erst 30 Tage nach dem Verkauf: Kommt ein Teil zurück („Doch nicht verkauft“), hat es nach dem Laden sonst nur noch das kleine Foto.
+    const klein = t.verkauf === "verkauft" && tageSeit(t.verkauftAm) >= KLEIN_NACH_TAGEN;
+    const foto = (klein ? null : await getPhoto(t.nr)) || t.vorschau, name = fotoName(t);
     dateien.push({ name, data: foto }, { name: vorschauName(t.nr), data: t.vorschau });
     const { vorschau, vektor, geloescht, ...rest } = t;
     angaben.push({ ...rest, foto: name, vorschau: vorschauName(t.nr), vektor: vektor ? zuB64(vektor) : null });
@@ -407,7 +412,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
     el("div", { class: "panel" },
       mitInfo(el("strong", {}, "Sicherung speichern"),
         "Packt alle Teile mit Fotos, Ordner, „Mein Stil“, fertige Outfits und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit.",
-        "Verkaufte Teile kommen mit, aber nur mit kleinem Foto. So bleibt deine Übersicht „✅ Verkauft“ erhalten, und die Datei wird nicht mit jedem Verkauf größer.",
+        "Verkaufte Teile kommen mit, damit deine Übersicht „✅ Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit kleinem Foto (bis dahin kann noch etwas zurückkommen), so wird die Datei nicht mit jedem Verkauf größer.",
         `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“ (nach Name käme der 01.11. vor dem 25.10.).`),
       el("p", { class: "hint" }, stand),
       offen ? el("p", { class: "hint" }, `Noch ${offen} ${offen === 1 ? "Foto" : "Fotos"} auf der Startseite nicht gespeichert – die kommen nicht mit.`) : null,
