@@ -7,20 +7,22 @@
 // Erst wenn alles geprüft ist, kommt die Rückfrage – mit dem, was wirklich übernommen wird und was verloren ginge.
 // Dateiname bewusst ohne „sicherung“ (die private Sperrliste würde die Datei sonst nicht hochladen).
 import { zipErstellen, zipLesen } from "./zip-format.js?v=2";
-import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText } from "./speicher.js?v=12";
+import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, getOutfits, getLookFoto, replaceAll, askPersist, nrText, allDinge, getDingFoto, dingNrText } from "./speicher.js?v=12";
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=21";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=22";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=23";
 import { VERKAUF_STUFEN, preisPruefen, tageSeit } from "./verkauf.js?v=4";
 import { reisenPruefen } from "./koffer.js?v=5";
+import { dingPruefen } from "./haushalt.js?v=1";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
 // Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)
 const KLEIN_NACH_TAGEN = 30;
 // Die ZIP wird Stück für Stück gelesen, darum darf sie groß sein; gehalten werden nur die neu gezeichneten Fotos
 // Pro Teil Foto + Vorschau, pro Outfit ein Foto; ein Mac legt je Datei noch eine „._“-Datei dazu
-const MAX_ZIP = 2e9, MAX_TEILE = 3000, MAX_OUTFITS = 1000, MAX_EINTRAEGE = 4 * MAX_TEILE + 2 * MAX_OUTFITS + 100;
+// Seit 0.32 dazu pro Ding im Haushalt Foto + Vorschau
+const MAX_ZIP = 2e9, MAX_TEILE = 3000, MAX_OUTFITS = 1000, MAX_DINGE = 3000, MAX_EINTRAEGE = 4 * MAX_TEILE + 2 * MAX_OUTFITS + 4 * MAX_DINGE + 100;
 const utf8 = s => new TextEncoder().encode(s);
 const mb = n => (n / 1e6).toFixed(n < 10e6 ? 1 : 0).replace(".", ",") + " MB";
 const anzahl = n => `${n} ${n === 1 ? "Teil" : "Teile"}`;
@@ -30,11 +32,16 @@ const nummern = (nrs, max = 12) => nrs.slice(0, max).map(nrText).join(", ") + (n
 const ohneSonderzeichen = s => s.replace(/[^\p{L}\p{N} .,+&()'-]/gu, " ").replace(/\s+/g, " ").trim();
 const fotoName = t => `${nrText(t.nr)} - ${ohneSonderzeichen(`${t.art} ${(t.farben || []).join(" ").toLowerCase()}`).slice(0, 60).trim() || "Teil"}.jpg`;
 const vorschauName = nr => `Vorschaubilder/${nrText(nr)}.jpg`;
+// Sachen im Haushalt (seit 0.32) im eigenen Ordner: „Haushalt/H012 - Wasserkocher.jpg“
+const dingFotoName = d => `Haushalt/${dingNrText(d.nr)} - ${ohneSonderzeichen(d.name || d.kategorie || "").slice(0, 60).trim() || "Ding"}.jpg`;
+const dingVorschauName = nr => `Haushalt/Vorschaubilder/${dingNrText(nr)}.jpg`;
+const dingAnzahl = n => `${n} ${n === 1 ? "Ding" : "Dinge"} im Haushalt`;
+const dingNummern = (nrs, max = 12) => nrs.slice(0, max).map(dingNrText).join(", ") + (nrs.length > max ? ` und ${nrs.length - max} weitere` : "");
 // „Outfits/03 - Modern Smart Casual.jpg“ (Zähler vorn, damit gleiche Namen sich nicht überschreiben)
 const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSonderzeichen(o.name).slice(0, 50).trim() || "Outfit"}.jpg`;
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
   "Zum Wiederherstellen: App öffnen, auf der Startseite unten „💾 Sicherung“ antippen, dann „Sicherung auswählen …“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
-  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits. In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits, Reisen aus „Koffer packen“ und eigene Knöpfe.\r\n\r\n" +
+  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits, im Ordner „Haushalt“ die Fotos deiner Sachen im Haushalt (z. B. „H012 - Wasserkocher.jpg“). In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits, Reisen aus „Koffer packen“ und eigene Knöpfe.\r\n\r\n" +
   "Verkaufte Teile sind auch dabei, damit deine Übersicht „Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit einem kleinen Foto.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 
@@ -52,31 +59,37 @@ function vonB64(s) {
 }
 
 /* ---------- Stand: Was ist seit der letzten Sicherung anders? ---------- */
-// letzte = meta "letzteSicherung" = { zeit, nrs } (welche Teile in der letzten ZIP waren),
-// sonst = meta "sonstGeaendert" (wann zuletzt Ordner, Outfits, eigene Knöpfe oder seit 0.31 Reisen geändert wurden)
-export function zipStand(items, letzte, stil, sonst) {
-  const da = items.filter(t => !t.geloescht);
-  if (!letzte) return { nie: true, leer: !items.length, aenderungen: [] };
+// letzte = meta "letzteSicherung" = { zeit, nrs, dingNrs } (welche Teile und seit 0.32 welche Dinge in der letzten ZIP waren),
+// sonst = meta "sonstGeaendert" (wann zuletzt Ordner, Outfits, eigene Knöpfe oder seit 0.31 Reisen geändert wurden),
+// dinge = Sachen im Haushalt (seit 0.32; eine Sicherung von vorher kennt keine, dann zählen alle als neu)
+export function zipStand(items, letzte, stil, sonst, dinge = []) {
+  const da = items.filter(t => !t.geloescht), dingDa = dinge.filter(d => !d.geloescht);
+  if (!letzte) return { nie: true, leer: !items.length && !dinge.length, aenderungen: [] };
   const drin = new Set(letzte.nrs), jetzt = new Set(da.map(t => t.nr));
   const neu = da.filter(t => !drin.has(t.nr)).length, weg = letzte.nrs.filter(n => !jetzt.has(n)).length;
   // Seit 0.26: Verkaufte Teile kommen mit in die Sicherung und heißen hier „verkauft“ statt „geändert“
   const seitdemVerkauft = t => t.verkauf === "verkauft" && t.verkauftAm > letzte.zeit;
-  const verkauft = da.filter(t => drin.has(t.nr) && seitdemVerkauft(t)).length;
+  const dAlt = Array.isArray(letzte.dingNrs) ? letzte.dingNrs : [], dDrin = new Set(dAlt), dJetzt = new Set(dingDa.map(d => d.nr));
+  const verkauft = da.filter(t => drin.has(t.nr) && seitdemVerkauft(t)).length + dingDa.filter(d => dDrin.has(d.nr) && seitdemVerkauft(d)).length;
   const geaendert = da.filter(t => drin.has(t.nr) && t.geaendert > letzte.zeit && !seitdemVerkauft(t)).length;
+  const dNeu = dingDa.filter(d => !dDrin.has(d.nr)).length, dWeg = dAlt.filter(n => !dJetzt.has(n)).length;
+  const dGeaendert = dingDa.filter(d => dDrin.has(d.nr) && d.geaendert > letzte.zeit && !seitdemVerkauft(d)).length;
   const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, verkauft && `${verkauft} verkauft`, geaendert && `${geaendert} geändert`,
+    dNeu && `${dNeu} ${dNeu === 1 ? "neues Ding" : "neue Dinge"} im Haushalt`, dWeg && `${dWeg} ${dWeg === 1 ? "Ding" : "Dinge"} im Haushalt gelöscht`,
+    dGeaendert && `${dGeaendert} ${dGeaendert === 1 ? "Ding" : "Dinge"} im Haushalt geändert`,
     stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits, Reisen oder eigene Knöpfe geändert"].filter(Boolean);
   // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
   const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
   const tage = Math.max(0, Math.round((tagAnfang(Date.now()) - tagAnfang(letzte.zeit)) / TAG));
-  return { nie: false, tage, neu, datum: datumText(new Date(letzte.zeit)), aenderungen };
+  return { nie: false, tage, neu: neu + dNeu, datum: datumText(new Date(letzte.zeit)), aenderungen };
 }
 const tageText = n => n === 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`;
 // Fällig: noch nie gesichert (und es gibt Teile), die letzte Sicherung ist über 14 Tage alt und seitdem hat sich etwas geändert,
 // oder (seit 0.27, Wunsch 18.11.2026) seitdem sind schon 6 neue Teile dazugekommen – egal, wie lange die Sicherung her ist
 const faellig = s => !s.leer && (s.nie || (s.aenderungen.length > 0 && s.tage >= ERINNERN_TAGE) || s.neu >= ERINNERN_NEU);
 // Startseite oben, nur wenn etwas zu tun ist: Sicherung fällig, oder leerer Kleiderschrank („Sicherung laden?“). Sonst null.
-export function zipHinweis(items, letzte, stil, sonst, oeffnen) {
-  const s = zipStand(items, letzte, stil, sonst);
+export function zipHinweis(items, letzte, stil, sonst, oeffnen, dinge = []) {
+  const s = zipStand(items, letzte, stil, sonst, dinge);
   if (s.nie && s.leer) return el("div", { class: "panel hinweis" }, el("strong", {}, "Neues Handy oder App neu eingerichtet?"),
     el("p", {}, "Wenn du eine Sicherung hast, holst du damit deinen ganzen Kleiderschrank zurück."),
     el("button", { type: "button", class: "btn", onclick: oeffnen }, "Sicherung laden"));
@@ -87,8 +100,8 @@ export function zipHinweis(items, letzte, stil, sonst, oeffnen) {
     el("div", { class: "actions" }, el("button", { type: "button", class: "btn primary", onclick: oeffnen }, "Jetzt sichern")));
 }
 // Kurzer Stand für die kleine Kachel „Sicherung“: { text, faellig }
-export function zipKurz(items, letzte, stil, sonst) {
-  const s = zipStand(items, letzte, stil, sonst);
+export function zipKurz(items, letzte, stil, sonst, dinge = []) {
+  const s = zipStand(items, letzte, stil, sonst, dinge);
   const text = s.nie ? "noch keine" : s.aenderungen.length ? tageText(s.tage) : `${tageText(s.tage)} ✓`;
   return { text, faellig: faellig(s) };
 }
@@ -124,9 +137,24 @@ async function erstellen(fortschritt) {
     chatStand: chat?.zeit && chat?.teile ? { zeit: chat.zeit, teile: chat.teile } : null,
     // Reisen aus „Koffer packen“ (seit 0.28, mit Namen und Packliste). Ältere Versionen lesen das Feld nicht.
     reisen: reisenPruefen(reisen) };
+  // Sachen im Haushalt (seit 0.32): ohne Papierkorb, mit Foto und Vorschau im Ordner „Haushalt“. Verkaufte wie bei der Kleidung
+  // 30 Tage nach dem Verkauf nur noch mit der Vorschau.
+  const [dingeAlle, naechsteDing] = await Promise.all([allDinge(), getMeta("naechsteDingNr")]);
+  const dinge = dingeAlle.filter(d => !d.geloescht).sort((a, b) => a.nr - b.nr), dingAngaben = [];
+  for (const [i, d] of dinge.entries()) {
+    fortschritt(`Haushalt sammeln: ${i + 1} von ${dinge.length} …`);
+    const klein = d.verkauf === "verkauft" && tageSeit(d.verkauftAm) >= KLEIN_NACH_TAGEN;
+    const foto = (klein ? null : await getDingFoto(d.nr)) || d.vorschau, name = dingFotoName(d);
+    dateien.push({ name, data: foto }, { name: dingVorschauName(d.nr), data: d.vorschau });
+    const { vorschau, geloescht, ...rest } = d;
+    dingAngaben.push({ ...rest, foto: name, vorschau: dingVorschauName(d.nr) });
+  }
+  json.dinge = dingAngaben;
+  json.naechsteDingNr = Math.max(naechsteDing || 1, ...dingeAlle.map(d => d.nr + 1));
   dateien.unshift({ name: "angaben.json", data: utf8(JSON.stringify(json)) }, { name: "Lies mich.txt", data: utf8(LIES_MICH) });
   const blob = await zipErstellen(dateien, jetzt, (i, n) => fortschritt(`Sicherung packen: ${Math.round(100 * i / n)} % …`));
-  return { blob, name: `Sicherung vom ${datumText(jetzt)} Outfit Helfer.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length };
+  return { blob, name: `Sicherung vom ${datumText(jetzt)} Outfit Helfer.zip`, zeit: jetzt.toISOString(), nrs: teile.map(t => t.nr), anzahl: teile.length,
+    dingNrs: dinge.map(d => d.nr) };
 }
 // Auf dem Handy über „Teilen“ (dort „In Dateien sichern“), am PC als Download.
 // Gibt null zurück, wenn im Teilen-Menü abgebrochen wurde. Klappt Teilen nicht, wird die Datei stattdessen heruntergeladen.
@@ -223,9 +251,19 @@ function pruefen(j) {
     for (const [k, v] of Object.entries(cs.teile).slice(0, MAX_TEILE)) if (/^\d{1,6}$/.test(k) && typeof v === "string" && /^[0-9a-z]{1,8}$/.test(v)) st[k] = v;
     chatStand = { zeit: zeit(cs.zeit), teile: st };
   }
+  // Sachen im Haushalt (seit 0.32): eigene Nummern, Angaben prüft haushalt.js (nur bekannte Felder). Ältere Sicherungen haben keine.
+  const dinge = [], dingNrs = new Set();
+  let dingeAusgelassen = 0;
+  for (const d of Array.isArray(j.dinge) ? j.dinge.slice(0, MAX_DINGE) : []) {
+    const nr = d?.nr;
+    if (!Number.isInteger(nr) || nr < 1 || nr > 999999 || dingNrs.has(nr)) { dingeAusgelassen++; continue; }
+    dingNrs.add(nr);
+    dinge.push({ ...dingPruefen(d), _foto: typeof d.foto === "string" ? d.foto : null, _vorschau: typeof d.vorschau === "string" ? d.vorschau : null });
+  }
+  const naechsteDingNr = Number.isInteger(j.naechsteDingNr) && j.naechsteDingNr > 0 && j.naechsteDingNr <= 1e6 ? j.naechsteDingNr : 1;
   // Reisen (seit 0.28): erst in laden() geprüft, wenn feststeht, welche Teile wirklich übernommen werden
   return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, chatStand, ausgelassen,
-    reisenRoh: Array.isArray(j.reisen) ? j.reisen.slice(0, 100) : [] };
+    reisenRoh: Array.isArray(j.reisen) ? j.reisen.slice(0, 100) : [], dinge, naechsteDingNr, dingeAusgelassen };
 }
 // Nur echte JPG-Bilder mit vernünftiger Größe annehmen (Größe steht im Kopf der Datei, vor dem Entschlüsseln prüfbar).
 // Fotos der App haben höchstens etwa 1,5 Megapixel; 16 sind großzügig und für das Handy noch gut zu entpacken.
@@ -264,13 +302,18 @@ function inhalt(alle) {
   const basis = a.name.slice(0, -"angaben.json".length);
   const dateien = new Map(echt.filter(x => x.name.startsWith(basis)).map(x => [x.name.slice(basis.length), x]));
   const nachNummer = new Map(); // Nummer → Datei (null, wenn mehrere Dateien mit derselben Nummer beginnen: dann nicht raten)
+  const dingNachNummer = new Map(); // dasselbe für „Haushalt/H012 - ….jpg“ (seit 0.32)
   for (const [name, x] of dateien) {
     const m = /^(\d{1,6})\b[^/]*\.jpe?g$/i.exec(name);
     if (m) nachNummer.set(Number(m[1]), nachNummer.has(Number(m[1])) ? null : x);
+    const h = /^Haushalt\/H(\d{1,6})\b[^/]*\.jpe?g$/i.exec(name);
+    if (h) dingNachNummer.set(Number(h[1]), dingNachNummer.has(Number(h[1])) ? null : x);
   }
   return { angaben: a, datei: name => (typeof name === "string" && dateien.get(name)) || null,
     foto: (name, nr) => dateien.get(name) || nachNummer.get(nr) || null,
-    vorschau: (name, nr) => dateien.get(name) || dateien.get(vorschauName(nr)) || null };
+    vorschau: (name, nr) => dateien.get(name) || dateien.get(vorschauName(nr)) || null,
+    dingFoto: (name, nr) => (typeof name === "string" && name.startsWith("Haushalt/") && dateien.get(name)) || dingNachNummer.get(nr) || null,
+    dingVorschau: (name, nr) => (typeof name === "string" && name.startsWith("Haushalt/") && dateien.get(name)) || dateien.get(dingVorschauName(nr)) || null };
 }
 // Bildschirm „Bitte warten“: Während des Ladens darf nichts anderes gespeichert werden, sonst würde es überschrieben
 function sperre(start) {
@@ -323,22 +366,42 @@ async function laden(datei) {
     }
     // Reisen (seit 0.28): nur bekannte Felder, Nummern nur von Teilen, die übernommen werden
     const reisen = reisenPruefen(s.reisenRoh, kommtNr);
+    // Sachen im Haushalt (seit 0.32): Fotos wie bei den Teilen neu zeichnen; ohne lesbares Foto wird ein Ding nicht übernommen
+    const dinge = [], dingFotos = new Map(), dingFehlen = [];
+    for (const [i, d] of s.dinge.entries()) {
+      sp.text(`Haushalt prüfen: ${i + 1} von ${s.dinge.length} …`);
+      const { _foto, _vorschau, ...ding } = d;
+      try {
+        const f = z.dingFoto(_foto, ding.nr);
+        if (!f) throw new Error("Foto fehlt");
+        const roh = await f.lesen(), foto = await fotoNeuZeichnen(roh, 1200), v = z.dingVorschau(_vorschau, ding.nr);
+        const vorschau = (v && await v.lesen().then(b => fotoNeuZeichnen(b, 400)).catch(() => null)) || await fotoNeuZeichnen(roh, 400);
+        dingFotos.set(ding.nr, foto); dinge.push({ ...ding, vorschau });
+      } catch (e) { console.error(e); dingFehlen.push(ding.nr); }
+    }
     // 2. Ehrlich fragen: was kommt, was fehlt, was ginge verloren
     const jetzt = await allItems(), kommt = new Set(teile.map(t => t.nr));
     const verloren = jetzt.filter(t => !t.geloescht && !kommt.has(t.nr)).map(t => t.nr).sort((a, b) => a - b);
     const imKorb = jetzt.filter(t => t.geloescht).length, unlesbar = fehlen.length + s.ausgelassen;
     const verkauft = teile.filter(t => t.verkauf === "verkauft").length;
+    const dingeJetzt = await allDinge(), kommtDing = new Set(dinge.map(d => d.nr));
+    const dingVerloren = dingeJetzt.filter(d => !d.geloescht && !kommtDing.has(d.nr)).map(d => d.nr).sort((a, b) => a - b);
+    const dingImKorb = dingeJetzt.filter(d => d.geloescht).length, dingUnlesbar = dingFehlen.length + s.dingeAusgelassen;
     const frage = [
       `Sicherung${s.erstellt ? " vom " + datumText(new Date(s.erstellt)) : ""}: ${anzahl(teile.length)}${verkauft ? ` (davon ${verkauft} verkauft)` : ""}, ${s.ordner.length} Ordner` +
+        `${dinge.length ? `, ${dingAnzahl(dinge.length)}` : ""}` +
         `${outfits.length ? `, ${outfits.length} ${outfits.length === 1 ? "fertiges Outfit" : "fertige Outfits"}` : ""}` +
         `${reisen.length ? `, ${reisen.length} ${reisen.length === 1 ? "Reise" : "Reisen"}` : ""}` +
         `${Object.keys(s.meinStil).some(k => k !== "geaendert") ? ", „Mein Stil“" : ""}.`,
       unlesbar ? `⚠️ ${unlesbar === 1 ? "1 Teil" : unlesbar + " Teile"} aus der Sicherung ${unlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${unlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
         (fehlen.length ? `: Nr. ${nummern(fehlen)}` : "") + (s.ausgelassen ? `${fehlen.length ? " und " : ": "}${s.ausgelassen} ohne gültige Nummer oder Art` : "") + "." : null,
+      dingUnlesbar ? `⚠️ ${dingUnlesbar === 1 ? "1 Ding" : dingUnlesbar + " Dinge"} aus dem Haushalt ${dingUnlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${dingUnlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
+        (dingFehlen.length ? `: ${dingNummern(dingFehlen)}` : "") + "." : null,
       verloren.length ? `⚠️ ${verloren.length === 1 ? "Dieses Teil ist" : `Diese ${verloren.length} Teile sind`} jetzt in der App, aber nicht in der Sicherung und ${verloren.length === 1 ? "wäre" : "wären"} danach weg: Nr. ${nummern(verloren)}.` : null,
-      imKorb ? `Der Papierkorb (${anzahl(imKorb)}) wird geleert.` : null,
-      "Das ERSETZT alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, Reisen, eigene Knöpfe).",
-      verloren.length ? "Tipp: Willst du den jetzigen Stand behalten, tippe auf „Abbrechen“ und erstelle zuerst eine Sicherung davon." : null,
+      dingVerloren.length ? `⚠️ ${dingVerloren.length === 1 ? "Dieses Ding" : `Diese ${dingVerloren.length} Dinge`} im Haushalt ${dingVerloren.length === 1 ? "ist" : "sind"} jetzt in der App, aber nicht in der Sicherung und ${dingVerloren.length === 1 ? "wäre" : "wären"} danach weg: ${dingNummern(dingVerloren)}.` : null,
+      imKorb || dingImKorb ? `Der Papierkorb (${[imKorb && anzahl(imKorb), dingImKorb && dingAnzahl(dingImKorb)].filter(Boolean).join(", ")}) wird geleert.` : null,
+      "Das ERSETZT alles, was jetzt in der App ist (Teile, Sachen im Haushalt, Ordner, „Mein Stil“, fertige Outfits, Reisen, eigene Knöpfe).",
+      verloren.length || dingVerloren.length ? "Tipp: Willst du den jetzigen Stand behalten, tippe auf „Abbrechen“ und erstelle zuerst eine Sicherung davon." : null,
       "Wiederherstellen?"].filter(Boolean).join("\n\n");
     if (!confirm(frage)) return "Abgebrochen – es wurde nichts geändert.";
     // 3. Alles in EINEM Schritt ersetzen. Nummern nie doppelt: weiter nach der höchsten aus Sicherung, App und bisherigem Zähler
@@ -348,15 +411,18 @@ async function laden(datei) {
     // diesem Handy oder aus der Sicherung. Danach vergleicht die App ihn wie immer mit den Teilen.
     const chatJetzt = await getMeta("chatgptStand").catch(() => null);
     const chat = [chatJetzt, s.chatStand].filter(x => typeof x?.zeit === "string" && x.teile).sort((a, b) => b.zeit.localeCompare(a.zeit))[0] || null;
+    // Nummern im Haushalt ebenso nie doppelt
+    const naechsteDingNr = Math.max(s.naechsteDingNr, ...s.dinge.map(d => d.nr + 1), ...dingeJetzt.map(d => d.nr + 1), (await getMeta("naechsteDingNr")) || 1);
     // Scheitert das Schreiben, bricht replaceAll alles ab: Dann ist wirklich nichts geändert, und das soll auch dastehen
     try {
-      await replaceAll({ teile, fotos, meta: { naechsteNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, reisen, chatgptStand: chat,
-        letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr) } } });
+      await replaceAll({ teile, fotos, dinge, dingFotos, meta: { naechsteNr, naechsteDingNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, reisen, chatgptStand: chat,
+        letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr), dingNrs: dinge.map(d => d.nr) } } });
     } catch (e) { console.error(e); throw new Error(`Die Sicherung ließ sich nicht speichern. Es wurde nichts geändert, dein Kleiderschrank ist wie vorher. (${fehlerText(e)})`); }
     await askPersist(); // auf einem neuen Handy gleich um dauerhaften Speicher bitten
     sp.weg();
-    alert(`Wiederhergestellt: ${anzahl(teile.length)}.` + (unlesbar ? `\n\nNicht übernommen (Foto fehlt oder beschädigt): ${fehlen.length ? "Nr. " + nummern(fehlen, 50) : ""}` +
-      `${fehlen.length && s.ausgelassen ? " und " : ""}${s.ausgelassen ? s.ausgelassen + " ohne gültige Nummer oder Art" : ""}` : ""));
+    alert(`Wiederhergestellt: ${anzahl(teile.length)}${dinge.length ? `, ${dingAnzahl(dinge.length)}` : ""}.` + (unlesbar ? `\n\nNicht übernommen (Foto fehlt oder beschädigt): ${fehlen.length ? "Nr. " + nummern(fehlen, 50) : ""}` +
+      `${fehlen.length && s.ausgelassen ? " und " : ""}${s.ausgelassen ? s.ausgelassen + " ohne gültige Nummer oder Art" : ""}` : "") +
+      (dingFehlen.length ? `\n\nAus dem Haushalt nicht übernommen (Foto fehlt oder beschädigt): ${dingNummern(dingFehlen, 50)}` : ""));
     // Neu starten, damit alle Teile der App den neuen Stand lesen (z. B. die eigenen Knöpfe)
     history.replaceState({ v: "start", d: 0 }, "");
     location.reload();
@@ -365,13 +431,13 @@ async function laden(datei) {
 }
 
 /* ---------- Ansicht „Sicherung“ ---------- */
-export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) {
-  const s = zipStand(items, letzte, stil, sonst), offen = document.querySelectorAll("#pruefen .check").length;
+export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren, dinge = []) {
+  const s = zipStand(items, letzte, stil, sonst, dinge), offen = document.querySelectorAll("#pruefen .check").length;
   const stand = s.nie ? "Noch keine Sicherung gespeichert." : `Letzte Sicherung: ${s.datum} (${tageText(s.tage)}).` +
     (s.aenderungen.length ? ` Seitdem: ${s.aenderungen.join(", ")}.` : " Seitdem nichts geändert ✓");
   const meldung = el("div", { class: "status" }), weiter = el("div", {});
   const gesichert = async z => {
-    await setMeta("letzteSicherung", { zeit: z.zeit, nrs: z.nrs });
+    await setMeta("letzteSicherung", { zeit: z.zeit, nrs: z.nrs, dingNrs: z.dingNrs });
     toast("Sicherung gespeichert ✓"); aktualisieren();
   };
   const erstellenKnopf = el("button", { type: "button", class: "btn primary" }, "Sicherung erstellen");
@@ -379,7 +445,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
     erstellenKnopf.disabled = true; weiter.replaceChildren();
     try {
       const z = await mitWachSperre(() => erstellen(t => { meldung.textContent = t; }));
-      meldung.textContent = `Fertig: „${z.name}“ (${anzahl(z.anzahl)}, ${mb(z.blob.size)}).`;
+      meldung.textContent = `Fertig: „${z.name}“ (${anzahl(z.anzahl)}${z.dingNrs.length ? `, ${dingAnzahl(z.dingNrs.length)}` : ""}, ${mb(z.blob.size)}).`;
       // Eigener Knopf zum Weitergeben: „Teilen“ braucht auf dem iPhone ein frisches Antippen
       const sichern = el("button", { type: "button", class: "btn primary" }, mobil() ? "In Dateien sichern …" : "Herunterladen");
       sichern.onclick = async () => {
@@ -419,7 +485,7 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
   fill(box, kopf,
     el("div", { class: "panel" },
       mitInfo(el("strong", {}, "Sicherung speichern"),
-        "Packt alle Teile mit Fotos, Ordner, „Mein Stil“, fertige Outfits, deine Reisen aus „Koffer packen“ und deine eigenen Knöpfe in eine ZIP-Datei. Teile im Papierkorb kommen nicht mit.",
+        "Packt alle Teile mit Fotos, deine Sachen im Haushalt mit Fotos, Ordner, „Mein Stil“, fertige Outfits, deine Reisen aus „Koffer packen“ und deine eigenen Knöpfe in eine ZIP-Datei. Was im Papierkorb liegt, kommt nicht mit.",
         "Verkaufte Teile kommen mit, damit deine Übersicht „✅ Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit kleinem Foto (bis dahin kann noch etwas zurückkommen), so wird die Datei nicht mit jedem Verkauf größer.",
         `Tipp: ${mobil() ? "In der Dateien-App" : "Im Ordner"} nach „Datum“ sortieren, nicht nach „Name“ (nach Name käme der 01.11. vor dem 25.10.).`),
       el("p", { class: "hint" }, stand),
@@ -436,6 +502,6 @@ export function renderZip(box, kopf, items, letzte, stil, sonst, aktualisieren) 
       mitInfo(el("strong", {}, "Sicherung laden"),
         "Holt den Stand aus einer Sicherung zurück, z. B. auf einem neuen Handy.",
         "Vorher prüft die App die Datei und sagt dir genau, was übernommen wird und was verloren ginge."),
-      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Ordner, „Mein Stil“, fertige Outfits, Reisen, Papierkorb)."),
+      el("p", { class: "hint" }, el("strong", {}, "Achtung:"), " Ersetzt alles, was jetzt in der App ist (Teile, Sachen im Haushalt, Ordner, „Mein Stil“, fertige Outfits, Reisen, Papierkorb)."),
       el("label", { class: "btn datei" }, "Sicherung auswählen …", eingabe), ladenStatus));
 }

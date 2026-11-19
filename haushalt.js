@@ -9,7 +9,7 @@
 import { el, fill, toast, fehlerToast, field, choice, clean, cleanText, zeigeGross, datumText, markenFeld, merkeMarken, mitInfo, mitWachSperre } from "./ui.js?v=21";
 import { addDing, allDinge, getDingFoto, updateDing, purgeDinge, dingNrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg } from "./ki.js?v=9";
-import { preisLesen, preisText } from "./verkauf.js?v=4";
+import { preisLesen, preisText, preisPruefen } from "./verkauf.js?v=4";
 
 // Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang)
 const KATEGORIEN_KNOEPFE = ["Küche", "Elektronik", "Deko", "Möbel", "Bücher & Medien", "Spiele & Spielzeug", "Werkzeug & Garten", "Sonstiges"];
@@ -29,6 +29,20 @@ export const woText = d => [d.raum, d.ort].filter(Boolean).join(" · ");
 const anzahl = n => `${n} ${n === 1 ? "Ding" : "Dinge"}`;
 const restTage = d => Math.max(0, KORB_TAGE - Math.floor((Date.now() - Date.parse(d.geloescht)) / TAG));
 const nochTage = d => { const n = restTage(d); return n <= 0 ? "noch heute" : n === 1 ? "noch 1 Tag" : `noch ${n} Tage`; };
+
+/* ---------- Prüfen (Sicherung laden, zip-ansicht.js) ----------
+   Die Datei kann von irgendwoher stammen: nur bekannte Felder, Texte gekürzt, Zahlen in Grenzen. Nummer prüft zip-ansicht.js. */
+const textVon = (v, max) => typeof v === "string" ? clean(v).slice(0, max).trim() || null : null;
+const zeitVon = v => typeof v === "string" && v.length < 40 && !isNaN(Date.parse(v)) ? new Date(v).toISOString() : null;
+export function dingPruefen(d) {
+  const jetzt = new Date().toISOString();
+  return { nr: d.nr, kategorie: textVon(d.kategorie, 30), name: textVon(d.name, MAX_NAME), marke: textVon(d.marke, 40),
+    raum: textVon(d.raum, 30), ort: textVon(d.ort, MAX_ORT),
+    menge: Number.isInteger(d.menge) && d.menge >= 1 && d.menge <= MAX_MENGE ? d.menge : null,
+    zustand: DING_ZUSTAENDE.includes(d.zustand) ? d.zustand : null, kaufpreis: preisPruefen(d.kaufpreis),
+    notiz: typeof d.notiz === "string" ? cleanText(d.notiz).slice(0, MAX_NOTIZ) || null : null, ergaenzen: d.ergaenzen === true,
+    erstellt: zeitVon(d.erstellt) || jetzt, geaendert: zeitVon(d.geaendert) || zeitVon(d.erstellt) || jetzt };
+}
 
 /* ---------- Angaben als Felder ----------
    werte = gespeicherte Angaben, onChange() nach jeder Änderung (auch beim Tippen). kurz = nur Kategorie, Name, Raum, Ort

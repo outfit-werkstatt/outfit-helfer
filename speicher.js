@@ -333,16 +333,20 @@ export async function setMeta(key, value) {
 // „Sicherung laden“: alles durch den Stand der Sicherung ersetzen, in EINEM Schritt.
 // Klappt etwas nicht, bleibt der bisherige Stand komplett erhalten.
 // teile: fertige Einträge (mit vorschau als ArrayBuffer), fotos: Map nr → ArrayBuffer (dazu die Fotos der Outfits unter
-// "outfit:<id>" / "outfit-klein:<id>"), meta: { Schlüssel: Wert }
-export async function replaceAll({ teile, fotos, meta }) {
-  const tx = await bereich(["teile", "fotos", "meta"], "readwrite");
+// "outfit:<id>" / "outfit-klein:<id>"), meta: { Schlüssel: Wert }. Seit 0.32 auch dinge (mit vorschau als ArrayBuffer) und
+// dingFotos (Map nr → ArrayBuffer): Der Haushalt wird mit ersetzt (eine Sicherung ohne Haushalt leert ihn).
+export async function replaceAll({ teile, fotos, meta, dinge = [], dingFotos = new Map() }) {
+  const tx = await bereich(["teile", "fotos", "meta", "dinge", "dingFotos"], "readwrite");
   const T = tx.objectStore("teile"), F = tx.objectStore("fotos"), M = tx.objectStore("meta"), fertig = done(tx);
+  const D = tx.objectStore("dinge"), DF = tx.objectStore("dingFotos");
   // Scheitert ein Eintrag sofort (z. B. ein Wert, den der Speicher nicht annimmt), muss der ganze Schritt abgebrochen werden.
   // Sonst wäre schon alles geleert und nur zum Teil neu geschrieben (Durchsicht 11.11.2026: aus 300 Teilen wurde 1).
   try {
-    T.clear(); F.clear(); M.clear();
+    T.clear(); F.clear(); M.clear(); D.clear(); DF.clear();
     for (const t of teile) T.put(t);
     for (const [nr, buf] of fotos) F.put(buf, nr);
+    for (const d of dinge) D.put(d);
+    for (const [nr, buf] of dingFotos) DF.put(buf, nr);
     for (const [k, v] of Object.entries(meta)) if (v != null) M.put(v, k);
   } catch (e) {
     try { tx.abort(); } catch {}

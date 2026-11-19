@@ -3,7 +3,7 @@
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=12";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
 import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=32";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=29";
@@ -148,7 +148,8 @@ async function render() {
   const [items, folders, stil, letzte, foto] = await Promise.all([
     s.v === "teil" ? getItem(s.nr).then(t => t ? [t] : []) : allItems(),
     getFolders(), getStil(), getMeta("letzteSicherung"), s.v === "teil" ? getPhoto(s.nr) : null]);
-  const [sonst, naechste, outfits] = await Promise.all([getMeta("sonstGeaendert"), getMeta("naechsteNr"), getOutfits()]);
+  // Sachen im Haushalt (seit 0.32) für „Seit deiner letzten Sicherung …“ (gemerkt, also schnell)
+  const [sonst, naechste, outfits, dinge] = await Promise.all([getMeta("sonstGeaendert"), getMeta("naechsteNr"), getOutfits(), allDinge()]);
   if (nr !== zeichnung) return;
   merkeMarken(items); // Vorschläge beim Eintippen der Marke
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
@@ -178,7 +179,7 @@ async function render() {
     if (!t || t.geloescht) return back();
     return renderVinted(box, kopf("🏷 Für Vinted", `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), t, url);
   }
-  if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen);
+  if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen, dinge);
   if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }),
     // Zusammenstellen beginnt ohne Suche und Filter (seit 0.25: vorher galten die aus „Mein Kleiderschrank“ mit)
     () => { if (!sichtbar(items).length) return toast("Speichere zuerst Kleidung, dann kannst du Outfits zusammenstellen."); filters.delete(ZUSAMMEN); go({ v: "liste", id: ALLE, zusammenstellen: true }); });
@@ -187,7 +188,7 @@ async function render() {
     if (!o) return back();
     return renderFertig(box, kopf(o.name), o, items, url, t => miniKachel(t, url, n => go({ v: "teil", nr: n })), bildPaketBereich, back, neuZeichnen);
   }
-  renderStart(items, folders, stil, letzte, sonst, naechste, outfits);
+  renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge);
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
@@ -228,10 +229,10 @@ function nummernKarte(items, naechste) {
 // Kleine Kachel unter dem Kleiderschrank (Mein Stil, Sicherung, Papierkorb): Name und kurzer Stand
 const nebenKachel = (name, stand, onclick, faellig = false) => el("button", { type: "button", class: faellig ? "faellig" : "", onclick },
   el("span", { class: "name" }, name), el("span", { class: "stand" }, stand));
-function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
+function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.filter(t => t.geloescht).length;
   // Oben nur, wenn etwas zu tun ist: Sicherung fällig oder (leerer Kleiderschrank) „Sicherung laden?“
-  fill($("startHinweis"), zipHinweis(items, letzte, stil, sonst, () => go({ v: "sicherung" })));
+  fill($("startHinweis"), zipHinweis(items, letzte, stil, sonst, () => go({ v: "sicherung" }), dinge));
   // „Outfit finden“ braucht gespeicherte Kleidung; vorher nur ein freundlicher Hinweis statt einer leeren Seite
   const outfitKnopf = $("outfitKnopf");
   outfitKnopf.classList.toggle("leer", !da.length);
@@ -240,7 +241,7 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
   $("kofferKnopf").classList.toggle("leer", !da.length);
   $("kofferKnopf").onclick = () => da.length ? go({ v: "koffer" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
   $("haushaltKnopf").onclick = () => go({ v: "haushalt" }); // seit 0.32 (vorher Platzhalter „kommt bald“)
-  const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst);
+  const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst, dinge);
   fill($("nebenKacheln"),
     nebenKachel("✨ Mein Stil", kurz.length ? `${kurz.length} ${kurz.length === 1 ? "Angabe" : "Angaben"}` : "einstellen", () => go({ v: "stil" })),
     nebenKachel("💾 Sicherung", zip.text, () => go({ v: "sicherung" }), zip.faellig),
