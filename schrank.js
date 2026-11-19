@@ -15,6 +15,8 @@ import { GROUPS } from "./ki.js?v=9";
 import { renderKoffer } from "./koffer.js?v=5";
 import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
 import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=1";
+import { renderKisten, kistenLaden } from "./umzug.js?v=1";
+import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=4";
 
@@ -139,7 +141,7 @@ function schwebeEinrichten() {
 }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
 // Beim Haushalt (seit 0.32) nie: Neue Kleidung ändert dort nichts, und offene Eingaben in „Noch ergänzen“ würden den Fokus verlieren
-export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingText", "dingKorb"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
+export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingText", "dingKorb", "kisten", "kiste", "wunsch", "verkaeufe"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
@@ -171,8 +173,17 @@ async function render() {
   if (s.v === "koffer") return renderKoffer(box, (titel, unter) => kopf(titel, unter), s.id || null, items, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen,
     { go, ersetze, back });
   // Sachen im Haushalt (seit 0.32): Übersicht, ein Ding, Papierkorb. Eigener Speicher, darum lädt haushalt.js selbst.
-  if (["haushalt", "ding", "dingText", "dingKorb"].includes(s.v)) return renderHaushalt(box, kopf, s, url, { go, back,
-    schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnen);
+  if (["haushalt", "ding", "dingText", "dingKorb"].includes(s.v)) {
+    const [kisten, wuensche] = await Promise.all([kistenLaden(), wunschLaden()]);
+    if (nr !== zeichnung) return;
+    return renderHaushalt(box, kopf, s, url, { go, back,
+      schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnen,
+      { kisten, wunschOffen: wuensche.filter(w => !w.erledigt).length });
+  }
+  // Umzugskisten und Wunschliste (seit 0.32, aus dem Haushalt)
+  if (s.v === "kisten" || s.v === "kiste") return renderKisten(box, kopf, s, dinge, url, { go, back, ersetze }, neuZeichnen);
+  if (s.v === "wunsch") return renderWunsch(box, kopf("📝 Wunschliste", "Was brauchst du neu?"), items, dinge, url,
+    x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
   // Verkäufe (seit 0.32): Kleidung und Haushalt zusammen
   if (s.v === "verkaeufe") return renderVerkaeufe(box, kopf("💶 Verkäufe", "Kleidung und Haushalt zusammen"), items, dinge, url,
     x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);

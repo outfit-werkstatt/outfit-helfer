@@ -15,6 +15,8 @@ import { kleiderschrankSchritt } from "./chatgpt.js?v=23";
 import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=4";
 import { reisenPruefen } from "./koffer.js?v=5";
 import { dingPruefen } from "./haushalt.js?v=1";
+import { kistenPruefen } from "./umzug.js?v=1";
+import { wunschPruefen } from "./wunsch.js?v=1";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
 // Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)
@@ -77,7 +79,7 @@ export function zipStand(items, letzte, stil, sonst, dinge = []) {
   const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, verkauft && `${verkauft} verkauft`, geaendert && `${geaendert} geändert`,
     dNeu && `${dNeu} ${dNeu === 1 ? "neues Ding" : "neue Dinge"} im Haushalt`, dWeg && `${dWeg} ${dWeg === 1 ? "Ding" : "Dinge"} im Haushalt gelöscht`,
     dGeaendert && `${dGeaendert} ${dGeaendert === 1 ? "Ding" : "Dinge"} im Haushalt geändert`,
-    stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits, Reisen oder eigene Knöpfe geändert"].filter(Boolean);
+    stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits, Reisen, Listen oder eigene Knöpfe geändert"].filter(Boolean);
   // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
   const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
   const tage = Math.max(0, Math.round((tagAnfang(Date.now()) - tagAnfang(letzte.zeit)) / TAG));
@@ -150,6 +152,10 @@ async function erstellen(fortschritt) {
     dingAngaben.push({ ...rest, foto: name, vorschau: dingVorschauName(d.nr) });
   }
   json.dinge = dingAngaben;
+  // Umzugskisten und Wunschliste (seit 0.32)
+  const [kistenRoh, wunschRoh] = await Promise.all([getMeta("kisten").catch(() => null), getMeta("wunschliste").catch(() => null)]);
+  json.kisten = kistenPruefen(kistenRoh, new Set(dinge.map(d => d.nr)));
+  json.wunschliste = wunschPruefen(wunschRoh);
   json.naechsteDingNr = Math.max(naechsteDing || 1, ...dingeAlle.map(d => d.nr + 1));
   dateien.unshift({ name: "angaben.json", data: utf8(JSON.stringify(json)) }, { name: "Lies mich.txt", data: utf8(LIES_MICH) });
   const blob = await zipErstellen(dateien, jetzt, (i, n) => fortschritt(`Sicherung packen: ${Math.round(100 * i / n)} % …`));
@@ -265,7 +271,8 @@ function pruefen(j) {
   const naechsteDingNr = Number.isInteger(j.naechsteDingNr) && j.naechsteDingNr > 0 && j.naechsteDingNr <= 1e6 ? j.naechsteDingNr : 1;
   // Reisen (seit 0.28): erst in laden() geprüft, wenn feststeht, welche Teile wirklich übernommen werden
   return { erstellt: zeit(j.erstellt), teile, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits, naechsteNr, chatStand, ausgelassen,
-    reisenRoh: Array.isArray(j.reisen) ? j.reisen.slice(0, 100) : [], dinge, naechsteDingNr, dingeAusgelassen };
+    reisenRoh: Array.isArray(j.reisen) ? j.reisen.slice(0, 100) : [], dinge, naechsteDingNr, dingeAusgelassen,
+    kistenRoh: Array.isArray(j.kisten) ? j.kisten.slice(0, 300) : [], wunschliste: wunschPruefen(j.wunschliste) };
 }
 // Nur echte JPG-Bilder mit vernünftiger Größe annehmen (Größe steht im Kopf der Datei, vor dem Entschlüsseln prüfbar).
 // Fotos der App haben höchstens etwa 1,5 Megapixel; 16 sind großzügig und für das Handy noch gut zu entpacken.
@@ -381,6 +388,8 @@ async function laden(datei) {
         dingFotos.set(ding.nr, foto); dinge.push({ ...ding, vorschau });
       } catch (e) { console.error(e); dingFehlen.push(ding.nr); }
     }
+    // Umzugskisten: nur mit Dingen, die übernommen werden (seit 0.32)
+    const kisten = kistenPruefen(s.kistenRoh, new Set(dinge.map(d => d.nr)));
     // 2. Ehrlich fragen: was kommt, was fehlt, was ginge verloren
     const jetzt = await allItems(), kommt = new Set(teile.map(t => t.nr));
     const verloren = jetzt.filter(t => !t.geloescht && !kommt.has(t.nr)).map(t => t.nr).sort((a, b) => a - b);
@@ -394,6 +403,8 @@ async function laden(datei) {
         `${dinge.length ? `, ${dingAnzahl(dinge.length)}` : ""}` +
         `${outfits.length ? `, ${outfits.length} ${outfits.length === 1 ? "fertiges Outfit" : "fertige Outfits"}` : ""}` +
         `${reisen.length ? `, ${reisen.length} ${reisen.length === 1 ? "Reise" : "Reisen"}` : ""}` +
+        `${kisten.length ? `, ${kisten.length} ${kisten.length === 1 ? "Umzugskiste" : "Umzugskisten"}` : ""}` +
+        `${s.wunschliste.length ? `, Wunschliste (${s.wunschliste.length})` : ""}` +
         `${Object.keys(s.meinStil).some(k => k !== "geaendert") ? ", „Mein Stil“" : ""}.`,
       unlesbar ? `⚠️ ${unlesbar === 1 ? "1 Teil" : unlesbar + " Teile"} aus der Sicherung ${unlesbar === 1 ? "lässt" : "lassen"} sich nicht lesen und ${unlesbar === 1 ? "wird" : "werden"} nicht übernommen` +
         (fehlen.length ? `: Nr. ${nummern(fehlen)}` : "") + (s.ausgelassen ? `${fehlen.length ? " und " : ": "}${s.ausgelassen} ohne gültige Nummer oder Art` : "") + "." : null,
@@ -402,7 +413,7 @@ async function laden(datei) {
       verloren.length ? `⚠️ ${verloren.length === 1 ? "Dieses Teil ist" : `Diese ${verloren.length} Teile sind`} jetzt in der App, aber nicht in der Sicherung und ${verloren.length === 1 ? "wäre" : "wären"} danach weg: Nr. ${nummern(verloren)}.` : null,
       dingVerloren.length ? `⚠️ ${dingVerloren.length === 1 ? "Dieses Ding" : `Diese ${dingVerloren.length} Dinge`} im Haushalt ${dingVerloren.length === 1 ? "ist" : "sind"} jetzt in der App, aber nicht in der Sicherung und ${dingVerloren.length === 1 ? "wäre" : "wären"} danach weg: ${dingNummern(dingVerloren)}.` : null,
       imKorb || dingImKorb ? `Der Papierkorb (${[imKorb && anzahl(imKorb), dingImKorb && dingAnzahl(dingImKorb)].filter(Boolean).join(", ")}) wird geleert.` : null,
-      "Das ERSETZT alles, was jetzt in der App ist (Teile, Sachen im Haushalt, Ordner, „Mein Stil“, fertige Outfits, Reisen, eigene Knöpfe).",
+      "Das ERSETZT alles, was jetzt in der App ist (Teile, Sachen im Haushalt, Ordner, „Mein Stil“, fertige Outfits, Reisen, Umzugskisten, Wunschliste, eigene Knöpfe).",
       verloren.length || dingVerloren.length ? "Tipp: Willst du den jetzigen Stand behalten, tippe auf „Abbrechen“ und erstelle zuerst eine Sicherung davon." : null,
       "Wiederherstellen?"].filter(Boolean).join("\n\n");
     if (!confirm(frage)) return "Abgebrochen – es wurde nichts geändert.";
@@ -417,7 +428,7 @@ async function laden(datei) {
     const naechsteDingNr = Math.max(s.naechsteDingNr, ...s.dinge.map(d => d.nr + 1), ...dingeJetzt.map(d => d.nr + 1), (await getMeta("naechsteDingNr")) || 1);
     // Scheitert das Schreiben, bricht replaceAll alles ab: Dann ist wirklich nichts geändert, und das soll auch dastehen
     try {
-      await replaceAll({ teile, fotos, dinge, dingFotos, meta: { naechsteNr, naechsteDingNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, reisen, chatgptStand: chat,
+      await replaceAll({ teile, fotos, dinge, dingFotos, meta: { naechsteNr, naechsteDingNr, ordner: s.ordner, meinStil: s.meinStil, eigeneWerte: s.eigeneWerte, outfits, reisen, kisten, wunschliste: s.wunschliste, chatgptStand: chat,
         letzteSicherung: { zeit: s.erstellt || new Date().toISOString(), nrs: teile.map(t => t.nr), dingNrs: dinge.map(d => d.nr) } } });
     } catch (e) { console.error(e); throw new Error(`Die Sicherung ließ sich nicht speichern. Es wurde nichts geändert, dein Kleiderschrank ist wie vorher. (${fehlerText(e)})`); }
     await askPersist(); // auf einem neuen Handy gleich um dauerhaften Speicher bitten
