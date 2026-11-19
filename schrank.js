@@ -2,19 +2,20 @@
 // Startseite mit Ordnern („Mein Kleiderschrank“ = immer alle Teile, dazu eigene Ordner wie Alben in der Fotos-App,
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
-import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=20";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
-import { renderStil, stilKurz } from "./stil.js?v=21";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=31";
-import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=28";
-import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=25";
-import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=10";
-import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=22";
-import { renderVinted } from "./vinted.js?v=13";
+import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=12";
+import { renderStil, stilKurz } from "./stil.js?v=22";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=32";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=29";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=26";
+import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=11";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=23";
+import { renderVinted } from "./vinted.js?v=14";
 import { GROUPS } from "./ki.js?v=9";
-import { renderKoffer } from "./koffer.js?v=4";
+import { renderKoffer } from "./koffer.js?v=5";
+import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
-  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=3";
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=4";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -136,7 +137,8 @@ function schwebeEinrichten() {
   document.addEventListener("focusin", () => { if (tipptGerade()) schwebeZeigen(false); });
 }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
-export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
+// Beim Haushalt (seit 0.32) nie: Neue Kleidung ändert dort nichts, und offene Eingaben in „Noch ergänzen“ würden den Fokus verlieren
+export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingKorb"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
@@ -166,6 +168,9 @@ async function render() {
   // Koffer packen (seit 0.28): ohne id die Liste „Deine Reisen“, mit id eine Reise. Den Kopf baut koffer.js selbst (Titel = Name der Reise).
   if (s.v === "koffer") return renderKoffer(box, (titel, unter) => kopf(titel, unter), s.id || null, items, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen,
     { go, ersetze, back });
+  // Sachen im Haushalt (seit 0.32): Übersicht, ein Ding, Papierkorb. Eigener Speicher, darum lädt haushalt.js selbst.
+  if (["haushalt", "ding", "dingKorb"].includes(s.v)) return renderHaushalt(box, kopf, s, url, { go, back,
+    schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnen);
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
     items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "vinted") {
@@ -234,7 +239,7 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits) {
   // Zweite Reihe (seit 0.28): „Koffer packen“ und „Sachen im Haushalt“ (Platzhalter für später)
   $("kofferKnopf").classList.toggle("leer", !da.length);
   $("kofferKnopf").onclick = () => da.length ? go({ v: "koffer" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
-  $("haushaltKnopf").onclick = () => toast("🏠 Sachen im Haushalt kommt später.");
+  $("haushaltKnopf").onclick = () => go({ v: "haushalt" }); // seit 0.32 (vorher Platzhalter „kommt bald“)
   const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst);
   fill($("nebenKacheln"),
     nebenKachel("✨ Mein Stil", kurz.length ? `${kurz.length} ${kurz.length === 1 ? "Angabe" : "Angaben"}` : "einstellen", () => go({ v: "stil" })),
@@ -744,6 +749,7 @@ export async function initSchrank() {
     if (!(await getMeta("woerterAngeglichen"))) { await updateAll(teilAngleichen); await setMeta("woerterAngeglichen", true); }
   } catch (e) { console.error(e); }
   try { await aufraeumen(); } catch (e) { console.error(e); }
+  try { await dingeAufraeumen(); } catch (e) { console.error(e); }
   schwebeEinrichten();
   const wieder = await sitzungLaden().catch(e => { console.error(e); return null; });
   sitzungEinrichten();

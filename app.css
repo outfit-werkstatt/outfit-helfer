@@ -57,8 +57,8 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 .haupt.outfit{background:var(--accent);color:var(--accent-ink)}
 .haupt.leer{opacity:.55}
 /* Platzhalter für eine spätere Idee (seit 0.28): gestrichelt wie „Neuer Ordner“, damit er nicht wie ein fertiger Knopf aussieht */
-.haupt.platzhalter{background:transparent;border:1.5px dashed var(--accent);color:var(--muted);box-shadow:none}
-.haupt .bald{font-size:.78rem;font-weight:600;color:var(--link)}
+/* Sachen im Haushalt (seit 0.32): Überschriften „Noch ergänzen“ / „Fertig eingetragen“ */
+.ding-abschnitt{font-size:1.05rem;font-weight:700;color:var(--haupt);margin:18px 0 8px}
 label.upload input{display:none}
 .foto-tipp{margin:10px 0 18px}
 .foto-tipp .info-zeile{justify-content:center}

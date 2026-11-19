@@ -12,12 +12,12 @@
 // 5. Auf Wunsch Bild vom Outfit: Bild-Paket (die Teile groß) + Bild-Wunsch als eigene Nachricht.
 // Die App schickt selbst nichts: Die Nutzerin lädt Bilder und Text selbst im Chat hoch (Hinweis auf OpenAI/Google steht dabei).
 // Die eingefügte Antwort ist fremder Text: nur per textContent anzeigen, nur Nummern daraus übernehmen.
-import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=20";
-import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=11";
-import { stilAktuell, stilZeilen } from "./stil.js?v=21";
-import { kandidaten } from "./regeln.js?v=21";
+import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=21";
+import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=12";
+import { stilAktuell, stilZeilen } from "./stil.js?v=22";
+import { kandidaten } from "./regeln.js?v=22";
 import { GROUPS, GROUP_OF } from "./ki.js?v=9";
-import { speichernKnopf } from "./fertig.js?v=10";
+import { speichernKnopf } from "./fertig.js?v=11";
 
 const MAX_ANTWORT = 20000, MAX_ZUSATZ = 500; // Zusatz: beim Koffer bis 500 Zeichen (Reise beschreiben), sonst 300
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,

@@ -13,7 +13,12 @@
 //        Damit nichts verloren geht, wenn das iPhone die App beim Hinzufügen vieler Fotos schließt. Kommt nicht in die Sicherung.
 // Bilder liegen als ArrayBuffer statt als Blob: ältere Safari-Versionen hatten Fehler mit Blobs in IndexedDB.
 // Umzug 1 → 2: nur der neue Bereich „entwuerfe“ kommt dazu, die anderen bleiben unverändert.
-const DB_NAME = "outfit-helfer", DB_VERSION = 2;
+// dinge (ab DB_VERSION 3, seit 0.32, Wunsch 19.11.2026): Sachen aus dem Haushalt, Angaben + kleine Vorschau, Schlüssel = eigene Nummer
+//        (angezeigt als H001 …, Zähler meta "naechsteDingNr", wird wie bei der Kleidung nie neu vergeben). Bewusst getrennt von „teile“:
+//        So kommt ein Ding nie in Outfit-Vorschläge, in den Chat-Kleiderschrank oder in den Koffer.
+// dingFotos: das große Foto eines Dings, Schlüssel = Nummer.
+// Umzug 2 → 3: nur die zwei neuen Bereiche kommen dazu, die anderen bleiben unverändert.
+const DB_NAME = "outfit-helfer", DB_VERSION = 3;
 let dbPromise = null;
 function db() {
   if (!dbPromise) dbPromise = new Promise((res, rej) => {
@@ -24,6 +29,8 @@ function db() {
       if (!d.objectStoreNames.contains("fotos")) d.createObjectStore("fotos");
       if (!d.objectStoreNames.contains("meta")) d.createObjectStore("meta");
       if (!d.objectStoreNames.contains("entwuerfe")) d.createObjectStore("entwuerfe", { keyPath: "id" });
+      if (!d.objectStoreNames.contains("dinge")) d.createObjectStore("dinge", { keyPath: "nr" });
+      if (!d.objectStoreNames.contains("dingFotos")) d.createObjectStore("dingFotos");
     };
     req.onsuccess = () => {
       const d = req.result;
@@ -153,6 +160,60 @@ export async function purgeItems(nrs) {
   for (const nr of nrs) { tx.objectStore("teile").delete(nr); tx.objectStore("fotos").delete(nr); }
   await done(tx);
 }
+/* ---------- Sachen im Haushalt (seit 0.32) ----------
+   Wie bei den Teilen: Angaben + Vorschau in „dinge“, das große Foto in „dingFotos“, beides in EINEM Schritt geschrieben.
+   Am Ding: nr, erstellt, geaendert, vorschau, geloescht (Papierkorb) und die Angaben (haushalt.js). */
+export async function addDing({ foto, vorschau, ...angaben }) {
+  const [fotoBuf, vorschauBuf] = await Promise.all([foto.arrayBuffer(), vorschau.arrayBuffer()]);
+  const tx = await bereich(["dinge", "dingFotos", "meta"], "readwrite");
+  const meta = tx.objectStore("meta");
+  let nr;
+  meta.get("naechsteDingNr").onsuccess = e => {
+    nr = e.target.result || 1;
+    meta.put(nr + 1, "naechsteDingNr");
+    const jetzt = new Date().toISOString();
+    tx.objectStore("dinge").add({ ...angaben, vorschau: vorschauBuf, nr, erstellt: jetzt, geaendert: jetzt });
+    tx.objectStore("dingFotos").add(fotoBuf, nr);
+  };
+  await done(tx);
+  return nr;
+}
+// Alle Dinge mit Vorschau (als Blob), gemerkt bis zum nächsten Schreiben (wie allItems: die Objekte nie verändern, immer kopieren)
+let dingeGemerkt = null;
+export async function allDinge() {
+  if (dingeGemerkt && dingeGemerkt.stand === stand) return [...dingeGemerkt.dinge];
+  const beginn = stand;
+  const dinge = (await request((await bereich("dinge")).objectStore("dinge").getAll())).map(d => ({ ...d, vorschau: toBlob(d.vorschau) }));
+  if (beginn === stand) dingeGemerkt = { stand: beginn, dinge };
+  return [...dinge];
+}
+export async function getDing(nr) {
+  const d = await request((await bereich("dinge")).objectStore("dinge").get(nr));
+  return d ? { ...d, vorschau: toBlob(d.vorschau) } : null;
+}
+export async function getDingFoto(nr) {
+  const buf = await request((await bereich("dingFotos")).objectStore("dingFotos").get(nr));
+  return buf ? toBlob(buf) : null;
+}
+// [{ nr, ...geänderte Felder }] in EINEM Schritt; „geaendert“ für „Seit deiner letzten Sicherung …“
+export async function updateDinge(changes) {
+  const tx = await bereich("dinge", "readwrite"), D = tx.objectStore("dinge"), jetzt = new Date().toISOString();
+  for (const { nr, ...felder } of changes) {
+    D.get(nr).onsuccess = e => { if (e.target.result) D.put({ ...e.target.result, ...felder, geaendert: jetzt }); };
+  }
+  await done(tx);
+}
+export const updateDing = (nr, felder) => updateDinge([{ nr, ...felder }]);
+// Endgültig löschen (Papierkorb leeren oder nach 30 Tagen). Die Nummer wird nie wieder vergeben.
+export async function purgeDinge(nrs) {
+  if (!nrs.length) return;
+  const tx = await bereich(["dinge", "dingFotos"], "readwrite");
+  for (const nr of nrs) { tx.objectStore("dinge").delete(nr); tx.objectStore("dingFotos").delete(nr); }
+  await done(tx);
+}
+// „H012“
+export const dingNrText = nr => "H" + nrText(nr);
+
 // „Mein Stil“: was sie gern trägt (sehr persönlich, bleibt nur auf dem Gerät und in ihrer eigenen Sicherung)
 export async function getStil() {
   return (await request((await bereich("meta")).objectStore("meta").get("meinStil"))) || {};

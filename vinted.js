@@ -5,10 +5,10 @@
 // Aufbau nach Verkaufs-Ratgebern: Titel = Marke + Art + Farbe + Detail + Größe (Suchwörter, kurz, ohne Emojis);
 // Beschreibung = Aufhänger, Details (Marke, Größe, Farbe, Material, Passform, Zustand), Service. Nur ihre eigenen Angaben,
 // nichts dazuerfunden. Die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
-import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=20";
-import { updateItem, getPhoto, nrText } from "./speicher.js?v=11";
-import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=22";
-import { verkaufFeld } from "./verkauf.js?v=3";
+import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=21";
+import { updateItem, getPhoto, nrText } from "./speicher.js?v=12";
+import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=23";
+import { verkaufFeld } from "./verkauf.js?v=4";
 
 // Länge des Titels: laut einem Ratgeber erlaubt Vinted etwa 50 Zeichen (nicht offiziell bestätigt) → lieber kürzer
 const TITEL_MAX = 50;
