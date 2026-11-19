@@ -17,7 +17,7 @@ import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
 import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=1";
 import { renderKisten, kistenLaden } from "./umzug.js?v=1";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
-import { renderSchonDa } from "./schonda.js?v=1";
+import { renderSchonDa } from "./schonda.js?v=2";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=4";
 

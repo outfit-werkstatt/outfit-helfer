@@ -62,13 +62,11 @@ export function renderSchonDa(box, kopf, items, bild, oeffnen, neuZeichnen) {
     finally { ki.aus(); laeuft = false; }
   }
   nochmal.onclick = () => { nochmal.hidden = true; status.textContent = "KI wird geladen …"; kiAnfordern(); };
-  // Zwei Wege: Kamera direkt (capture) oder ein vorhandenes Foto. Am PC öffnen beide die Dateiauswahl.
-  const wahl = (text, kamera, haupt) => {
-    const input = el("input", { type: "file", accept: "image/*", hidden: true });
-    if (kamera) input.setAttribute("capture", "environment");
-    input.onchange = () => { const d = input.files[0]; input.value = ""; if (d) pruefen(d); };
-    return el("label", { class: haupt ? "btn primary datei" : "btn datei" }, text, input);
-  };
+  // Ein Knopf (seit 0.33.1, iPhone-Test 19.11.2026): Das iPhone bietet dabei selbst „Fotomediathek“ und „Foto aufnehmen“ an,
+  // ein eigener Kamera-Knopf war doppelt
+  const input = el("input", { type: "file", accept: "image/*", hidden: true });
+  input.onchange = () => { const d = input.files[0]; input.value = ""; if (d) pruefen(d); };
+  const knopf = el("label", { class: "btn primary datei" }, "📷 Foto machen oder auswählen", input);
   const da = items.filter(t => !t.geloescht && !istVerkauft(t));
 
   // Ergebnis
@@ -104,7 +102,7 @@ export function renderSchonDa(box, kopf, items, bild, oeffnen, neuZeichnen) {
         "Sie vergleicht, wie es auf dem Foto aussieht (Art, Farbe, Form). Im Laden, auf dem Bügel oder bei anderem Licht sieht ein Teil anders aus als zu Hause fotografiert. Das Ergebnis ist darum eine Einschätzung.",
         "Nur Kleidung, Schuhe, Taschen und Schmuck – deine Sachen im Haushalt vergleicht die App nicht. Das Foto wird nicht gespeichert und bleibt auf deinem Handy.",
         "Beim ersten Mal lädt die App dafür ihre KI (ca. 100 MB, am besten im WLAN)."),
-      el("div", { class: "actions wrap" }, wahl("📷 Foto machen", true, true), wahl("🖼 Foto auswählen", false, false)),
+      el("div", { class: "actions" }, knopf),
       status, balken, nochmal),
     !da.length ? el("p", { class: "hint" }, "Speichere zuerst Kleidung, dann kann die App vergleichen.") : null,
     ergebnis);
