@@ -3,12 +3,12 @@
 // ein Teil kann in mehreren sein), Ordner-Ansicht mit Filtern, Teil-Ansicht (ändern, Ordner, Papierkorb), Papierkorb.
 // Jede Ansicht bekommt einen Eintrag im Verlauf, damit „Zurück“ (Knopf, Wischen, Android-Taste) funktioniert.
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
-import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
+import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, getLookFoto, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
 import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=33";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=29";
 import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=26";
-import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=11";
+import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=11";
 import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=23";
 import { renderVinted } from "./vinted.js?v=14";
 import { GROUPS } from "./ki.js?v=9";
@@ -206,7 +206,10 @@ async function render() {
     if (!o) return back();
     return renderFertig(box, kopf(o.name), o, items, url, t => miniKachel(t, url, n => go({ v: "teil", nr: n })), bildPaketBereich, back, neuZeichnen);
   }
-  renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge);
+  // Fotos vom Look der neuesten Outfits für die Kachel „⭐ Fertige Outfits“ (seit 0.33.1)
+  const looks = new Map(await Promise.all(outfits.slice(0, 4).filter(o => o.foto).map(async o => [o.id, await getLookFoto(o.id, true).catch(() => null)])));
+  if (nr !== zeichnung) return;
+  renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge, looks);
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
@@ -221,6 +224,21 @@ function kachel(name, list, onclick, fotos = list) {
   return el("button", { type: "button", class: "kachel", onclick },
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
     el("span", { class: "name" }, name), el("span", { class: "anzahl" }, anzahl(list.length)));
+}
+// „⭐ Fertige Outfits“ (seit 0.33.1, iPhone-Test 19.11.2026: „Andersrum wäre es viel cooler“): je eines der vier neuesten Outfits,
+// mit seinem Foto vom Look, falls es eins gibt, sonst mit dem ersten Teil. Vorher immer das erste Teil (fertigKachel in fertig.js).
+function outfitKachel(outfits, items, looks) {
+  const nachNr = new Map(items.map(t => [t.nr, t]));
+  const bilder = outfits.slice(0, 4).map(o => {
+    const look = looks.get(o.id);
+    if (look) return look;
+    const t = nachNr.get(o.nrs[0]);
+    return t && !t.geloescht && t.verkauf !== "verkauft" ? t.vorschau : null;
+  }).filter(Boolean);
+  return el("button", { type: "button", class: "kachel", onclick: () => go({ v: "fertig" }) },
+    el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder.map(b => el("img", { src: url(b), alt: "", loading: "lazy" }))),
+    el("span", { class: "name" }, "⭐ Fertige Outfits"),
+    el("span", { class: "anzahl" }, outfits.length === 1 ? "1 Outfit" : `${outfits.length} Outfits`));
 }
 // Abwechselnd aus mehreren Listen (je eins, dann das nächste …), damit das Mosaik von „Aussortiert“ von jedem Bereich etwas zeigt
 function gemischt(...listen) {
@@ -247,7 +265,7 @@ function nummernKarte(items, naechste) {
 // Kleine Kachel unter dem Kleiderschrank (Mein Stil, Sicherung, Papierkorb): Name und kurzer Stand
 const nebenKachel = (name, stand, onclick, faellig = false) => el("button", { type: "button", class: faellig ? "faellig" : "", onclick },
   el("span", { class: "name" }, name), el("span", { class: "stand" }, stand));
-function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge) {
+function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge, looks) {
   const da = sichtbar(items).sort((a, b) => b.nr - a.nr), korb = items.filter(t => t.geloescht).length;
   // Oben nur, wenn etwas zu tun ist: Sicherung fällig oder (leerer Kleiderschrank) „Sicherung laden?“
   fill($("startHinweis"), zipHinweis(items, letzte, stil, sonst, () => go({ v: "sicherung" }), dinge));
@@ -286,7 +304,7 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
     aussortiert.length ? kachel(AUSSORTIERT_NAME, aussortiert, () => go({ v: "liste", id: ersterBereich() }), gemischt(...AUSSORTIERT.map(b => bereiche[b]))) : null,
-    da.length || outfits.length ? fertigKachel(outfits, items, url, () => go({ v: "fertig" })) : null,
+    da.length || outfits.length ? outfitKachel(outfits, items, looks) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
   fill($("nummernKarte"), nummernKarte(items, naechste));
