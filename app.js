@@ -5,8 +5,9 @@
 // sonst nimmt das Handy die alte Datei aus seinem Zwischenspeicher
 import { loadAI, recognize, loadImage, alsJpg, AERMEL_FEST } from "./ki.js?v=9";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=12";
-import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=21";
-import { refresh, initSchrank } from "./schrank.js?v=45";
+import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange, saisonVorschlag } from "./ui.js?v=21";
+import { refresh, initSchrank } from "./schrank.js?v=46";
+import { kiStartRegistrieren, kiMelden } from "./ki-start.js?v=1";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -143,7 +144,10 @@ async function addPhoto(e, card) {
     };
     // Wiederhergestellte Karte: dieselben Knöpfe wie nach der Erkennung, angetippt ist, was sie schon gewählt hatte
     const w = e.wahl, gewesen = w && angabenVon(w), mitAuswahl = (k, sel) => ({ ...vorschlag[k], selected: sel });
-    const form = angabenFelder(w ? { ...gewesen, mehrOffen: false,
+    // Saison folgt weiter Art und Material, solange sie noch der Vorschlag ist (seit 0.33, Durchsicht 04.11.2026: angabenVon hielt eine
+    // vorgeschlagene Saison für selbst gewählt, und nach dem Wiederherstellen änderte sie sich beim Wechsel der Art nicht mehr)
+    const saisonNochVorschlag = w && (!w.saison?.length || JSON.stringify(w.saison) === JSON.stringify(saisonVorschlag(w.art, w.gruppe, w.material)));
+    const form = angabenFelder(w ? { ...gewesen, mehrOffen: false, saisonAuto: saisonNochVorschlag,
       art: mitAuswahl("art", w.art ? [w.art] : []), farbe: mitAuswahl("farbe", gewesen.farbe.selected),
       muster: mitAuswahl("muster", gewesen.muster.selected), material: mitAuswahl("material", gewesen.material.selected),
       // ausgeblendet (z. B. Ärmel bei einer Hose) war nichts gewählt → wieder der Vorschlag der KI, falls die Art noch wechselt
@@ -336,9 +340,11 @@ async function startAI() {
   $("kiPanel").hidden = false; $("kiHilfe").hidden = true; $("kiRetry").hidden = true; $("kiLaden").hidden = false;
   $("barfill").style.width = "0"; $("status").textContent = "KI wird geladen …";
   try {
+    kiMelden({ text: "KI wird geladen …", anteil: 0, fertig: false, fehler: false });
     const msg = await loadAI((share, mb, total) => {
       $("barfill").style.width = (100 * share).toFixed(0) + "%";
       $("status").textContent = `KI wird geladen … ${mb.toFixed(0)} von ${total.toFixed(0)} MB`;
+      kiMelden({ text: $("status").textContent, anteil: share });
     });
     aiState = "bereit"; $("kiLaden").hidden = true;
     $("barfill").style.width = "100%";
@@ -346,7 +352,7 @@ async function startAI() {
     else {
       $("status").textContent = "✅ KI ist bereit.";
       setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
-      kiIstBereit(); warteBox();
+      kiIstBereit(); warteBox(); kiMelden({ text: "KI ist bereit.", anteil: 1, fertig: true });
     }
     wachPruefen();
   } catch (e) {
@@ -354,6 +360,7 @@ async function startAI() {
     const wo = e.dateien?.length ? ` (bei ${e.dateien.join(", ")})` : "";
     $("status").textContent = `❌ Die KI konnte nicht geladen werden${wo}: ${e?.message || e}`;
     $("kiHilfe").hidden = false; $("kiRetry").hidden = false;
+    kiMelden({ text: $("status").textContent, fehler: true });
     console.error(e);
     if (aiTries === 1) retryWhenVisible();
   }
@@ -363,6 +370,8 @@ function retryWhenVisible() {
   document.addEventListener("visibilitychange", onVisible); onVisible();
 }
 $("kiRetry").onclick = () => startAI();
+// „🔍 Hab ich sowas schon?“ (seit 0.33) lädt die KI über diesen Weg, damit sie nur einmal im Speicher liegt (ki-start.js)
+kiStartRegistrieren(startAI, kiBereit);
 
 /* ---------- Home-Bildschirm ----------
    Im normalen Safari darf das iPhone die Daten nach 7 Tagen ohne Nutzung löschen, als App auf dem Home-Bildschirm nicht.

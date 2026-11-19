@@ -4,7 +4,7 @@
 // Seit 0.28 (Wunsch 18.11.2026, „Kreta Sommer 2026“): mehrere Reisen mit Namen, jede mit eigener Packliste, eigenen Haken und eigener
 // Chat-Antwort. Gespeichert in meta „reisen“ und in der Sicherung (mit Namen sind sie etwas zum Behalten, z. B. als Vorlage fürs nächste Jahr).
 // Texte nur per textContent/DOM, nie per innerHTML (Name und eigene Einträge sind eingetippter Text).
-import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, beschreibung } from "./ui.js?v=21";
+import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, info, beschreibung } from "./ui.js?v=21";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=12";
 import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=22";
 import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=23";
@@ -299,7 +299,13 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
           el("span", { class: "menge-zahl", "aria-label": `Anzahl ${x.menge}` }, `${x.menge}×`), knopf("＋", "Mehr", () => setze(Math.min(MAX_MENGE, x.menge + 1))))
       : knopf("＋ Anzahl", "Anzahl angeben", () => setze(1));
     if (!x.menge) menge.classList.add("ohne");
-    return el("div", { class: "extra-zeile" + (x.gepackt ? " erledigt" : "") }, el("label", {}, box2, el("span", {}, x.text)), menge, weg);
+    // ⓘ bei Unterwäsche und Socken: wie die App die Anzahl rechnet (Wunsch 19.11.2026, „Unter einem Info Button“; iPhone-Test:
+    // bei 14 Tagen mit Waschen blieb es bei 5× und man sah nicht, warum)
+    const hilfe = kofferMenge(x.text, e) !== null ? info(
+      `Vorschlag der App: eine pro Tag und eine Reserve${e.waschen ? ". Mit „Ich kann waschen“ rechnet sie höchstens 4 Tage plus 1 Reserve, egal wie lange die Reise ist" : ""}.`,
+      "Mit − und ＋ stellst du die Zahl selbst ein. Dann ändert die App sie nicht mehr, auch wenn du die Reise änderst.") : null;
+    const zeile = el("div", { class: "extra-zeile" + (x.gepackt ? " erledigt" : "") }, el("label", {}, box2, el("span", {}, x.text)), hilfe?.knopf, menge, weg);
+    return hilfe ? el("div", {}, zeile, hilfe.box) : zeile;
   }));
   const neuText = el("input", { type: "text", class: "feld-eingabe", maxLength: MAX_EXTRA_TEXT, placeholder: "z. B. Reiseadapter", autocomplete: "off", enterKeyHint: "done", "aria-label": "Eigener Eintrag" });
   const neuKnopf = el("button", { type: "button", class: "btn" }, "Hinzufügen");

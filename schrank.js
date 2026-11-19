@@ -5,18 +5,19 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=32";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=33";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=29";
 import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=26";
 import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=11";
 import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=23";
 import { renderVinted } from "./vinted.js?v=14";
 import { GROUPS } from "./ki.js?v=9";
-import { renderKoffer } from "./koffer.js?v=5";
+import { renderKoffer } from "./koffer.js?v=6";
 import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
 import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=1";
 import { renderKisten, kistenLaden } from "./umzug.js?v=1";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
+import { renderSchonDa } from "./schonda.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=4";
 
@@ -184,6 +185,8 @@ async function render() {
   if (s.v === "kisten" || s.v === "kiste") return renderKisten(box, kopf, s, dinge, url, { go, back, ersetze }, neuZeichnen);
   if (s.v === "wunsch") return renderWunsch(box, kopf("📝 Wunschliste", "Was brauchst du neu?"), items, dinge, url,
     x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
+  // „🔍 Hab ich sowas schon?“ (seit 0.33): Foto mit dem Kleiderschrank vergleichen
+  if (s.v === "schonDa") return renderSchonDa(box, kopf("🔍 Hab ich sowas schon?", "Mit deinem Kleiderschrank vergleichen"), items, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   // Verkäufe (seit 0.32): Kleidung und Haushalt zusammen
   if (s.v === "verkaeufe") return renderVerkaeufe(box, kopf("💶 Verkäufe", "Kleidung und Haushalt zusammen"), items, dinge, url,
     x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
@@ -256,6 +259,9 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
   $("kofferKnopf").classList.toggle("leer", !da.length);
   $("kofferKnopf").onclick = () => da.length ? go({ v: "koffer" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
   $("haushaltKnopf").onclick = () => go({ v: "haushalt" }); // seit 0.32 (vorher Platzhalter „kommt bald“)
+  // „🔍 Hab ich sowas schon?“ (seit 0.33, eigener Knopf unter den vier großen)
+  $("schonKnopf").classList.toggle("leer", !da.length);
+  $("schonKnopf").onclick = () => da.length ? go({ v: "schonDa" }) : toast("Sobald du Kleidung gespeichert hast, kann die App vergleichen.");
   const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst, dinge);
   // „💶 Verkäufe“ (seit 0.32) nur, wenn es schon etwas zum Verkaufen gibt; dann stehen die vier kleinen Kacheln 2 × 2
   const verkaeufe = verkaeufeKurz(items, dinge);
