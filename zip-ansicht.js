@@ -11,9 +11,9 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=20";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=21";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=21";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=22";
 import { VERKAUF_STUFEN, preisPruefen, tageSeit } from "./verkauf.js?v=3";
-import { reisenPruefen } from "./koffer.js?v=3";
+import { reisenPruefen } from "./koffer.js?v=4";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
 // Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)
@@ -53,7 +53,7 @@ function vonB64(s) {
 
 /* ---------- Stand: Was ist seit der letzten Sicherung anders? ---------- */
 // letzte = meta "letzteSicherung" = { zeit, nrs } (welche Teile in der letzten ZIP waren),
-// sonst = meta "sonstGeaendert" (wann zuletzt Ordner oder eigene Knöpfe geändert wurden)
+// sonst = meta "sonstGeaendert" (wann zuletzt Ordner, Outfits, eigene Knöpfe oder seit 0.31 Reisen geändert wurden)
 export function zipStand(items, letzte, stil, sonst) {
   const da = items.filter(t => !t.geloescht);
   if (!letzte) return { nie: true, leer: !items.length, aenderungen: [] };
@@ -64,7 +64,7 @@ export function zipStand(items, letzte, stil, sonst) {
   const verkauft = da.filter(t => drin.has(t.nr) && seitdemVerkauft(t)).length;
   const geaendert = da.filter(t => drin.has(t.nr) && t.geaendert > letzte.zeit && !seitdemVerkauft(t)).length;
   const aenderungen = [neu && `${neu} ${neu === 1 ? "neues Teil" : "neue Teile"}`, weg && `${weg} gelöscht`, verkauft && `${verkauft} verkauft`, geaendert && `${geaendert} geändert`,
-    stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits oder eigene Knöpfe geändert"].filter(Boolean);
+    stil?.geaendert > letzte.zeit && "„Mein Stil“ geändert", sonst > letzte.zeit && "Ordner, Outfits, Reisen oder eigene Knöpfe geändert"].filter(Boolean);
   // Nach Kalendertagen zählen: Eine Sicherung von gestern Abend ist heute früh „gestern“, auch wenn keine 24 Stunden vergangen sind
   const tagAnfang = d => new Date(d).setHours(0, 0, 0, 0);
   const tage = Math.max(0, Math.round((tagAnfang(Date.now()) - tagAnfang(letzte.zeit)) / TAG));

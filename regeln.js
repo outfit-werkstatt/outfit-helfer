@@ -701,6 +701,9 @@ export function kofferPacken(e, alle, meinStil = null) {
   if (lage.strand && !teile.some(t => platzVon(t) === "bade")) luecken.push("Bademode hast du noch nicht im Kleiderschrank.");
   return { nrs: teile.map(t => t.nr), tage: kofferTage(teile, e, meinStil), luecken, tipps: kofferTipps(teile, e, lage, n), mengen: n };
 }
+const TAGE_HOECHSTENS = { oben: 8, ganz: 4, unten: 6, schuh: 5, lage: 4 };
+// Bei gleich oft getragen bleibt die Reihenfolge der Packliste (sort ist stabil)
+const wenigsteZuerst = (liste, oft, max) => liste.length <= max ? liste : [...liste].sort((a, b) => (oft.get(a) || 0) - (oft.get(b) || 0)).slice(0, max);
 // Ein Vorschlag pro Tag aus genau diesen Teilen. Jede Unternehmung kommt einmal dran, die übrigen Tage sind wie die erste.
 // Oberteile und Kleider möglichst nicht doppelt (erst wenn alle dran waren), Unterteile und Schuhe dürfen sich wiederholen.
 export function kofferTage(teile, e, meinStil = null) {
@@ -713,7 +716,9 @@ export function kofferTage(teile, e, meinStil = null) {
     let beste = null, besterWert = -Infinity;
     for (const v of vorlagen) {
       if (v.some(p => !["schuh", "lage"].includes(p) && !nachPlatz[p]?.length)) continue;
-      const listen = v.filter(p => nachPlatz[p]?.length).map(p => nachPlatz[p]);
+      // Je Platz nur die bisher am wenigsten getragenen durchprobieren (seit 0.31, Durchsicht 19.11.2026): Bei sehr langen Packlisten
+      // (68 Teile, 14 Tage) waren es sonst über 30.000 Kombinationen pro Tag, fast 2 Sekunden am PC
+      const listen = v.filter(p => nachPlatz[p]?.length).map(p => wenigsteZuerst(nachPlatz[p], oft, TAGE_HOECHSTENS[p] || 6));
       const weiter = (j, weg) => {
         if (j === listen.length) {
           if (!weg.length) return;

@@ -5,14 +5,14 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=20";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
 import { renderStil, stilKurz } from "./stil.js?v=21";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=30";
-import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=27";
-import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=24";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=31";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=28";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=25";
 import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=10";
-import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=21";
-import { renderVinted } from "./vinted.js?v=12";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=22";
+import { renderVinted } from "./vinted.js?v=13";
 import { GROUPS } from "./ki.js?v=9";
-import { renderKoffer } from "./koffer.js?v=3";
+import { renderKoffer } from "./koffer.js?v=4";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=3";
 
@@ -158,7 +158,8 @@ async function render() {
   if (s.v === "stil") return renderStil(box, kopf("Mein Stil"), stil);
   if (s.v === "passt") {
     const t = items.find(x => x.nr === s.nr);
-    if (!t) return back();
+    // Auch nach einem Neustart (Merken seit 0.27) nicht für ein Teil, das inzwischen im Papierkorb liegt oder verkauft ist (seit 0.31)
+    if (!t || t.geloescht || istVerkauft(t)) return back();
     return renderPasst(box, kopf("Was passt dazu?", `Zu Nr. ${nrText(t.nr)} – ${beschreibung(t)}`,
       neuKnopf(() => passtHatEtwas(t.nr), () => chatHatAntwort({ teil: t }), () => passtNeu(t.nr))), items, folders, stil, s.nr, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   }
@@ -410,7 +411,10 @@ function renderListe(items, folders, id) {
     const fertig = fertigKnopf = el("button", { type: "button", class: "btn primary" }, `Fertig (${anzahl(auswahl.size)})`);
     fertig.onclick = async () => {
       fertig.disabled = true;
-      try { await setFolderItems(id, auswahl); auswahl = null; toast("Ordner gespeichert"); neuZeichnen(); }
+      // Verkaufte Teile stehen nicht zur Auswahl, bleiben aber in ihren Ordnern (seit 0.31, Durchsicht 19.11.2026: vorher nahm
+      // „Fertig“ sie still heraus, und nach „Doch nicht verkauft“ fehlte der Ordner)
+      const verkaufteDrin = items.filter(t => !t.geloescht && istVerkauft(t) && t.ordner?.includes(id)).map(t => t.nr);
+      try { await setFolderItems(id, new Set([...auswahl, ...verkaufteDrin])); auswahl = null; toast("Ordner gespeichert"); neuZeichnen(); }
       catch (e) { fertig.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
     };
     aktionen = el("div", {}, el("div", { class: "hint" }, `Tippe die Teile an, die in „${ordner.name}“ sein sollen. In „${HAUPT}“ bleiben sie immer.`),

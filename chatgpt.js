@@ -15,7 +15,7 @@
 import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=20";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=11";
 import { stilAktuell, stilZeilen } from "./stil.js?v=21";
-import { kandidaten } from "./regeln.js?v=20";
+import { kandidaten } from "./regeln.js?v=21";
 import { GROUPS, GROUP_OF } from "./ki.js?v=9";
 import { speichernKnopf } from "./fertig.js?v=10";
 
@@ -631,12 +631,16 @@ export function chatgptPanel(items, stil, frage, kachel) {
     // dazu die Tage („Tag 1: …“). Was schon abgehakt war und wieder dabei ist, bleibt abgehakt (koffer.js).
     let uebernahme = null;
     if (k && frage.uebernehmen) {
-      const nrs = [...new Set(gruppen.flatMap(g => g.teile).filter(t => !t.geloescht && t.verkauf !== "verkauft").map(t => t.nr))];
+      // Seit 0.31 (Durchsicht 19.11.2026) auch ohne Teile, die sie verkaufen will oder als 🚫 markiert hat: Die kommen sonst in keinen
+      // Vorschlag, also auch nicht in den Koffer. Der Chat kennt sie evtl. noch aus einem alten Stand. Die Tage verlieren sie in koffer.js.
+      const alle = [...new Set(gruppen.flatMap(g => g.teile).filter(t => !t.geloescht && t.verkauf !== "verkauft"))];
+      const nrs = alle.filter(t => !t.verkauf && !t.nichtAnziehen).map(t => t.nr), draussen = alle.filter(t => t.verkauf || t.nichtAnziehen);
       const tage = outfits.filter(o => /^[^\p{L}]*tag\b/iu.test(o.name) && o.teile.length).map(o => ({ titel: amWortKuerzen(o.voll, 60), nrs: o.teile.map(t => t.nr) }));
       if (nrs.length) {
         const knopf = el("button", { type: "button", class: "btn primary" }, `🧳 ${nrs.length === 1 ? "1 Teil" : nrs.length + " Teile"} als Packliste übernehmen`);
         knopf.onclick = () => frage.uebernehmen(nrs, tage);
         uebernahme = el("div", { class: "panel hinweis" }, el("p", {}, "Die Antwort als deine Packliste übernehmen? Deine bisherige Liste wird ersetzt, abgehakte Teile bleiben abgehakt."),
+          draussen.length ? el("p", { class: "hint" }, `${draussen.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${draussen.length === 1 ? "kommt" : "kommen"} nicht mit (beim Verkaufen oder als „🚫 Ziehe ich nicht an“ markiert).`) : null,
           el("div", { class: "actions" }, knopf));
       }
     }

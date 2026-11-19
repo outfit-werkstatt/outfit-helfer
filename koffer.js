@@ -6,15 +6,27 @@
 // Texte nur per textContent/DOM, nie per innerHTML (Name und eigene Einträge sind eingetippter Text).
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, beschreibung } from "./ui.js?v=20";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=11";
-import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=20";
-import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=21";
-import { miniKachel } from "./passt.js?v=27";
+import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=21";
+import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=22";
+import { miniKachel } from "./passt.js?v=28";
 import { stilAktuell } from "./stil.js?v=21";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";
 const REIHE = ["oben", "unten", "ganz", "lage", "schuh", "tasche", "zubehoer", "bade", "schmuck", "guertel"];
 const MAX_EXTRAS = 40, MAX_EXTRA_TEXT = 60, MAX_TEILE = 80, MAX_REISEN = 30, MAX_NAME = 40, MAX_MENGE = 99;
-const neueExtras = e => kofferExtras(e).map(text => ({ text, gepackt: false, menge: kofferMenge(text, e) }));
+// Einträge bei „Außerdem einpacken“: { text, gepackt, menge (1–99 oder null), selbst (Anzahl selbst eingestellt), eigen (selbst eingetragen) }
+const neueExtras = e => kofferExtras(e).map(text => ({ text, gepackt: false, menge: kofferMenge(text, e), selbst: false, eigen: false }));
+// Seit 0.31 (Durchsicht 19.11.2026): Ändert sich die Reise, passen sich die Einträge der App an. Vorher blieb z. B. „Unterwäsche 6×“
+// stehen, auch nach dem Wechsel auf 10 Tage ohne Waschen und neuem Packen. Jetzt: Die Anzahl bei Unterwäsche und Socken folgt der
+// Reise (außer sie hat sie selbst eingestellt), neue Standard-Einträge kommen dazu (z. B. Regenschirm bei Regen), Standard-Einträge,
+// die nicht mehr passen, gehen weg, solange sie nicht abgehakt sind. Selbst eingetragene bleiben immer.
+function extrasAnpassen(liste, vorher, nachher) {
+  const alt = new Set(kofferExtras(vorher)), neu = kofferExtras(nachher), bleibt = new Set(neu), da = new Set(liste.map(x => x.text));
+  const out = liste.filter(x => x.eigen || x.gepackt || !alt.has(x.text) || bleibt.has(x.text))
+    .map(x => { const n = kofferMenge(x.text, nachher); return !x.selbst && n !== null ? { ...x, menge: n } : x; });
+  for (const text of neu) if (!alt.has(text) && !da.has(text) && out.length < MAX_EXTRAS) out.push({ text, gepackt: false, menge: kofferMenge(text, nachher), selbst: false, eigen: false });
+  return out;
+}
 const leer = () => ({ eingaben: { tage: null, temperatur: null, wetter: [], anlaesse: [], waschen: false, handgepaeck: false },
   nrs: null, gepackt: [], tage: null, luecken: [], tipps: [], extras: null, quelle: null, gepacktFuer: null });
 let reisen = null;           // [{ id, name, erstellt, geaendert, ...wie leer() }] aus meta „reisen“, beim ersten Öffnen geladen
@@ -44,7 +56,8 @@ function pruefen(o) {
   // menge seit 0.30: Zahl 1–99 oder null (keine Anzahl). Ältere Reisen kennen das Feld nicht: Dort bekommen Unterwäsche und Socken den Vorschlag.
   if (Array.isArray(o.extras)) k.extras = o.extras.filter(x => typeof x?.text === "string" && clean(x.text)).slice(0, MAX_EXTRAS)
     .map(x => { const text = clean(x.text).slice(0, MAX_EXTRA_TEXT);
-      return { text, gepackt: x.gepackt === true, menge: Number.isInteger(x.menge) && x.menge >= 1 && x.menge <= MAX_MENGE ? x.menge : x.menge === undefined ? kofferMenge(text, k.eingaben) : null }; });
+      return { text, gepackt: x.gepackt === true, menge: Number.isInteger(x.menge) && x.menge >= 1 && x.menge <= MAX_MENGE ? x.menge : x.menge === undefined ? kofferMenge(text, k.eingaben) : null,
+        selbst: x.selbst === true, eigen: x.eigen === true }; });
   k.quelle = o.quelle === "chat" ? "chat" : o.quelle === "app" ? "app" : null;
   k.gepacktFuer = typeof o.gepacktFuer === "string" ? o.gepacktFuer.slice(0, 1000) : null;
   return k;
@@ -75,10 +88,14 @@ async function laden() {
   } catch (e) { console.error(e); reisen = []; }
   return reisen;
 }
-// r = die geänderte Reise (bekommt den Zeitpunkt, die Liste „Deine Reisen“ sortiert danach)
-const speichern = (r = null) => {
-  if (r) r.geaendert = new Date().toISOString();
-  return setMeta("reisen", reisen.filter(x => !leerReise(x))).catch(e => fehlerToast("Speichern hat nicht geklappt", e));
+// r = die geänderte Reise (bekommt den Zeitpunkt, die Liste „Deine Reisen“ sortiert danach).
+// merken = zählt für „Seit deiner letzten Sicherung …“ (meta „sonstGeaendert“, seit 0.31, Durchsicht 19.11.2026: Reisen stehen in der
+// Sicherung, aber Änderungen daran meldete die App nicht). Nur Abhaken zählt nicht, sonst wäre nach jedem Häkchen eine Sicherung „fällig“.
+const speichern = (r = null, merken = true) => {
+  const jetzt = new Date().toISOString();
+  if (r) r.geaendert = jetzt;
+  return Promise.all([setMeta("reisen", reisen.filter(x => !leerReise(x))), merken ? setMeta("sonstGeaendert", jetzt) : null])
+    .catch(e => fehlerToast("Speichern hat nicht geklappt", e));
 };
 const eingabenSchluessel = e => JSON.stringify([e.tage, e.temperatur, e.wetter, e.anlaesse, e.waschen, e.handgepaeck]);
 const fuerText = e => [e.tage && `${e.tage} ${e.tage === 1 ? "Tag" : "Tage"}`, e.temperatur, ...e.wetter, ...e.anlaesse].filter(Boolean).join(" · ");
@@ -88,6 +105,15 @@ function neueReise() {
   reisen.unshift(r);
   aendern = false; reiseOffen = false; tageOffen = false; chatOffen = false;
   return r;
+}
+
+// „Outfit pro Tag“ der App nur neu rechnen, wenn sich Packliste, Teile oder Reise ändern (seit 0.31, Durchsicht 19.11.2026: vorher bei
+// jedem Häkchen; bei sehr langen Listen dauerte das am PC fast 2 Sekunden)
+let tageMerk = { schluessel: null, plan: [] };
+function tageVon(teile, e, mitStil) {
+  const s = JSON.stringify([teile.map(t => [t.nr, t.geaendert || ""]), eingabenSchluessel(e), mitStil.mode]);
+  if (tageMerk.schluessel !== s) tageMerk = { schluessel: s, plan: kofferTage(teile, e, mitStil) };
+  return tageMerk.plan;
 }
 
 /* ---------- Ansicht ---------- */
@@ -101,7 +127,14 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
   const e = koffer.eingaben, pool = kandidaten(items), nachNr = new Map(items.map(t => [t.nr, t]));
   const mitStil = { mode: stilAktuell(stil).mode };
   const gepackt = koffer.nrs !== null;
-  const aenderung = felder => { Object.assign(e, felder); speichern(koffer); neuZeichnen(); };
+  const aenderung = felder => {
+    const vorher = { ...e };
+    Object.assign(e, felder);
+    if (koffer.extras) koffer.extras = extrasAnpassen(koffer.extras, vorher, e);
+    speichern(koffer); neuZeichnen();
+  };
+  // Beim Packen (App oder Chat): vorhandene Einträge behalten, Anzahlen zur jetzigen Reise (ältere Reisen aus 0.30 hatten evtl. alte Zahlen)
+  const extrasJetzt = () => koffer.extras ? extrasAnpassen(koffer.extras, e, e) : neueExtras(e);
 
   // --- Die Reise ---
   const einer = (werte, wert, setzen) => choice({ options: werte, selected: wert ? [wert] : [], onChange: sel => setzen(sel[0] || null) }).el;
@@ -115,7 +148,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     const r = kofferPacken(e, pool, mitStil);
     if (!r.nrs.length) return toast("Dafür passt noch nichts aus deinem Kleiderschrank.");
     Object.assign(koffer, { nrs: r.nrs, gepackt: koffer.gepackt.filter(n => r.nrs.includes(n)), tage: null, luecken: r.luecken, tipps: r.tipps,
-      extras: koffer.extras || neueExtras(e), quelle: "app", gepacktFuer: eingabenSchluessel(e) });
+      extras: extrasJetzt(), quelle: "app", gepacktFuer: eingabenSchluessel(e) });
     reiseOffen = false; aendern = false; speichern(koffer);
     toast(`${r.nrs.length} Teile eingepackt – jetzt abhaken, was im Koffer ist`);
     neuZeichnen();
@@ -149,9 +182,12 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
   // --- Mit ChatGPT oder Gemini ---
   // id: Jede Reise hat ihre eigene Chat-Antwort; name kommt mit in die Anfrage („Reise: Kreta Sommer 2026“)
   const frage = { koffer: { ...e, id: koffer.id, name: koffer.name }, uebernehmen: (nrs, tage) => {
-    const neu = nrs.filter(n => nachNr.has(n)).slice(0, MAX_TEILE);
-    Object.assign(koffer, { nrs: neu, gepackt: koffer.gepackt.filter(n => neu.includes(n)), tage: tage.length ? tage : null, luecken: [], tipps: [],
-      extras: koffer.extras || neueExtras(e), quelle: "chat", gepacktFuer: eingabenSchluessel(e) });
+    const neu = nrs.filter(n => nachNr.has(n)).slice(0, MAX_TEILE), drin = new Set(neu);
+    // Tage nur mit Teilen, die auch in der Packliste sind (seit 0.31: Stand in einem Tag ein Teil aus dem Papierkorb, ersetzte die App
+    // vorher alle Tage aus dem Chat still durch ihre eigenen)
+    const tageDa = tage.map(t => ({ ...t, nrs: t.nrs.filter(n => drin.has(n)) })).filter(t => t.nrs.length);
+    Object.assign(koffer, { nrs: neu, gepackt: koffer.gepackt.filter(n => drin.has(n)), tage: tageDa.length ? tageDa : null, luecken: [], tipps: [],
+      extras: extrasJetzt(), quelle: "chat", gepacktFuer: eingabenSchluessel(e) });
     aendern = false; chatOffen = false; speichern(koffer);
     toast(`${neu.length} Teile aus der Antwort eingepackt`);
     Promise.resolve(neuZeichnen()).then(() => document.getElementById("rahmen")?.scrollTo(0, 0)); // oben steht jetzt die Packliste
@@ -169,7 +205,8 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     const neu = neueReise();
     if (!neu) return;
     const kopie = JSON.parse(JSON.stringify({ eingaben: e, nrs: koffer.nrs, tage: koffer.tage, luecken: koffer.luecken, tipps: koffer.tipps, quelle: koffer.quelle, gepacktFuer: koffer.gepacktFuer }));
-    Object.assign(neu, kopie, { name: koffer.name ? `${koffer.name} (Kopie)`.slice(0, MAX_NAME) : null, gepackt: [], extras: koffer.extras ? koffer.extras.map(x => ({ text: x.text, gepackt: false, menge: x.menge ?? null })) : null });
+    Object.assign(neu, kopie, { name: koffer.name ? `${koffer.name} (Kopie)`.slice(0, MAX_NAME) : null, gepackt: [],
+      extras: koffer.extras ? koffer.extras.map(x => ({ text: x.text, gepackt: false, menge: x.menge ?? null, selbst: !!x.selbst, eigen: !!x.eigen })) : null });
     speichern(neu); toast("Kopie angelegt, alle Haken sind wieder offen. Den Namen änderst du unter „Deine Reise“.");
     reiseOffen = true; nav.ersetze({ v: "koffer", id: neu.id });
   };
@@ -198,7 +235,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     b.onclick = onclick;
     return b;
   };
-  const umschalten = t => { hak.has(t.nr) ? hak.delete(t.nr) : hak.add(t.nr); koffer.gepackt = [...hak]; speichern(koffer); neuZeichnen(); };
+  const umschalten = t => { hak.has(t.nr) ? hak.delete(t.nr) : hak.add(t.nr); koffer.gepackt = [...hak]; speichern(koffer, false); neuZeichnen(); };
   const raus = t => { koffer.nrs = koffer.nrs.filter(n => n !== t.nr); koffer.gepackt = koffer.gepackt.filter(n => n !== t.nr); koffer.tage = null; speichern(koffer); toast(`Nr. ${nrText(t.nr)} aus dem Koffer genommen`); neuZeichnen(); };
   const dazu = t => { if (koffer.nrs.length >= MAX_TEILE) return toast(`Höchstens ${MAX_TEILE} Teile.`); koffer.nrs = [...koffer.nrs, t.nr]; koffer.tage = null; speichern(koffer); toast(`Nr. ${nrText(t.nr)} eingepackt`); neuZeichnen(); };
   const plaetze = [...new Set([...REIHE, ...teile.map(platzVon)])];
@@ -222,15 +259,22 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     el("div", { class: "koffer-stand" }, el("strong", {}, "Packliste"), el("span", {}, `${zahl} von ${gesamt} eingepackt`)), balken,
     el("p", { class: "hint" }, aendern ? "Tippe ein Teil an, um es herauszunehmen, oder ein Teil bei „Dazu nehmen“, um es einzupacken."
       : `Tippe ein Teil an, wenn es im Koffer ist.${koffer.quelle === "chat" ? " Diese Liste stammt aus deiner Chat-Antwort." : ""}`),
-    reiseGeaendert ? el("p", { class: "hint" }, "Du hast die Reise oben geändert. Tippe dort auf „Neu von der App packen lassen“, wenn die Liste dazu passen soll.") : null,
+    // Mit Knopf gleich hier (seit 0.31, Durchsicht 19.11.2026): Vorher hieß es „oben … dort“, aber „Deine Reise“ steht unten und ist eingeklappt
+    reiseGeaendert ? el("div", {}, el("p", { class: "hint" }, koffer.quelle === "chat"
+        ? "Du hast die Angaben zur Reise geändert, die Packliste ist noch die alte aus dem Chat. Lass die App neu packen oder frag unten den Chat noch einmal."
+        : "Du hast die Angaben zur Reise geändert, die Packliste ist noch die alte."),
+      el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => packKnopf.click() }, "🧳 Von der App neu packen lassen"))) : null,
     fehlt.length ? el("p", { class: "hint" }, `${fehlt.map(n => "Nr. " + nrText(n)).join(", ")} ${fehlt.length === 1 ? "ist" : "sind"} nicht mehr im Kleiderschrank.`) : null,
     ...koffer.luecken.map(x => el("p", { class: "hint" }, "⚠️ " + x)),
     ...gruppen,
     el("div", { class: "actions" }, aendernKnopf));
 
   // --- Outfit pro Tag (aus der Chat-Antwort, sonst von der App aus genau diesen Teilen) ---
-  const ausChat = koffer.tage?.every(d => d.nrs.every(n => teile.some(t => t.nr === n))) ? koffer.tage : null;
-  const plan = ausChat ? ausChat.map(d => ({ titel: d.titel, nrs: d.nrs })) : kofferTage(teile, e, mitStil).map(d => ({ titel: `Tag ${d.tag} · ${d.anlass}`, nrs: d.nrs }));
+  // Tage aus dem Chat: Teile, die nicht mehr im Koffer sind (z. B. inzwischen im Papierkorb), fallen nur aus ihrem Tag heraus (seit 0.31;
+  // vorher ersetzte die App dann alle Chat-Tage still durch ihre eigenen)
+  const imKoffer = new Set(teile.map(t => t.nr));
+  const ausChat = (koffer.tage || []).map(d => ({ titel: d.titel, nrs: d.nrs.filter(n => imKoffer.has(n)) })).filter(d => d.nrs.length);
+  const plan = ausChat.length ? ausChat : tageVon(teile, e, mitStil).map(d => ({ titel: `Tag ${d.tag} · ${d.anlass}`, nrs: d.nrs }));
   const tage = plan.length ? el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "👗 Outfit pro Tag"), el("span", { class: "klappe-zahl" }, String(plan.length))),
     ...plan.map(d => {
       const ts = d.nrs.map(n => teile.find(t => t.nr === n)).filter(Boolean);
@@ -243,11 +287,12 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
   // --- Außerdem einpacken (nicht im Kleiderschrank) ---
   const extraListe = el("div", { class: "extra-liste" }, ...extras.map((x, i) => {
     const box2 = el("input", { type: "checkbox", checked: x.gepackt, "aria-label": x.text });
-    box2.onchange = () => { x.gepackt = box2.checked; speichern(koffer); neuZeichnen(); };
+    box2.onchange = () => { x.gepackt = box2.checked; speichern(koffer, false); neuZeichnen(); };
     const weg = el("button", { type: "button", class: "link", "aria-label": `„${x.text}“ entfernen` }, "✕");
     weg.onclick = () => { koffer.extras = extras.filter((_, j) => j !== i); speichern(koffer); neuZeichnen(); };
     // Anzahl (seit 0.30): − / ＋, bei 1 nimmt „−“ die Zahl ganz weg. Ohne Zahl ein kleines „＋ Anzahl“.
-    const setze = n => { x.menge = n; speichern(koffer); neuZeichnen(); };
+    // selbst: Diese Anzahl hat sie eingestellt, die App ändert sie nicht mehr, wenn sich die Reise ändert
+    const setze = n => { x.menge = n; x.selbst = true; speichern(koffer); neuZeichnen(); };
     const knopf = (zeichen, label, f) => { const b = el("button", { type: "button", class: "menge-knopf", "aria-label": `${label}: ${x.text}` }, zeichen); b.onclick = f; return b; };
     const menge = x.menge
       ? el("span", { class: "menge" }, knopf("−", x.menge === 1 ? "Anzahl entfernen" : "Weniger", () => setze(x.menge > 1 ? x.menge - 1 : null)),
@@ -262,7 +307,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     const text = clean(neuText.value).slice(0, MAX_EXTRA_TEXT);
     if (!text) return toast("Bitte etwas eintippen.");
     if (extras.length >= MAX_EXTRAS) return toast(`Höchstens ${MAX_EXTRAS} Einträge.`);
-    koffer.extras = [...extras, { text, gepackt: false, menge: null }]; speichern(koffer); neuZeichnen();
+    koffer.extras = [...extras, { text, gepackt: false, menge: null, selbst: false, eigen: true }]; speichern(koffer); neuZeichnen();
   };
   neuText.onkeydown = ev => { if (ev.key === "Enter") neuKnopf.click(); };
   const sonstiges = el("div", { class: "panel" }, el("strong", {}, "Außerdem einpacken"),

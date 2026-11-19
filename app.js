@@ -6,7 +6,7 @@
 import { loadAI, recognize, loadImage, alsJpg, AERMEL_FEST } from "./ki.js?v=9";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=11";
 import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange } from "./ui.js?v=20";
-import { refresh, initSchrank } from "./schrank.js?v=43";
+import { refresh, initSchrank } from "./schrank.js?v=44";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
