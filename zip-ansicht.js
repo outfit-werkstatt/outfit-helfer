@@ -12,7 +12,7 @@ import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleic
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=22";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=23";
-import { VERKAUF_STUFEN, preisPruefen, tageSeit } from "./verkauf.js?v=4";
+import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=4";
 import { reisenPruefen } from "./koffer.js?v=5";
 import { dingPruefen } from "./haushalt.js?v=1";
 
@@ -205,6 +205,8 @@ function pruefen(j) {
       // Verkaufen (seit 0.26): nur die drei Stufen, Beträge als Zahl in Grenzen, Zeitpunkte als Datum
       verkauf: VERKAUF_STUFEN.includes(t.verkauf) ? t.verkauf : null, preis: preisPruefen(t.preis), erloes: preisPruefen(t.erloes),
       eingestelltAm: zeit(t.eingestelltAm), verkauftAm: zeit(t.verkauftAm),
+      // Seit 0.32: Plattform (auch selbst eingetippt) und Kaufpreis für die Verkaufs-Übersicht
+      plattform: plattformPruefen(t.plattform), kaufpreis: preisPruefen(t.kaufpreis),
       ordner: liste(t.ordner, 50, 50).filter(id => ids.has(id)), erstellt: zeit(t.erstellt) || new Date().toISOString(),
       ki: Object.fromEntries(["art", "farbe", "muster", "material", "aermel", "schnitt"].map(f => [f, text(k[f], 30)])),
       _foto: typeof t.foto === "string" ? t.foto : null, _vorschau: typeof t.vorschau === "string" ? t.vorschau : null };

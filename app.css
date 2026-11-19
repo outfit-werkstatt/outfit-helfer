@@ -59,6 +59,10 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 /* Platzhalter für eine spätere Idee (seit 0.28): gestrichelt wie „Neuer Ordner“, damit er nicht wie ein fertiger Knopf aussieht */
 /* Sachen im Haushalt (seit 0.32): Überschriften „Noch ergänzen“ / „Fertig eingetragen“ */
 .ding-abschnitt{font-size:1.05rem;font-weight:700;color:var(--haupt);margin:18px 0 8px}
+/* Verkaufen (seit 0.32): „Andere Plattform?“ als schlichter Link zum Aufklappen */
+.plattform-anders{margin-top:10px}
+.plattform-anders summary{color:var(--link);font-size:.92rem;cursor:pointer;padding:6px 0}
+.plattform-anders .chips{margin-top:6px}
 label.upload input{display:none}
 .foto-tipp{margin:10px 0 18px}
 .foto-tipp .info-zeile{justify-content:center}

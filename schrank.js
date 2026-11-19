@@ -15,7 +15,7 @@ import { GROUPS } from "./ki.js?v=9";
 import { renderKoffer } from "./koffer.js?v=5";
 import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
-  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=4";
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=4";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -138,7 +138,7 @@ function schwebeEinrichten() {
 }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
 // Beim Haushalt (seit 0.32) nie: Neue Kleidung ändert dort nichts, und offene Eingaben in „Noch ergänzen“ würden den Fokus verlieren
-export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingKorb"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
+export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingText", "dingKorb"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
@@ -170,7 +170,7 @@ async function render() {
   if (s.v === "koffer") return renderKoffer(box, (titel, unter) => kopf(titel, unter), s.id || null, items, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen,
     { go, ersetze, back });
   // Sachen im Haushalt (seit 0.32): Übersicht, ein Ding, Papierkorb. Eigener Speicher, darum lädt haushalt.js selbst.
-  if (["haushalt", "ding", "dingKorb"].includes(s.v)) return renderHaushalt(box, kopf, s, url, { go, back,
+  if (["haushalt", "ding", "dingText", "dingKorb"].includes(s.v)) return renderHaushalt(box, kopf, s, url, { go, back,
     schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnen);
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
     items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
@@ -372,7 +372,7 @@ const summeVon = (list, feld) => Math.round(list.reduce((s, t) => s + (t[feld] |
 // „Will ich verkaufen: 2 · Bei Vinted: 1 (zusammen 15 €)“ – Bereiche mit 0 Teilen fallen weg (iPhone-Test: „0 will ich verkaufen“)
 function verkaufUnter(list) {
   const bei = list.filter(t => t.verkauf === EINGESTELLT), summe = summeVon(bei, "preis"), wollen = list.length - bei.length;
-  const teile = [wollen ? `Will ich verkaufen: ${wollen}` : null, bei.length ? `Bei Vinted: ${bei.length}${summe ? ` (zusammen ${preisText(summe)})` : ""}` : null].filter(Boolean);
+  const teile = [wollen ? `Will ich verkaufen: ${wollen}` : null, bei.length ? `Eingestellt: ${bei.length}${summe ? ` (zusammen ${preisText(summe)})` : ""}` : null].filter(Boolean);
   return (teile.length ? teile.join(" · ") + "." : "") + (list.length === 1 ? " Es kommt nicht in Outfit-Vorschläge." : " Sie kommen nicht in Outfit-Vorschläge.");
 }
 function verkauftUnter(list) {
@@ -450,8 +450,8 @@ function renderListe(items, folders, id) {
     : `Alle ${anzahl(drin.length)}`;
   // Bei Vinted schon lange online: Hinweis oben (nur beim Öffnen der App, eine Mitteilung aufs Handy gibt es nicht)
   const lange = id === L_VERKAUF && !mehrfach ? drin.filter(langeOnline) : [];
-  const langeHinweis = lange.length ? el("div", { class: "panel hinweis" }, el("strong", {}, "⏰ Schon lange bei Vinted"),
-    el("p", {}, `${lange.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${lange.length === 1 ? "ist" : "sind"} seit über ${LANGE_TAGE} Tagen online. Vielleicht den Preis bei Vinted etwas senken oder den Artikel neu einstellen?`)) : null;
+  const langeHinweis = lange.length ? el("div", { class: "panel hinweis" }, el("strong", {}, "⏰ Schon lange online"),
+    el("p", {}, `${lange.map(t => `Nr. ${nrText(t.nr)} (${plattformVon(t)})`).join(", ")} ${lange.length === 1 ? "ist" : "sind"} seit über ${LANGE_TAGE} Tagen online. Vielleicht den Preis etwas senken oder den Artikel neu einstellen?`)) : null;
 
   // „＋ Eigenes Outfit zusammenstellen“ (aus „⭐ Fertige Outfits“): alle Teile antippen, unten nur „⭐ Als Outfit speichern“
   const zusammen = !!current.zusammenstellen && id === ALLE && !!mehrfach;
@@ -526,21 +526,33 @@ function renderListe(items, folders, id) {
       fertigMit(neu.length ? `${n(neu)} in „${VERKAUF_NAME}“` : "Die ausgewählten Teile sind schon beim Verkaufen");
     } };
     const verkaufAktionen = id === L_VERKAUF ? [
-      { text: "📦 Bei Vinted eingestellt", haupt: true, los: async nrs => {
-        const neu = nrs.filter(nr => alleTeile.get(nr)?.verkauf === ZUM_VERKAUF), jetzt = new Date().toISOString();
-        await updateItems(neu.map(nr => ({ nr, verkauf: EINGESTELLT, eingestelltAm: jetzt })));
-        fertigMit(neu.length ? `${n(neu)} bei Vinted eingestellt` : "Die ausgewählten Teile sind schon eingestellt");
+      // Seit 0.32 mit Plattform (Wunsch 19.11.2026): erst antippen, wo eingestellt (Vinted, Kleinanzeigen, eBay oder eingetippt)
+      { text: "📦 Eingestellt bei …", haupt: true, los: async nrs => {
+        const fertig = async p => {
+          const neu = [...(mehrfach || [])].filter(nr => alleTeile.get(nr)?.verkauf === ZUM_VERKAUF), jetzt = new Date().toISOString();
+          await updateItems(neu.map(nr => ({ nr, verkauf: EINGESTELLT, eingestelltAm: jetzt, plattform: p })));
+          fertigMit(neu.length ? `${n(neu)} bei ${p} eingestellt` : "Die ausgewählten Teile sind schon eingestellt");
+        };
+        const eigen = el("input", { type: "text", class: "suche", maxLength: MAX_PLATTFORM, placeholder: "Andere, z. B. Momox", "aria-label": "Andere Plattform", autocomplete: "off", enterKeyHint: "done" });
+        const ok = el("button", { type: "button", class: "btn" }, "Übernehmen");
+        ok.onclick = () => { const p = clean(eigen.value).slice(0, MAX_PLATTFORM); if (!p) return toast("Bitte eine Plattform eintippen."); fertig(p).catch(e => fehlerToast("Hat nicht geklappt", e)); };
+        eigen.onkeydown = e => { if (e.key === "Enter") ok.click(); };
+        fill(leiste.extra, el("div", { class: "note" }, `${n(nrs)}: Wo eingestellt?`),
+          el("div", { class: "chips" }, ...PLATTFORMEN.map(p => el("button", { type: "button", class: "chip", onclick: () => fertig(p).catch(e => fehlerToast("Hat nicht geklappt", e)) }, p)),
+            el("button", { type: "button", class: "chip", onclick: () => { leiste.extra.hidden = true; } }, "Abbrechen")),
+          el("div", { class: "extra-neu" }, eigen, ok));
+        leiste.extra.hidden = false;
       } },
       { text: "✅ Verkauft", los: async nrs => {
-        if (!confirm(`${n(nrs)} als verkauft eintragen?\n\nDanach ${nrs.length === 1 ? "ist es" : "sind sie"} nicht mehr im Kleiderschrank, nur noch unter „${VERKAUFT_NAME}“. Als Betrag gilt der Preis bei Vinted (falls eingetragen), ändern kannst du ihn beim Teil.`)) return;
+        if (!confirm(`${n(nrs)} als verkauft eintragen?\n\nDanach ${nrs.length === 1 ? "ist es" : "sind sie"} nicht mehr im Kleiderschrank, nur noch unter „${VERKAUFT_NAME}“. Als Betrag gilt der eingetragene Preis (falls vorhanden), ändern kannst du ihn beim Teil.`)) return;
         const jetzt = new Date().toISOString();
-        await updateItems(nrs.map(nr => ({ nr, verkauf: VERKAUFT, verkauftAm: jetzt, erloes: alleTeile.get(nr)?.preis ?? null })));
+        await updateItems(nrs.map(nr => ({ nr, verkauf: VERKAUFT, verkauftAm: jetzt, erloes: alleTeile.get(nr)?.preis ?? null, plattform: plattformVon(alleTeile.get(nr)) })));
         fertigMit(`${n(nrs)} verkauft 🎉`);
       } },
       { text: "Doch behalten", los: async nrs => {
-        // Rückfrage, wenn dabei Preis oder Datum bei Vinted verloren gehen (Durchsicht vor dem Hochladen, 18.11.2026)
+        // Rückfrage, wenn dabei Preis oder Datum verloren gehen (Durchsicht vor dem Hochladen, 18.11.2026)
         const bei = nrs.filter(nr => alleTeile.get(nr)?.verkauf === EINGESTELLT || alleTeile.get(nr)?.preis != null).length;
-        if (bei && !confirm(`${n(nrs)} doch behalten?\n\nBei ${bei === 1 ? "1 Teil gehen" : bei + " Teilen gehen"} der Preis und das Datum bei Vinted verloren. Nimm ${bei === 1 ? "es" : "sie"} auch bei Vinted heraus.`)) return;
+        if (bei && !confirm(`${n(nrs)} doch behalten?\n\nBei ${bei === 1 ? "1 Teil gehen" : bei + " Teilen gehen"} der Preis und das Datum verloren. Nimm ${bei === 1 ? "es" : "sie"} auch auf der Plattform heraus.`)) return;
         await updateItems(nrs.map(nr => ({ nr, ...KEIN_VERKAUF })));
         fertigMit(`${n(nrs)} ${nrs.length === 1 ? "kommt" : "kommen"} wieder in Vorschläge`);
       } },

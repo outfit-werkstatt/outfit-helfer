@@ -9,7 +9,9 @@
 import { el, fill, toast, fehlerToast, field, choice, clean, cleanText, zeigeGross, datumText, markenFeld, merkeMarken, mitInfo, mitWachSperre } from "./ui.js?v=21";
 import { addDing, allDinge, getDingFoto, updateDing, purgeDinge, dingNrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg } from "./ki.js?v=9";
-import { preisLesen, preisText, preisPruefen } from "./verkauf.js?v=4";
+import { preisLesen, preisText, preisPruefen, plattformPruefen, verkaufFeld, verkaufKurz, verkaufZeichen, imVerkauf, istVerkauft, VERKAUF_STUFEN,
+  EINGESTELLT } from "./verkauf.js?v=4";
+import { renderDingText } from "./ding-text.js?v=1";
 
 // Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang)
 const KATEGORIEN_KNOEPFE = ["Küche", "Elektronik", "Deko", "Möbel", "Bücher & Medien", "Spiele & Spielzeug", "Werkzeug & Garten", "Sonstiges"];
@@ -41,6 +43,9 @@ export function dingPruefen(d) {
     menge: Number.isInteger(d.menge) && d.menge >= 1 && d.menge <= MAX_MENGE ? d.menge : null,
     zustand: DING_ZUSTAENDE.includes(d.zustand) ? d.zustand : null, kaufpreis: preisPruefen(d.kaufpreis),
     notiz: typeof d.notiz === "string" ? cleanText(d.notiz).slice(0, MAX_NOTIZ) || null : null, ergaenzen: d.ergaenzen === true,
+    // Verkaufen wie bei der Kleidung (verkauf.js)
+    verkauf: VERKAUF_STUFEN.includes(d.verkauf) ? d.verkauf : null, preis: preisPruefen(d.preis), erloes: preisPruefen(d.erloes),
+    eingestelltAm: zeitVon(d.eingestelltAm), verkauftAm: zeitVon(d.verkauftAm), plattform: plattformPruefen(d.plattform),
     erstellt: zeitVon(d.erstellt) || jetzt, geaendert: zeitVon(d.geaendert) || zeitVon(d.erstellt) || jetzt };
 }
 
@@ -154,7 +159,7 @@ function ergaenzenKarte(d, bild, neuZeichnen, entsorgen) {
 }
 
 /* ---------- Übersicht ---------- */
-const filter = { kategorie: null, raum: null, suche: "" }; // pro Sitzung gemerkt
+const filter = { kategorie: null, raum: null, suche: "", stand: null }; // pro Sitzung gemerkt (stand: null = im Haushalt, "verkaufen", "verkauft")
 const OHNE_RAUM = "ohne Raum";
 // Suche: „H12“, „12“ oder „H012“ = Nummer; sonst Wörter, die alle in den Angaben vorkommen müssen (z. B. „lego keller“)
 function passtSuche(d, q) {
@@ -173,7 +178,27 @@ function filterReihe(label, liste, key, wert) {
 }
 function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen) {
   const da = dinge.filter(d => !d.geloescht).sort((a, b) => b.nr - a.nr);
-  const offen = da.filter(d => d.ergaenzen).sort((a, b) => a.nr - b.nr), fertige = da.filter(d => !d.ergaenzen), imKorb = dinge.filter(d => d.geloescht).length;
+  const offen = da.filter(d => d.ergaenzen).sort((a, b) => a.nr - b.nr), imKorb = dinge.filter(d => d.geloescht).length;
+  // Umschalter „Im Haushalt · Zum Verkaufen · Verkauft“ (seit 0.32): Verkauftes ist nicht mehr im Haushalt, nur noch unter „✅ Verkauft“
+  const alleFertig = da.filter(d => !d.ergaenzen);
+  const STAENDE = { haushalt: ["🏠", "Im Haushalt", alleFertig.filter(d => !istVerkauft(d))], verkaufen: ["💰", "Zum Verkaufen", alleFertig.filter(imVerkauf)],
+    verkauft: ["✅", "Verkauft", alleFertig.filter(istVerkauft)] };
+  if (filter.stand && !STAENDE[filter.stand]) filter.stand = null;
+  const stand = filter.stand || "haushalt", fertige = STAENDE[stand][2];
+  const umschalter = STAENDE.verkaufen[2].length || STAENDE.verkauft[2].length || stand !== "haushalt"
+    ? el("div", { class: "chips umschalter" }, ...Object.entries(STAENDE).map(([k, [zeichen, wort, liste]]) => {
+        const b = el("button", { type: "button", class: "chip", "aria-label": `${wort}: ${anzahl(liste.length)}`,
+          onclick: () => { if (k !== stand) { filter.stand = k === "haushalt" ? null : k; filter.kategorie = filter.raum = null; neuZeichnen(); } } },
+          el("span", { class: "zahl" }, `${zeichen} ${liste.length}`), el("span", { class: "wort" }, wort));
+        b.setAttribute("aria-pressed", k === stand);
+        return b;
+      })) : null;
+  const summe = (l, f) => Math.round(l.reduce((s, d) => s + (d[f] || 0), 0) * 100) / 100;
+  const standZeile = stand === "verkaufen" ? (() => {
+      const bei = fertige.filter(d => d.verkauf === EINGESTELLT), wollen = fertige.length - bei.length, s = summe(bei, "preis");
+      return [wollen ? `Will ich verkaufen: ${wollen}` : null, bei.length ? `Eingestellt: ${bei.length}${s ? ` (zusammen ${preisText(s)})` : ""}` : null].filter(Boolean).join(" · ");
+    })()
+    : stand === "verkauft" ? `${anzahl(fertige.length)} verkauft${fertige.some(d => d.erloes != null) ? `, zusammen ${preisText(summe(fertige, "erloes"))}` : ""}.` : null;
 
   // Hinzufügen: mehrere Fotos auf einmal
   const status = el("p", { class: "hint", hidden: true });
@@ -213,9 +238,11 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen) {
     })));
   })) : null;
   const kachel = d => {
+    const zeichen = verkaufZeichen(d), unten = stand !== "haushalt" ? verkaufKurz(d) : woText(d) ? "📍 " + woText(d) : null;
     const b = el("button", { type: "button", class: "teil", onclick: () => nav.go({ v: "ding", nr: d.nr }) },
-      el("span", { class: "bild" }, el("img", { src: bild(d.vorschau), alt: dingName(d), loading: "lazy" }), el("span", { class: "plakette" }, dingNrText(d.nr))),
-      el("span", { class: "text" }, dingTitel(d)), woText(d) ? el("span", { class: "rest" }, "📍 " + woText(d)) : null);
+      el("span", { class: "bild" }, el("img", { src: bild(d.vorschau), alt: dingName(d), loading: "lazy" }), el("span", { class: "plakette" }, dingNrText(d.nr)),
+        zeichen ? el("span", { class: "nicht", title: verkaufKurz(d) }, zeichen) : null),
+      el("span", { class: "text" }, dingTitel(d)), unten ? el("span", { class: "rest" }, unten) : null);
     b.dataset.nr = d.nr;
     return b;
   };
@@ -233,10 +260,14 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen) {
   suche.oninput = suchen; suche.onkeydown = e => { if (e.key === "Enter") suche.blur(); };
   suchen();
   const leer = !da.length ? "Noch nichts hier. Tippe oben auf „＋ Fotos auswählen“."
-    : !fertige.length ? null : !gefiltert.length ? "Mit diesem Filter gibt es hier nichts." : null;
+    : !fertige.length ? (stand === "verkaufen" ? "Hier ist nichts. Ein Ding kommt hierher, wenn du bei ihm „💰 Will ich verkaufen“ antippst."
+      : stand === "verkauft" ? "Noch nichts verkauft." : null)
+    : !gefiltert.length ? "Mit diesem Filter gibt es hier nichts." : null;
   const korbKnopf = imKorb ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "dingKorb" }) }, `🗑 Papierkorb (${imKorb})`)) : null;
-  fill(box, kopf("🏠 Sachen im Haushalt", da.length ? anzahl(da.length) : null), hinzu, ergaenzen,
-    fertige.length ? el("h3", { class: "ding-abschnitt" }, offen.length ? "Fertig eingetragen" : "Alles") : null,
+  const imHaushalt = da.filter(d => !istVerkauft(d)).length;
+  fill(box, kopf("🏠 Sachen im Haushalt", imHaushalt ? anzahl(imHaushalt) : null), hinzu, ergaenzen,
+    alleFertig.length ? el("h3", { class: "ding-abschnitt" }, offen.length ? "Fertig eingetragen" : "Alles") : null,
+    umschalter, standZeile ? el("p", { class: "hint aussortiert-unter" }, standZeile) : null,
     fertige.length ? suche : null, filterEl, grid, fertige.length ? keinTreffer : null, leer ? el("p", { class: "hint" }, leer) : null, korbKnopf);
 }
 
@@ -278,8 +309,14 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen) {
     } catch (e) { korb.disabled = false; fehlerToast("Hat nicht geklappt", e); }
   };
   const aktionen = el("div", { class: "actions wrap" }, d.geloescht ? null : aendern, korb);
-  fill(box, kopf(dingTitel(d), d.geloescht ? `Liegt im Papierkorb (${nochTage(d)})` : d.ergaenzen ? "Noch nicht fertig eingetragen" : null),
-    gross, inhalt, aktionen);
+  // Verkaufen (seit 0.32, wie bei der Kleidung) und der Text für Vinted, Kleinanzeigen oder eBay
+  const verkauf = d.geloescht ? null : el("div", { class: "panel" }, verkaufFeld(d, () => neuZeichnen(), { speichern: updateDing, name: dingNrText, ding: true }));
+  const text = d.geloescht || istVerkauft(d) ? null : el("div", { class: "actions wrap" },
+    el("button", { type: "button", class: imVerkauf(d) ? "btn primary" : "btn", onclick: () => nav.go({ v: "dingText", nr: d.nr }) }, "🏷 Verkaufstext"));
+  const beimVerkauf = imVerkauf(d) || istVerkauft(d);
+  fill(box, kopf(dingTitel(d), d.geloescht ? `Liegt im Papierkorb (${nochTage(d)})` : istVerkauft(d) ? "✅ Verkauft – nicht mehr im Haushalt"
+      : d.ergaenzen ? "Noch nicht fertig eingetragen" : null),
+    gross, text, beimVerkauf ? verkauf : null, inhalt, beimVerkauf ? null : verkauf, aktionen);
 }
 
 /* ---------- Papierkorb ---------- */
@@ -320,6 +357,12 @@ export async function renderHaushalt(box, kopf, s, bild, nav, neuZeichnen) {
     const d = dinge.find(x => x.nr === s.nr);
     if (!d) return nav.back();
     return renderDing(box, kopf, d, await getDingFoto(d.nr), bild, nav, neuZeichnen, entsorgen);
+  }
+  if (s.v === "dingText") {
+    const d = dinge.find(x => x.nr === s.nr);
+    if (!d || d.geloescht) return nav.back();
+    return renderDingText(box, kopf("🏷 Verkaufstext", dingTitel(d)), d, bild, felder => updateDing(d.nr, felder),
+      verkaufFeld(d, null, { speichern: updateDing, name: dingNrText, ding: true }));
   }
   if (s.v === "dingKorb") return renderKorb(box, kopf, dinge, bild, nav, neuZeichnen);
   return renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen);
