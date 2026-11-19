@@ -43,9 +43,9 @@ export function preisLesen(s) {
   const n = Math.round(Number(roh.replace(",", ".")) * 100) / 100;
   return n >= 0 && n <= MAX_PREIS ? n : undefined;
 }
-// 12 → „12 €“, 12.5 → „12,50 €“
+// 12 → „12 €“, 12.5 → „12,50 €“ (seit 0.32 mit festem Leerzeichen: sonst brach „192 €“ zwischen Zahl und € um)
 export const preisText = n => typeof n === "number" && isFinite(n)
-  ? n.toLocaleString("de-DE", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }) + " €" : "";
+  ? n.toLocaleString("de-DE", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }) + " €" : "";
 // Für die Sicherung: nur Zahlen in vernünftigen Grenzen, auf Cent gerundet
 export const preisPruefen = v => typeof v === "number" && isFinite(v) && v >= 0 && v <= MAX_PREIS ? Math.round(v * 100) / 100 : null;
 // Für die Sicherung: Plattform als kurzer Text (eigene Einträge erlaubt)

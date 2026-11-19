@@ -59,6 +59,21 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 /* Platzhalter für eine spätere Idee (seit 0.28): gestrichelt wie „Neuer Ordner“, damit er nicht wie ein fertiger Knopf aussieht */
 /* Sachen im Haushalt (seit 0.32): Überschriften „Noch ergänzen“ / „Fertig eingetragen“ */
 .ding-abschnitt{font-size:1.05rem;font-weight:700;color:var(--haupt);margin:18px 0 8px}
+/* „💶 Verkäufe“ (seit 0.32): zwei große Zahlen, Tabellen nach Plattform und Monat, Liste der verkauften Sachen */
+.zahlen-reihe{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+.zahl-kachel{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--chip);border-radius:16px;padding:12px 6px;font-size:.88rem;color:var(--muted);text-align:center}
+.gross-zahl{font-size:1.5rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.verkauf-tabelle{margin-top:6px}
+.verkauf-reihe{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:.95rem}
+.verkauf-reihe > span:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.balken-platz{display:flex;align-items:center;gap:6px;min-width:0}
+.verkauf-balken{display:block;height:10px;border-radius:6px;background:var(--accent);min-width:6px}
+.verkauf-zeile{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:10px 0;font:inherit;color:inherit;cursor:pointer}
+.verkauf-zeile img{width:52px;height:52px;object-fit:cover;border-radius:12px;background:var(--chip);flex-shrink:0}
+.verkauf-zeile .name{display:block;font-weight:600;overflow-wrap:anywhere}
+.verkauf-zeile .unter{display:block;font-size:.82rem;color:var(--muted)}
+/* Vier kleine Kacheln auf der Startseite (mit „💶 Verkäufe“): 2 × 2 statt 3 + 1 */
+.neben.vier{grid-template-columns:repeat(2,minmax(0,1fr))}
 /* Verkaufen (seit 0.32): „Andere Plattform?“ als schlichter Link zum Aufklappen */
 .plattform-anders{margin-top:10px}
 .plattform-anders summary{color:var(--link);font-size:.92rem;cursor:pointer;padding:6px 0}

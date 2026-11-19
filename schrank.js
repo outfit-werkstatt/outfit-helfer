@@ -14,6 +14,7 @@ import { renderVinted } from "./vinted.js?v=14";
 import { GROUPS } from "./ki.js?v=9";
 import { renderKoffer } from "./koffer.js?v=5";
 import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
+import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=1";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=4";
 
@@ -172,6 +173,9 @@ async function render() {
   // Sachen im Haushalt (seit 0.32): Übersicht, ein Ding, Papierkorb. Eigener Speicher, darum lädt haushalt.js selbst.
   if (["haushalt", "ding", "dingText", "dingKorb"].includes(s.v)) return renderHaushalt(box, kopf, s, url, { go, back,
     schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnen);
+  // Verkäufe (seit 0.32): Kleidung und Haushalt zusammen
+  if (s.v === "verkaeufe") return renderVerkaeufe(box, kopf("💶 Verkäufe", "Kleidung und Haushalt zusammen"), items, dinge, url,
+    x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
     items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "vinted") {
@@ -242,10 +246,14 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
   $("kofferKnopf").onclick = () => da.length ? go({ v: "koffer" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
   $("haushaltKnopf").onclick = () => go({ v: "haushalt" }); // seit 0.32 (vorher Platzhalter „kommt bald“)
   const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst, dinge);
+  // „💶 Verkäufe“ (seit 0.32) nur, wenn es schon etwas zum Verkaufen gibt; dann stehen die vier kleinen Kacheln 2 × 2
+  const verkaeufe = verkaeufeKurz(items, dinge);
   fill($("nebenKacheln"),
     nebenKachel("✨ Mein Stil", kurz.length ? `${kurz.length} ${kurz.length === 1 ? "Angabe" : "Angaben"}` : "einstellen", () => go({ v: "stil" })),
     nebenKachel("💾 Sicherung", zip.text, () => go({ v: "sicherung" }), zip.faellig),
+    verkaeufe ? nebenKachel("💶 Verkäufe", verkaeufe, () => go({ v: "verkaeufe" })) : null,
     nebenKachel("🗑 Papierkorb", korb ? anzahl(korb) : "leer", () => go({ v: "korb" })));
+  $("nebenKacheln").classList.toggle("vier", !!verkaeufe);
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };
@@ -606,6 +614,8 @@ function renderListe(items, folders, id) {
       : kopf(ordner ? ordner.name : imAussortiert ? AUSSORTIERT_NAME : HAUPT, imAussortiert ? null : unter, waehlenKnopf),
     // In „Aussortiert“ steht die Zeile zum Bereich unter den Knöpfen zum Umschalten
     imAussortiert && !mehrfach ? umschalter : null, imAussortiert && unter ? el("p", { class: "hint aussortiert-unter" }, unter) : null,
+    // Seit 0.32: von „✅ Verkauft“ zur Übersicht mit Erlös, Plattformen und Monaten
+    id === L_VERKAUFT && !mehrfach && drin.length ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => go({ v: "verkaeufe" }) }, "💶 Zur Verkaufs-Übersicht")) : null,
     langeHinweis, aktionen, editor,
     basis.length ? suche : null,
     basis.length ? filterChips(basis, f, nf => { filters.set(filterName, nf); neuZeichnen(); }) : null,

@@ -268,6 +268,7 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen) {
   fill(box, kopf("🏠 Sachen im Haushalt", imHaushalt ? anzahl(imHaushalt) : null), hinzu, ergaenzen,
     alleFertig.length ? el("h3", { class: "ding-abschnitt" }, offen.length ? "Fertig eingetragen" : "Alles") : null,
     umschalter, standZeile ? el("p", { class: "hint aussortiert-unter" }, standZeile) : null,
+    stand === "verkauft" && fertige.length ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "verkaeufe" }) }, "💶 Zur Verkaufs-Übersicht")) : null,
     fertige.length ? suche : null, filterEl, grid, fertige.length ? keinTreffer : null, leer ? el("p", { class: "hint" }, leer) : null, korbKnopf);
 }
 
