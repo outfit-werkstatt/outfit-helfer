@@ -6,8 +6,8 @@
 // Texte nur per textContent/DOM (Namen und Plattformen können eingetippt sein).
 import { el, fill, field, choice, mitInfo, beschreibung, datumText } from "./ui.js?v=21";
 import { nrText } from "./speicher.js?v=12";
-import { istVerkauft, imVerkauf, plattformVon, preisText, EINGESTELLT } from "./verkauf.js?v=4";
-import { dingTitel } from "./haushalt.js?v=1";
+import { istVerkauft, imVerkauf, plattformVon, preisText, EINGESTELLT } from "./verkauf.js?v=5";
+import { dingTitel } from "./haushalt.js?v=2";
 
 const MELDE_ANZAHL = 30, MELDE_BETRAG = 2000, WARN_ANZAHL = 25, WARN_BETRAG = 1600;
 const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -15,6 +15,9 @@ const ALLE = "Alle Jahre";
 let jahrWahl = null; // pro Sitzung gemerkt
 const summe = l => Math.round(l.reduce((s, x) => s + (x.erloes || 0), 0) * 100) / 100;
 const sachen = n => `${n} ${n === 1 ? "Sache" : "Sachen"}`;
+// Jahr des Verkaufs in Ortszeit (seit 0.33.2, Durchsicht 19.11.2026: vorher aus der Weltzeit, ein Verkauf am 1.1. um 0:30 Uhr stand
+// im Vorjahr, dort aber als „Januar“; der Monat kam schon aus der Ortszeit)
+const jahrAus = iso => iso ? String(new Date(iso).getFullYear()) : null;
 
 // Alle Teile und Dinge mit Verkaufs-Stand, einheitlich: { art, nr, titel, t }
 function eintraege(items, dinge) {
@@ -26,7 +29,7 @@ export function verkaeufeKurz(items, dinge) {
   const e = eintraege(items, dinge);
   if (!e.length) return null;
   const jahr = String(new Date().getFullYear());
-  const dieses = e.filter(x => istVerkauft(x.t) && (x.t.verkauftAm || "").startsWith(jahr));
+  const dieses = e.filter(x => istVerkauft(x.t) && jahrAus(x.t.verkauftAm) === jahr);
   const online = e.filter(x => x.t.verkauf === EINGESTELLT).length;
   return dieses.length ? `${dieses.length} verkauft${summe(dieses.map(x => x.t)) ? " · " + preisText(summe(dieses.map(x => x.t))) : ""}` : online ? `${online} online` : `${e.length} zum Verkaufen`;
 }
@@ -34,7 +37,7 @@ export function verkaeufeKurz(items, dinge) {
 // oeffnen(eintrag) = Teil oder Ding ansehen, bild(blob) = Bild-Adresse
 export function renderVerkaeufe(box, kopf, items, dinge, bild, oeffnen, neuZeichnen) {
   const alle = eintraege(items, dinge), verkauft = alle.filter(x => istVerkauft(x.t));
-  const jahrVon = x => (x.t.verkauftAm || "").slice(0, 4) || null;
+  const jahrVon = x => jahrAus(x.t.verkauftAm);
   const jahre = [...new Set(verkauft.map(jahrVon).filter(Boolean))].sort().reverse();
   const diesesJahr = String(new Date().getFullYear());
   if (!jahrWahl || (jahrWahl !== ALLE && !jahre.includes(jahrWahl))) jahrWahl = jahre.includes(diesesJahr) ? diesesJahr : jahre[0] || ALLE;

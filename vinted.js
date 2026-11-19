@@ -8,12 +8,14 @@
 import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=21";
 import { updateItem, getPhoto, nrText } from "./speicher.js?v=12";
 import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=23";
-import { verkaufFeld } from "./verkauf.js?v=4";
+import { verkaufFeld } from "./verkauf.js?v=5";
 
-// Länge des Titels: laut einem Ratgeber erlaubt Vinted etwa 50 Zeichen (nicht offiziell bestätigt) → lieber kürzer
-const TITEL_MAX = 50;
-// Pro Sitzung gemerkt: mit Emojis und welche Formulierung
-let mitEmojis = true, variante = 0;
+// Seit 0.33.2 (Durchsicht 19.11.2026) auch für Kleinanzeigen und eBay, wie die Texte für den Haushalt (ding-text.js).
+// Länge des Titels: eBay erlaubt 80 Zeichen; Vinted und Kleinanzeigen laut Ratgebern etwa 50 bzw. 65 (nicht offiziell bestätigt)
+const TITEL_MAX = tabelle({ Vinted: 50, Kleinanzeigen: 65, eBay: 80 });
+export const TEXT_PLATTFORMEN = ["Vinted", "Kleinanzeigen", "eBay"];
+// Pro Sitzung gemerkt: Plattform, mit Emojis (null = Standard: nur bei Vinted) und welche Formulierung
+let mitEmojis = null, variante = 0, plattform = null;
 
 /* ---------- Texte ---------- */
 // Geschlecht der Art für „Schöner Pullover / Schöne Bluse / Schönes Kleid / Schöne Sneaker“ (p = Mehrzahl).
@@ -52,20 +54,20 @@ const wort = (map, v) => v == null ? null : v in map ? map[v] : v;
 
 // Titel: Marke + Art + Farbe + Material + Größe; wird es zu lang, fallen erst Material, dann die zweite Farbe, dann die Farbe weg.
 // Die Größe bleibt immer ganz (wird nie abgeschnitten).
-export function titelText(t) {
+export function titelText(t, max = TITEL_MAX.Vinted) {
   const farben = (t.farben || []).map(f => f === BUNT ? "bunt" : f.toLowerCase());
   let mat = t.material ? wort(MAT_KURZ, t.material) : "";
   if (t.art === "Jeans" && mat === "Denim") mat = ""; // „Jeans Denim“ sagt dasselbe zweimal
   const gr = t.groesse ? `Gr. ${t.groesse}` : "";
   const marke = markeVon(t);
   const bau = (fb, m) => [marke, artText(t.art), fb.join("/"), m, gr].filter(Boolean).join(" ");
-  for (const [fb, m] of [[farben, mat], [farben, ""], [farben.slice(0, 1), ""], [[], ""]]) { const s = bau(fb, m); if (s.length <= TITEL_MAX) return s; }
-  const vorne = [marke, artText(t.art)].filter(Boolean).join(" ").slice(0, TITEL_MAX - (gr ? gr.length + 1 : 0)).trim();
+  for (const [fb, m] of [[farben, mat], [farben, ""], [farben.slice(0, 1), ""], [[], ""]]) { const s = bau(fb, m); if (s.length <= max) return s; }
+  const vorne = [marke, artText(t.art)].filter(Boolean).join(" ").slice(0, max - (gr ? gr.length + 1 : 0)).trim();
   return [vorne, gr].filter(Boolean).join(" ");
 }
 
 // Beschreibung: Aufhänger, ein, zwei Sätze, Details, Service. v = Formulierung 0–2
-export function beschreibungText(t, emojis = true, v = 0) {
+export function beschreibungText(t, emojis = true, v = 0, p = "Vinted") {
   const em = s => emojis ? " " + s : "."; // ohne Emojis endet der erste Satz mit einem Punkt
   const marke = markeVon(t), g = GENUS[t.art], art = artText(t.art), von = marke ? ` von ${marke}` : "";
   const farben = t.farben || [], fa = !farben.length ? "" : farben.includes(BUNT) ? " in bunten Farben" : " in " + und(farben);
@@ -83,7 +85,11 @@ export function beschreibungText(t, emojis = true, v = 0) {
     ["🔸", "Muster", t.muster && t.muster !== "Einfarbig" ? t.muster : null], ["✂️", "Passform", passform.join(", ")],
     ["💫", "Stil", (t.stil || []).join(", ")], ["✨", "Zustand", t.zustand]
   ].filter(([, , w]) => w).map(([e, k, w]) => `${emojis ? e : "•"} ${k}: ${w}`);
-  const service = emojis
+  // Bei Kleinanzeigen und eBay dazu Versand/Abholung und der übliche Satz für private Verkäufe (keine Rechtsberatung)
+  const service = p !== "Vinted"
+    ? [emojis ? "📐 Maße gern auf Anfrage." : "Maße gern auf Anfrage.", p === "eBay" ? "Versand gegen Aufpreis oder Abholung möglich." : "Abholung oder Versand möglich (Versand gegen Aufpreis).",
+       "Privatverkauf, daher keine Garantie und keine Rücknahme.", emojis ? "💬 Bei Fragen gern melden!" : "Bei Fragen gern melden."].join("\n")
+    : emojis
     ? ["📐 Maße gern auf Anfrage.", "💬 Bei Fragen schreib mir gern!", "👀 Schau auch gern in meine anderen Artikel."].join("\n")
     : "Maße gern auf Anfrage. Bei Fragen schreib mir gern! Schau auch gern in meine anderen Artikel.";
   return [intro + (saetze ? "\n" + saetze : ""), details.join("\n"), service].filter(Boolean).join("\n\n");
@@ -95,15 +101,18 @@ export function renderVinted(box, kopf, t, bild) {
   let teil = { ...t };
   const g = teil.gruppe ?? groupOf(teil.art);
   const fehltBox = el("p", { class: "hint" });
-  const titel = el("input", { type: "text", class: "feld-eingabe", maxLength: 100, autocomplete: "off", "aria-label": "Titel für Vinted" });
-  const text = el("textarea", { class: "notiz", rows: 14, maxLength: 3000, "aria-label": "Beschreibung für Vinted" });
+  if (!plattform) plattform = TEXT_PLATTFORMEN.includes(t.plattform) ? t.plattform : "Vinted";
+  const emojiAn = () => mitEmojis ?? plattform === "Vinted";
+  const titel = el("input", { type: "text", class: "feld-eingabe", maxLength: 100, autocomplete: "off", "aria-label": "Titel" });
+  const text = el("textarea", { class: "notiz", rows: 14, maxLength: 3000, "aria-label": "Beschreibung" });
   const zaehler = el("div", { class: "note" });
-  const zaehlen = () => { zaehler.textContent = `${titel.value.length} Zeichen` + (titel.value.length > TITEL_MAX ? " – bei Vinted evtl. zu lang" : ""); };
+  const zaehlen = () => { zaehler.textContent = `${titel.value.length} Zeichen` + (titel.value.length > TITEL_MAX[plattform] ? ` – bei ${plattform} evtl. zu lang` : ""); };
   titel.oninput = zaehlen;
   function erzeugen() {
-    titel.value = titelText(teil); text.value = beschreibungText(teil, mitEmojis, variante); zaehlen();
+    titel.value = titelText(teil, TITEL_MAX[plattform]); text.value = beschreibungText(teil, emojiAn(), variante, plattform); zaehlen();
+    emojiWahl.set(emojiAn() ? ["Mit Emojis"] : []);
     const fehlt = [!teil.marke && "Marke", groesseWahl && !teil.groesse && "Größe", !teil.zustand && "Zustand"].filter(Boolean);
-    fehltBox.textContent = fehlt.length ? `Noch nicht angegeben: ${fehlt.join(", ")}. Damit findet man das Teil bei Vinted leichter.` : "";
+    fehltBox.textContent = fehlt.length ? `Noch nicht angegeben: ${fehlt.join(", ")}. Damit findet man das Teil bei ${plattform} leichter.` : "";
     fehltBox.hidden = !fehlt.length;
   }
   // Angaben für Vinted: sofort am Teil gespeichert (dieselben wie unter „Mehr Angaben“).
@@ -130,10 +139,11 @@ export function renderVinted(box, kopf, t, bild) {
   const kopierKnopf = (beschriftung, wert, fertig) => {
     const b = el("button", { type: "button", class: "btn primary" }, beschriftung);
     // Steht im Marken-Feld noch etwas Neues (auf dem iPhone verlässt man das Feld beim Tippen auf den Knopf nicht immer), erst übernehmen
-    b.onclick = async () => { markeUebernehmen(); const v = wert(); if (!await kopieren(v)) { vonHand(kopierBox, v); return; } fill(kopierBox); toast(fertig); };
+    b.onclick = async () => { markeUebernehmen(); const v = wert(); if (!await kopieren(v)) { vonHand(kopierBox, v); return; } fill(kopierBox); toast(`${fertig} – bei ${plattform} einfügen`); };
     return b;
   };
-  const emojiWahl = choice({ options: ["Mit Emojis"], selected: mitEmojis ? ["Mit Emojis"] : [], onChange: sel => { mitEmojis = sel.length > 0; erzeugen(); } });
+  const emojiWahl = choice({ options: ["Mit Emojis"], selected: emojiAn() ? ["Mit Emojis"] : [], onChange: sel => { mitEmojis = sel.length > 0; erzeugen(); } });
+  const plattformWahl = choice({ options: TEXT_PLATTFORMEN, selected: [plattform], onChange: sel => { if (sel[0]) { plattform = sel[0]; erzeugen(); } else plattformWahl.set([plattform]); } });
   const anders = el("button", { type: "button", class: "btn" }, "🔄 Andere Formulierung");
   anders.onclick = () => { variante = (variante + 1) % 3; erzeugen(); };
 
@@ -150,15 +160,17 @@ export function renderVinted(box, kopf, t, bild) {
   erzeugen();
   fill(box, kopf,
     el("div", { class: "panel" },
+      field("Für welche Plattform?", null, plattformWahl.el),
       mitInfo(el("strong", {}, "So geht's"),
-        "Vinted lässt keine fremde App Artikel einstellen. Darum macht die App alles zum Kopieren fertig, das Einstellen machst du selbst in der Vinted-App.",
-        "In Vinted auf „Verkaufen“ tippen, das Foto aus deinen Fotos wählen, Titel und Beschreibung einfügen. Kategorie, Marke, Größe, Zustand und Preis wählst du dort selbst aus.",
+        "Vinted, Kleinanzeigen und eBay lassen keine fremde App Artikel einstellen. Darum macht die App alles zum Kopieren fertig, das Einstellen machst du selbst in der App der Plattform.",
+        "Dort auf „Verkaufen“ oder „Anzeige aufgeben“ tippen, das Foto aus deinen Fotos wählen, Titel und Beschreibung einfügen. Kategorie, Marke, Größe, Zustand und Preis wählst du dort selbst aus.",
+        "Bei Kleinanzeigen und eBay steht „Privatverkauf, keine Garantie und keine Rücknahme“ dabei, wie es bei privaten Verkäufen üblich ist. Das ist keine Rechtsberatung.",
         "Weitere Fotos (Etikett, Details, eventuelle Mängel) machst du am besten direkt in Vinted. Das Foto aus der App zeigt den Hintergrund (Boden, Zimmer), schau kurz drüber.",
         "Deine Notiz kommt nicht in den Text, die ist nur für dich. Titel und Beschreibung kannst du vor dem Kopieren ändern; tippst du danach oben etwas an, schreibt die App sie neu."),
-      el("p", { class: "hint" }, "① Foto sichern ② Titel kopieren ③ Beschreibung kopieren ④ in der Vinted-App einfügen. Foto und Text lädst du selbst bei Vinted hoch."),
+      el("p", { class: "hint" }, "① Foto sichern ② Titel kopieren ③ Beschreibung kopieren ④ in der App der Plattform einfügen. Foto und Text lädst du dort selbst hoch."),
       el("div", { class: "vinted-kopf" }, vorschau, el("div", { class: "actions wrap" }, fotoKnopf))),
     el("div", { class: "panel" },
-      el("strong", {}, "Angaben für Vinted"),
+      el("strong", {}, "Angaben"),
       el("p", { class: "hint" }, "Wird sofort am Teil gespeichert (dieselben Angaben wie unter „Angaben ändern“ → „Mehr Angaben“)."),
       field("Marke", null, marke.el),
       groesseWahl ? field("Größe", null, groesseWahl.el) : null,
@@ -166,9 +178,9 @@ export function renderVinted(box, kopf, t, bild) {
       fehltBox),
     el("div", { class: "panel" },
       field("Titel", null, titel), zaehler,
-      el("div", { class: "actions" }, kopierKnopf("📋 Titel kopieren", () => titel.value, "Titel kopiert – in Vinted einfügen")),
+      el("div", { class: "actions" }, kopierKnopf("📋 Titel kopieren", () => titel.value, "Titel kopiert")),
       field("Beschreibung", null, text),
-      el("div", { class: "actions" }, kopierKnopf("📋 Beschreibung kopieren", () => text.value, "Beschreibung kopiert – in Vinted einfügen")),
+      el("div", { class: "actions" }, kopierKnopf("📋 Beschreibung kopieren", () => text.value, "Beschreibung kopiert")),
       kopierBox,
       el("div", { class: "vinted-optionen" }, emojiWahl.el, anders)),
     // Seit 0.26: gleich hier eintragen, dass es bei Vinted ist (und später, dass es verkauft ist). Zeichnet sich selbst neu.

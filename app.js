@@ -6,8 +6,8 @@
 import { loadAI, recognize, loadImage, alsJpg, AERMEL_FEST } from "./ki.js?v=9";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=12";
 import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange, saisonVorschlag } from "./ui.js?v=21";
-import { refresh, initSchrank } from "./schrank.js?v=47";
-import { kiStartRegistrieren, kiMelden } from "./ki-start.js?v=1";
+import { refresh, initSchrank } from "./schrank.js?v=48";
+import { kiStartRegistrieren, kiMelden } from "./ki-start.js?v=2";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
@@ -344,7 +344,7 @@ async function startAI() {
     const msg = await loadAI((share, mb, total) => {
       $("barfill").style.width = (100 * share).toFixed(0) + "%";
       $("status").textContent = `KI wird geladen … ${mb.toFixed(0)} von ${total.toFixed(0)} MB`;
-      kiMelden({ text: $("status").textContent, anteil: share });
+      kiMelden({ text: $("status").textContent, anteil: share, fehler: false });
     });
     aiState = "bereit"; $("kiLaden").hidden = true;
     $("barfill").style.width = "100%";
@@ -352,7 +352,7 @@ async function startAI() {
     else {
       $("status").textContent = "✅ KI ist bereit.";
       setTimeout(() => { $("kiPanel").hidden = true; }, 1500);
-      kiIstBereit(); warteBox(); kiMelden({ text: "KI ist bereit.", anteil: 1, fertig: true });
+      kiIstBereit(); warteBox(); kiMelden({ text: "KI ist bereit.", anteil: 1, fertig: true, fehler: false });
     }
     wachPruefen();
   } catch (e) {

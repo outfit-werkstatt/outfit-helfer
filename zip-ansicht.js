@@ -12,10 +12,10 @@ import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleic
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=22";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=23";
-import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=4";
+import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=5";
 import { reisenPruefen } from "./koffer.js?v=6";
-import { dingPruefen } from "./haushalt.js?v=1";
-import { kistenPruefen } from "./umzug.js?v=1";
+import { dingPruefen } from "./haushalt.js?v=2";
+import { kistenPruefen } from "./umzug.js?v=2";
 import { wunschPruefen } from "./wunsch.js?v=1";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
@@ -43,7 +43,7 @@ const dingNummern = (nrs, max = 12) => nrs.slice(0, max).map(dingNrText).join(",
 const lookName = (o, i) => `Outfits/${String(i + 1).padStart(2, "0")} - ${ohneSonderzeichen(o.name).slice(0, 50).trim() || "Outfit"}.jpg`;
 const LIES_MICH = "Sicherung des Outfit-Helfers\r\n\r\n" +
   "Zum Wiederherstellen: App öffnen, auf der Startseite unten „💾 Sicherung“ antippen, dann „Sicherung auswählen …“ und diese ZIP-Datei wählen. Entpacken ist nicht nötig.\r\n\r\n" +
-  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits, im Ordner „Haushalt“ die Fotos deiner Sachen im Haushalt (z. B. „H012 - Wasserkocher.jpg“). In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits, Reisen aus „Koffer packen“ und eigene Knöpfe.\r\n\r\n" +
+  "Die Fotos heißen nach ihrer Nummer (z. B. „012 - T-Shirt braun.jpg“). Im Ordner „Outfits“ liegen die Fotos deiner fertigen Outfits, im Ordner „Haushalt“ die Fotos deiner Sachen im Haushalt (z. B. „H012 - Wasserkocher.jpg“). In angaben.json stehen alle Angaben, Ordner, „Mein Stil“, fertige Outfits, Reisen aus „Koffer packen“, Umzugskisten, die Wunschliste und eigene Knöpfe.\r\n\r\n" +
   "Verkaufte Teile sind auch dabei, damit deine Übersicht „Verkauft“ erhalten bleibt. 30 Tage nach dem Verkauf nur noch mit einem kleinen Foto.\r\n\r\n" +
   "Die Datei enthält persönliche Fotos und Angaben. Nur an Menschen weitergeben, die das sehen dürfen.\r\n";
 

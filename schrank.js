@@ -5,21 +5,21 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, getLookFoto, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=33";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=34";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=29";
 import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=26";
 import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=11";
 import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=23";
-import { renderVinted } from "./vinted.js?v=14";
+import { renderVinted } from "./vinted.js?v=15";
 import { GROUPS } from "./ki.js?v=9";
 import { renderKoffer } from "./koffer.js?v=6";
-import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=1";
-import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=1";
-import { renderKisten, kistenLaden } from "./umzug.js?v=1";
+import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=2";
+import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=2";
+import { renderKisten, kistenLaden } from "./umzug.js?v=2";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
-import { renderSchonDa } from "./schonda.js?v=2";
+import { renderSchonDa } from "./schonda.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
-  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=4";
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=5";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -140,6 +140,9 @@ function schwebeEinrichten() {
   }, { passive: true });
   document.addEventListener("focusin", () => { if (tipptGerade()) schwebeZeigen(false); });
 }
+// Für Ansichten, deren Arbeit länger dauert (KI, Fotos speichern): neu zeichnen nur, wenn sie noch in derselben Ansicht ist und nichts
+// bearbeitet (seit 0.33.2, Durchsicht 19.11.2026: sonst wäre z. B. ein inzwischen geöffnetes „Angaben ändern“ weg)
+function neuZeichnenHier() { const hier = current; return () => current === hier && !bearbeitet ? neuZeichnen() : Promise.resolve(); }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
 // Beim Haushalt (seit 0.32) nie: Neue Kleidung ändert dort nichts, und offene Eingaben in „Noch ergänzen“ würden den Fokus verlieren
 export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingText", "dingKorb", "kisten", "kiste", "wunsch", "verkaeufe"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
@@ -178,7 +181,7 @@ async function render() {
     const [kisten, wuensche] = await Promise.all([kistenLaden(), wunschLaden()]);
     if (nr !== zeichnung) return;
     return renderHaushalt(box, kopf, s, url, { go, back,
-      schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnen,
+      schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnenHier(),
       { kisten, wunschOffen: wuensche.filter(w => !w.erledigt).length });
   }
   // Umzugskisten und Wunschliste (seit 0.32, aus dem Haushalt)
@@ -186,7 +189,7 @@ async function render() {
   if (s.v === "wunsch") return renderWunsch(box, kopf("📝 Wunschliste", "Was brauchst du neu?"), items, dinge, url,
     x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
   // „🔍 Hab ich sowas schon?“ (seit 0.33): Foto mit dem Kleiderschrank vergleichen
-  if (s.v === "schonDa") return renderSchonDa(box, kopf("🔍 Hab ich sowas schon?", "Mit deinem Kleiderschrank vergleichen"), items, url, n => go({ v: "teil", nr: n }), neuZeichnen);
+  if (s.v === "schonDa") return renderSchonDa(box, kopf("🔍 Hab ich sowas schon?", "Mit deinem Kleiderschrank vergleichen"), items, url, n => go({ v: "teil", nr: n }), neuZeichnenHier());
   // Verkäufe (seit 0.32): Kleidung und Haushalt zusammen
   if (s.v === "verkaeufe") return renderVerkaeufe(box, kopf("💶 Verkäufe", "Kleidung und Haushalt zusammen"), items, dinge, url,
     x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
@@ -195,7 +198,7 @@ async function render() {
   if (s.v === "vinted") {
     const t = items.find(x => x.nr === s.nr);
     if (!t || t.geloescht) return back();
-    return renderVinted(box, kopf("🏷 Für Vinted", `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), t, url);
+    return renderVinted(box, kopf("🏷 Verkaufstext", `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), t, url);
   }
   if (s.v === "sicherung") return renderZip(box, kopf("Sicherung"), items, letzte, stil, sonst, neuZeichnen, dinge);
   if (s.v === "fertig") return renderFertigListe(box, kopf("⭐ Fertige Outfits"), outfits, items, url, id => go({ v: "fertigEins", id }),
@@ -674,7 +677,8 @@ function renderTeil(items, folders, nr, foto) {
     ...zeile("Weite", t.weite), ...zeile("Länge", t.laenge), ...zeile("Bund", t.bund),
     ...zeile("Stil", t.stil?.join(", ")), ...zeile("Saison", t.saison?.join(", ")), ...zeile("Notiz", t.notiz),
     ...zeile("Vorschläge", t.nichtAnziehen ? "🚫 Ziehe ich nicht an" : null),
-    ...zeile("Marke", t.marke), ...zeile("Größe", t.groesse), ...zeile("Zustand", t.zustand), ...zeile("Hinzugefügt", datum(t.erstellt)));
+    ...zeile("Marke", t.marke), ...zeile("Größe", t.groesse), ...zeile("Zustand", t.zustand),
+    ...zeile("Gekauft für", t.kaufpreis != null ? preisText(t.kaufpreis) : null), ...zeile("Hinzugefügt", datum(t.erstellt)));
   const inhalt = el("div", { class: "panel" }, angaben);
 
   // Ordner: Änderungen werden sofort gespeichert
@@ -738,7 +742,7 @@ function renderTeil(items, folders, nr, foto) {
   const verkauft = istVerkauft(t), beimVerkauf = !t.geloescht && (verkauft || imVerkauf(t));
   const passt = t.geloescht || verkauft ? null : el("div", { class: "actions wrap" },
     beimVerkauf ? null : el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
-    el("button", { type: "button", class: beimVerkauf ? "btn primary" : "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Für Vinted"));
+    el("button", { type: "button", class: beimVerkauf ? "btn primary" : "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Verkaufstext"));
   // Verkaufen (seit 0.26): 💰 will ich verkaufen → 📦 bei Vinted eingestellt → ✅ verkauft. Speichert sofort.
   const verkaufBox = t.geloescht ? el("div", {}) : verkaufFeld(t, () => neuZeichnen());
   const auswahlPanel = t.geloescht || verkauft ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld, beimVerkauf ? null : verkaufBox);

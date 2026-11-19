@@ -1,8 +1,7 @@
 // „🏠 Sachen im Haushalt“ (seit 0.32, Wunsch 19.11.2026): Dinge aus dem Haushalt mit Foto. Von unterwegs sehen, was man schon hat
 // und wo es liegt; später verkaufen (Etappe 3). Getrennt von der Kleidung: eigener Speicherbereich, eigene Nummern (H001 …), darum
 // kommt ein Ding nie in Outfit-Vorschläge, in den Chat-Kleiderschrank oder in den Koffer.
-// Erkennung: Die KI der App ist auf Mode trainiert. Ob sie Haushaltsdinge erkennt, wird erst mit echten Fotos gemessen; bis dahin
-// tippt sie die Kategorie selbst an. Neue Fotos werden sofort gespeichert (ohne Prüfen-Karte wie bei der Kleidung) und stehen unter
+// Ohne KI (entschieden 19.11.2026): Die KI der App ist auf Mode trainiert; im Haushalt tippt sie selbst an, was es ist. Neue Fotos werden sofort gespeichert (ohne Prüfen-Karte wie bei der Kleidung) und stehen unter
 // „Noch ergänzen“, bis sie „✓ Fertig“ tippt. So geht nichts verloren, wenn das iPhone die App schließt; Eingetipptes wird beim
 // Tippen gespeichert.
 // Texte nur per textContent/value, nie per innerHTML (Name, Ort, Notiz sind eingetippt).
@@ -10,7 +9,7 @@ import { el, fill, toast, fehlerToast, field, choice, clean, cleanText, zeigeGro
 import { addDing, allDinge, getDingFoto, updateDing, purgeDinge, dingNrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg } from "./ki.js?v=9";
 import { preisLesen, preisText, preisPruefen, plattformPruefen, verkaufFeld, verkaufKurz, verkaufZeichen, imVerkauf, istVerkauft, VERKAUF_STUFEN,
-  EINGESTELLT } from "./verkauf.js?v=4";
+  EINGESTELLT } from "./verkauf.js?v=5";
 import { renderDingText } from "./ding-text.js?v=1";
 
 // Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang)
@@ -53,6 +52,8 @@ export function dingPruefen(d) {
     eingestelltAm: zeitVon(d.eingestelltAm), verkauftAm: zeitVon(d.verkauftAm), plattform: plattformPruefen(d.plattform),
     // Verliehen an … (seit 0.32): Name höchstens 40 Zeichen, seit wann
     verliehen: d.verliehen && typeof d.verliehen === "object" && textVon(d.verliehen.an, MAX_AN) ? { an: textVon(d.verliehen.an, MAX_AN), seit: zeitVon(d.verliehen.seit) || jetzt } : null,
+    // Bild-Fingerabdruck für „Vielleicht doppelt“ (seit 0.33.2)
+    bildHash: typeof d.bildHash === "string" && /^[0-9a-f]{16}$/.test(d.bildHash) ? d.bildHash : null, doppeltOk: d.doppeltOk === true,
     erstellt: zeitVon(d.erstellt) || jetzt, geaendert: zeitVon(d.geaendert) || zeitVon(d.erstellt) || jetzt };
 }
 
@@ -107,6 +108,36 @@ function dingFelder(werte, onChange = () => {}, kurz = false) {
   };
 }
 
+/* ---------- Doppelte Fotos (seit 0.33.2, Durchsicht 19.11.2026) ----------
+   Ohne KI: ein kleiner Bild-Fingerabdruck (dHash, 64 Helligkeitsvergleiche auf 9 × 8 Punkten). Dasselbe Foto, noch einmal ausgewählt
+   (das iPhone speichert es dabei evtl. leicht anders), ergibt fast denselben Fingerabdruck; andere Fotos weichen deutlich ab.
+   Die App entscheidet nie selbst, sie zeigt bei der neuen Karte nur „Vielleicht doppelt“ (wie bei der Kleidung).
+   Gemessen 19.11.2026 an 60 Fotos: dasselbe Foto verkleinert und neu als JPG gespeichert höchstens 4 Bits anders (meist 0–1),
+   verschiedene Fotos mindestens 6 (1.770 Paare, nur 2 unter 9). Verkleinert wird in zwei Schritten: direkt auf 9 × 8 war der
+   Fingerabdruck unruhig (dasselbe Foto bis 14 Bits anders). */
+const DOPPELT_BITS = 4;
+function bildHash(quelle) {
+  const z = document.createElement("canvas"); z.width = 72; z.height = 64;
+  const gz = z.getContext("2d"); gz.imageSmoothingQuality = "high"; gz.drawImage(quelle, 0, 0, 72, 64);
+  const c = document.createElement("canvas"); c.width = 9; c.height = 8;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(z, 0, 0, 9, 8);
+  const d = g.getImageData(0, 0, 9, 8).data; c.width = c.height = z.width = z.height = 0;
+  let h = 0n;
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const i = (y * 9 + x) * 4, j = i + 4, hell = k => d[k] * 0.299 + d[k + 1] * 0.587 + d[k + 2] * 0.114;
+    h = (h << 1n) | (hell(i) > hell(j) ? 1n : 0n);
+  }
+  return h.toString(16).padStart(16, "0");
+}
+const bitsAnders = (a, b) => { let x = BigInt("0x" + a) ^ BigInt("0x" + b), n = 0; while (x) { n += Number(x & 1n); x >>= 1n; } return n; };
+// Das ähnlichste andere Ding mit (fast) gleichem Foto, oder null
+function doppeltVon(d, dinge) {
+  if (!d.bildHash || d.doppeltOk) return null;
+  let best = null;
+  for (const x of dinge) if (x.nr !== d.nr && x.bildHash) { const n = bitsAnders(d.bildHash, x.bildHash); if (n <= DOPPELT_BITS && (!best || n < best.n)) best = { ding: x, n }; }
+  return best?.ding || null;
+}
+
 /* ---------- Fotos hinzufügen ---------- */
 // Jedes Foto: verkleinert (ca. 1200 px) und als Vorschau (400 px) gespeichert, sofort mit Nummer. vorgabe = Angaben für alle
 // (z. B. der Raum, wenn gerade nach einem Raum gefiltert ist). Gibt zurück, wie viele geklappt haben.
@@ -120,7 +151,7 @@ async function fotosSpeichern(dateien, vorgabe, status) {
         const img = await loadImage(datei);
         try {
           const foto = await alsJpg(img, 1200), vorschau = await alsJpg(img, 400);
-          await addDing({ ...vorgabe, foto, vorschau, ergaenzen: true });
+          await addDing({ ...vorgabe, foto, vorschau, ergaenzen: true, bildHash: bildHash(img) });
           ok++;
         } finally { URL.revokeObjectURL(img.src); }
       } catch (e) { console.error(e); fehler = e; }
@@ -132,7 +163,7 @@ async function fotosSpeichern(dateien, vorgabe, status) {
 }
 
 /* ---------- „Noch ergänzen“: eine Karte pro neuem Foto ---------- */
-function ergaenzenKarte(d, bild, neuZeichnen, entsorgen) {
+function ergaenzenKarte(d, bild, neuZeichnen, entsorgen, dinge) {
   let timer = null;
   const speichern = () => updateDing(d.nr, form.get()).catch(e => fehlerToast("Speichern hat nicht geklappt", e));
   const spaeter = () => { clearTimeout(timer); timer = setTimeout(speichern, 400); };
@@ -157,9 +188,23 @@ function ergaenzenKarte(d, bild, neuZeichnen, entsorgen) {
     try { await updateDing(d.nr, { geloescht: new Date().toISOString() }); toast(`${dingNrText(d.nr)} liegt im Papierkorb`); neuZeichnen(); }
     catch (e) { weg.disabled = false; fehlerToast("Hat nicht geklappt", e); }
   };
+  // „Vielleicht doppelt“ mit dem Foto des anderen Dings; „Ist ein anderes Ding“ merkt sich das (doppeltOk)
+  const anderes = doppeltVon(d, dinge);
+  let doppelt = null;
+  if (anderes) {
+    const behalten = el("button", { type: "button", class: "btn klein" }, "Ist ein anderes Ding – behalten");
+    behalten.onclick = async () => {
+      behalten.disabled = true;
+      try { await updateDing(d.nr, { doppeltOk: true }); doppelt.remove(); } catch (e) { behalten.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
+    };
+    doppelt = el("div", { class: "doppelt" }, el("img", { src: bild(anderes.vorschau), alt: "" }),
+      el("div", {}, el("strong", {}, "⚠️ Vielleicht doppelt"),
+        el("div", {}, `Das Foto sieht aus wie ${dingTitel(anderes)}${anderes.geloescht ? " (liegt im Papierkorb)" : istVerkauft(anderes) ? " (schon verkauft)" : ""}.`),
+        el("div", { class: "note" }, "Wenn es dasselbe ist: unten „Verwerfen“."), behalten));
+  }
   const karte = el("div", { class: "check" },
     el("div", { class: "top" }, img, el("div", {}, el("div", { class: "titel" }, dingNrText(d.nr)), el("div", { class: "hint" }, `Hinzugefügt am ${datumText(d.erstellt)}`))),
-    ...form.elements, el("div", { class: "actions" }, weg, fertig));
+    doppelt, ...form.elements, el("div", { class: "actions" }, weg, fertig));
   // Verlässt sie ein Textfeld (z. B. um bei einer anderen Karte „Fertig“ zu tippen), gleich speichern statt erst nach der Pause
   karte.addEventListener("change", sofort);
   return karte;
@@ -224,7 +269,7 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, e
     mitInfo(el("strong", {}, "Sachen hinzufügen"),
       "Fotografiere ein Ding nach dem anderen, am besten einzeln vor ruhigem Hintergrund. Du kannst auch mehrere Fotos auf einmal auswählen.",
       "Jedes Foto wird gleich gespeichert und bekommt eine feste Nummer (H001, H002 …). Danach tippst du unter „Noch ergänzen“ an, was es ist, und gibst ihm einen kurzen Namen.",
-      "Die App erkennt Haushaltsdinge noch nicht von selbst. Die Fotos bleiben auf deinem Handy."),
+      "Hier erkennt die App nichts von selbst: Was es ist und wo es liegt, tippst du an oder schreibst es dazu. Die Fotos bleiben auf deinem Handy."),
     el("div", { class: "actions" }, el("label", { class: "btn primary datei" }, "＋ Fotos auswählen", eingabe)),
     filter.raum && filter.raum !== OHNE_RAUM ? el("p", { class: "hint" }, `Neue Fotos bekommen gleich den Raum „${filter.raum}“ (der Filter unten ist an).`) : null,
     status);
@@ -239,7 +284,7 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, e
   // Noch ergänzen
   const ergaenzen = offen.length ? el("div", {},
     el("h3", { class: "ding-abschnitt" }, `Noch ergänzen (${offen.length})`),
-    ...offen.map(d => ergaenzenKarte(d, bild, neuZeichnen, entsorgen))) : null;
+    ...offen.map(d => ergaenzenKarte(d, bild, neuZeichnen, entsorgen, dinge))) : null;
 
   // Suche und Filter (nur über die fertigen)
   const reihen = [filterReihe("Was", fertige, "kategorie", d => d.kategorie || "Sonstiges"),
@@ -318,7 +363,8 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra
       catch (e) { speichern.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
     };
     inhalt.replaceChildren(...form.elements, msg, el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: fertig }, "Abbrechen"), speichern));
-    aktionen.hidden = true;
+    // Während des Änderns alles ausblenden, was die Ansicht neu zeichnen würde (Verkaufen, Verliehen, Verkaufstext, Kiste)
+    for (const x of [aktionen, verkauf, verliehen, text, kisteKnopf]) if (x) x.hidden = true;
   };
   const korb = el("button", { type: "button", class: "btn" }, d.geloescht ? "Wiederherstellen" : "In den Papierkorb");
   korb.onclick = async () => {
@@ -334,6 +380,7 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra
   const text = d.geloescht || istVerkauft(d) ? null : el("div", { class: "actions wrap" },
     el("button", { type: "button", class: imVerkauf(d) ? "btn primary" : "btn", onclick: () => nav.go({ v: "dingText", nr: d.nr }) }, "🏷 Verkaufstext"));
   const beimVerkauf = imVerkauf(d) || istVerkauft(d);
+  const kisteKnopf = kiste ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "kiste", id: kiste.id }) }, `📦 Zu „${kiste.name}“`)) : null;
   // Verliehen an … (seit 0.32): Name eintippen, „Zurückbekommen“ nimmt es wieder weg
   let verliehen = null;
   if (!d.geloescht && !istVerkauft(d)) {
@@ -370,7 +417,7 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra
   fill(box, kopf(dingTitel(d), d.geloescht ? `Liegt im Papierkorb (${nochTage(d)})` : istVerkauft(d) ? "✅ Verkauft – nicht mehr im Haushalt"
       : d.ergaenzen ? "Noch nicht fertig eingetragen" : null),
     gross, text, beimVerkauf ? verkauf : null, d.verliehen ? verliehen : null, inhalt, d.verliehen ? null : verliehen, beimVerkauf ? null : verkauf,
-    kiste ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "kiste", id: kiste.id }) }, `📦 Zu „${kiste.name}“`)) : null, aktionen);
+    kisteKnopf, aktionen);
 }
 
 /* ---------- Papierkorb ---------- */

@@ -4,7 +4,7 @@
 // Der Ort am Ding bleibt, wie er ist. Gespeichert in meta „kisten“, kommt in die Sicherung. Texte nur per textContent/value.
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo } from "./ui.js?v=21";
 import { getMeta, setMeta, dingNrText } from "./speicher.js?v=12";
-import { RAEUME, dingName, dingTitel } from "./haushalt.js?v=1";
+import { RAEUME, dingName, dingTitel } from "./haushalt.js?v=2";
 
 const MAX_KISTEN = 200, MAX_NAME = 30, MAX_DINGE = 300, MAX_EXTRAS = 60, MAX_EXTRA_TEXT = 60, ID = /^k[a-z0-9]{1,40}$/;
 let kisten = null, waehlen = null, waehlenFuer = null; // waehlen = Set der Nummern beim „Dinge hineinlegen“ (sonst null), waehlenFuer = id der Kiste
@@ -33,7 +33,9 @@ export async function kistenLaden() {
 }
 const speichern = () => { const jetzt = new Date().toISOString();
   return Promise.all([setMeta("kisten", kisten), setMeta("sonstGeaendert", jetzt)]).catch(e => fehlerToast("Speichern hat nicht geklappt", e)); };
-const inhaltText = k => [k.nrs.length && `${k.nrs.length} ${k.nrs.length === 1 ? "Ding" : "Dinge"}`, k.extras.length && `${k.extras.length} ${k.extras.length === 1 ? "Eintrag" : "Einträge"}`].filter(Boolean).join(" + ") || "leer";
+// Gezählt werden nur Dinge, die es gibt (seit 0.33.2, Durchsicht 19.11.2026: ein Ding im Papierkorb zählte noch mit, „1 Ding“ bei leerer Kiste)
+const inhaltText = (k, nachNr) => { const n = k.nrs.filter(nr => nachNr.has(nr)).length;
+  return [n && `${n} ${n === 1 ? "Ding" : "Dinge"}`, k.extras.length && `${k.extras.length} ${k.extras.length === 1 ? "Eintrag" : "Einträge"}`].filter(Boolean).join(" + ") || "leer"; };
 
 // s = { v: "kisten" } (Liste) oder { v: "kiste", id }, nav = { go, back, ersetze }
 export async function renderKisten(box, kopf, s, dinge, bild, nav, neuZeichnen) {
@@ -63,7 +65,7 @@ export async function renderKisten(box, kopf, s, dinge, bild, nav, neuZeichnen) 
     return el("button", { type: "button", class: "outfit-karte", onclick: () => nav.go({ v: "kiste", id: k.id }) },
       el("span", { class: "look" }, erste ? el("img", { src: bild(erste.vorschau), alt: "" }) : el("span", { class: "koffer-zeichen" }, "📦")),
       el("span", { class: "outfit-info" }, el("span", { class: "name" }, `${k.zu ? "✓ " : ""}${k.name}`),
-        el("span", { class: "anzahl" }, [k.ziel && `→ ${k.ziel}`, inhaltText(k), k.zu ? "zu" : "offen"].filter(Boolean).join(" · "))));
+        el("span", { class: "anzahl" }, [k.ziel && `→ ${k.ziel}`, inhaltText(k, nachNr), k.zu ? "zu" : "offen"].filter(Boolean).join(" · "))));
   };
   fill(box, kopf("📦 Umzugskisten", kisten.length ? `${zu} von ${kisten.length} ${kisten.length === 1 ? "Kiste" : "Kisten"} zu` : null),
     el("div", { class: "panel" },
@@ -117,8 +119,11 @@ function renderKiste(box, kopf, k, nachNr, bild, nav, neuZeichnen) {
       for (const x of kisten) if (x !== k) x.nrs = x.nrs.filter(n => !waehlen.has(n)); // jedes Ding nur in einer Kiste
       aendern({ nrs }); waehlen = null; toast(`${nrs.length} ${nrs.length === 1 ? "Ding" : "Dinge"} in „${k.name}“`); neuZeichnen();
     };
+    // Noch nicht fertig eingetragene Dinge stehen hier nicht (sie haben oft noch keinen Namen) – mit Hinweis (seit 0.33.2)
+    const offen = [...nachNr.values()].filter(d => d.ergaenzen).length;
     dingeTeil = el("div", { class: "panel" }, el("strong", {}, "Was kommt in die Kiste?"),
       el("p", { class: "hint" }, "Tippe die Dinge an, die hineinkommen. Liegt eins schon in einer anderen Kiste, wandert es hierher."),
+      offen ? el("p", { class: "hint" }, `${offen} ${offen === 1 ? "Ding steht" : "Dinge stehen"} im Haushalt noch unter „Noch ergänzen“ und ${offen === 1 ? "erscheint" : "erscheinen"} hier, sobald du ${offen === 1 ? "es" : "sie"} fertig eingetragen hast.`) : null,
       suche, el("div", { class: "kombi-teile" }, ...kacheln),
       kandidaten.length ? null : el("p", { class: "hint" }, "Im Haushalt ist noch nichts eingetragen."),
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => { waehlen = null; neuZeichnen(); } }, "Abbrechen"), fertig));
@@ -151,7 +156,7 @@ function renderKiste(box, kopf, k, nachNr, bild, nav, neuZeichnen) {
     if ((k.nrs.length || k.extras.length) && !confirm(`„${k.name}“ löschen?\n\nDie Dinge bleiben im Haushalt, nur die Kiste ist weg.`)) return;
     kisten = kisten.filter(x => x !== k); speichern(); toast("Kiste gelöscht"); nav.back();
   };
-  fill(box, kopf(`📦 ${k.name}`, [k.ziel && `→ ${k.ziel}`, inhaltText(k), k.zu ? "zu" : "offen"].filter(Boolean).join(" · ")),
+  fill(box, kopf(`📦 ${k.name}`, [k.ziel && `→ ${k.ziel}`, inhaltText(k, nachNr), k.zu ? "zu" : "offen"].filter(Boolean).join(" · ")),
     dingeTeil,
     waehlen ? null : el("div", { class: "panel" }, el("strong", {}, "Was noch drin ist"), el("p", { class: "hint" }, "Sachen ohne Foto."), extraListe, el("div", { class: "extra-neu" }, neuText, neuKnopf)),
     waehlen ? null : el("div", { class: "panel" }, field("Name der Kiste", "schreib ihn auch auf den Karton", name), field("Wohin?", "freiwillig, Raum in der neuen Wohnung", ziel.el), field("Stand", null, zuWahl.el)),

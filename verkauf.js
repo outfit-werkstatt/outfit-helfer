@@ -118,13 +118,17 @@ export function verkaufFeld(t, nachher = null, opt = {}) {
     return wahl.el;
   };
   const nr = () => nameVon(teil.nr);
+  // „Gekauft für“ bei Kleidung in jedem Schritt (seit 0.33.2, Durchsicht 19.11.2026: vorher erst nach dem Verkauf). Im Haushalt steht
+  // es schon bei den Angaben, darum dort nur beim Verkauften.
+  const gekauftFeld = () => preisFeld(teil.kaufpreis, "Gekauft für (freiwillig)", n => setzen({ kaufpreis: n }, n == null ? "Kaufpreis entfernt" : `Gespeichert: ${preisText(n)}`, false));
 
   function zeichnen() {
     const s = teil.verkauf, bei = plattformVon(teil);
     wahl?.dispose(); wahl = null;
     if (!s) {
       fill(box, field("Verkaufen", null,
-        el("div", { class: "actions" }, knopf("💰 Will ich verkaufen", () => setzen({ ...NICHTS, verkauf: ZUM_VERKAUF }, `${nr()} liegt jetzt in „${VERKAUF_NAME}“`))),
+        el("div", {}, el("div", { class: "actions" }, knopf("💰 Will ich verkaufen", () => setzen({ ...NICHTS, verkauf: ZUM_VERKAUF }, `${nr()} liegt jetzt in „${VERKAUF_NAME}“`))),
+          ding ? null : gekauftFeld()),
         [W.ordner, "Hast du es eingestellt (z. B. bei Vinted oder Kleinanzeigen), tippst du hier die Plattform an, und wenn es weg ist, „✅ Verkauft“. So behältst du den Überblick."]));
       return;
     }
@@ -133,7 +137,8 @@ export function verkaufFeld(t, nachher = null, opt = {}) {
         el("div", {},
           el("div", { class: "note" }, "Eingestellt? Tipp an, wo:"),
           plattformWahl(null, p => setzen({ verkauf: EINGESTELLT, eingestelltAm: new Date().toISOString(), plattform: p }, `Bei ${p} eingestellt – viel Erfolg beim Verkaufen!`)),
-          el("div", { class: "actions wrap" }, knopf("Doch behalten", () => setzen(NICHTS, `${nr()} ${W.zurueck}`))))));
+          el("div", { class: "actions wrap" }, knopf("Doch behalten", () => setzen(NICHTS, `${nr()} ${W.zurueck}`))),
+          ding ? null : gekauftFeld())));
       return;
     }
     if (s === EINGESTELLT) {
@@ -161,6 +166,7 @@ export function verkaufFeld(t, nachher = null, opt = {}) {
         el("div", {},
           langeOnline(teil) ? el("p", { class: "hint" }, `⏰ Schon über ${LANGE_TAGE} Tage online. Vielleicht den Preis bei ${bei} etwas senken?`) : null,
           preisFeld(teil.preis, "Preis (freiwillig)", n => setzen({ preis: n }, n == null ? "Preis entfernt" : `Preis: ${preisText(n)}`, false)),
+          ding ? null : gekauftFeld(),
           el("div", { class: "actions wrap" }, verkauftKnopf,
             // Rückfrage, weil Preis und Datum verloren gehen (Durchsicht vor dem Hochladen, 18.11.2026)
             knopf("Doch behalten", () => {
@@ -174,7 +180,7 @@ export function verkaufFeld(t, nachher = null, opt = {}) {
     fill(box, field("Verkaufen", `✅ Verkauft${teil.verkauftAm ? " am " + datumText(teil.verkauftAm) : ""} über ${bei}.`,
       el("div", {},
         preisFeld(teil.erloes, "Verkauft für (freiwillig)", n => setzen({ erloes: n }, n == null ? "Betrag entfernt" : `Gespeichert: ${preisText(n)}`, false)),
-        preisFeld(teil.kaufpreis, "Gekauft für (freiwillig)", n => setzen({ kaufpreis: n }, n == null ? "Kaufpreis entfernt" : `Gespeichert: ${preisText(n)}`, false)),
+        gekauftFeld(),
         el("div", { class: "actions" }, knopf("Doch nicht verkauft", () => {
           if (!confirm(`Doch nicht verkauft?\n\n${W.zurueckOrt} (unter „💰 Zum Verkaufen“). Verkaufsdatum und Betrag werden gelöscht.`)) return;
           setzen({ verkauf: EINGESTELLT, verkauftAm: null, erloes: null, eingestelltAm: teil.eingestelltAm || new Date().toISOString() },

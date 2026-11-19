@@ -8,7 +8,9 @@ export function kiStartRegistrieren(start, versprechen) { starten = start; berei
 export function kiMelden(neu) { stand = { ...stand, ...neu }; for (const h of hoerer) { try { h(stand); } catch (e) { console.error(e); } } }
 // hoeren(stand) bei jeder Änderung; gibt { bereit (Promise, erfüllt, sobald Fotos erkannt werden können), aus() } zurück
 export function kiAnfordern(hoeren = null) {
-  if (hoeren) { hoerer.add(hoeren); hoeren(stand); }
+  // Erst starten, dann den Stand melden (seit 0.33.2): Sonst sah ein neuer Hörer nach einem Fehlschlag sofort den alten Fehler,
+  // obwohl der neue Versuch schon lief
   starten?.();
+  if (hoeren) { hoerer.add(hoeren); hoeren(stand); }
   return { bereit: bereit || Promise.reject(new Error("Die KI ist nicht verfügbar.")), aus: () => { if (hoeren) hoerer.delete(hoeren); } };
 }

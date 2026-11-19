@@ -6,8 +6,8 @@
 import { el, fill, toast, fehlerToast, mitInfo, beschreibung, zeigeGross } from "./ui.js?v=21";
 import { nrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg, recognize } from "./ki.js?v=9";
-import { kiAnfordern } from "./ki-start.js?v=1";
-import { istVerkauft } from "./verkauf.js?v=4";
+import { kiAnfordern } from "./ki-start.js?v=2";
+import { istVerkauft } from "./verkauf.js?v=5";
 
 // Grenzen für die Ähnlichkeit der Bild-Abdrücke (1 = gleiches Foto). Gemessen 19.11.2026 an 43 Herren-Fotos (903 Paare verschiedener
 // Teile): gleiche Art und ähnlich aussehend 0,92–0,965 (helle Jeans untereinander, zwei Air-Force-Sneaker; 20 von 120 Paaren gleicher Art
@@ -39,17 +39,24 @@ export function renderSchonDa(box, kopf, items, bild, oeffnen, neuZeichnen) {
   const status = el("p", { class: "status" });
   const balken = el("div", { class: "bar", hidden: true }, el("div", {}));
   const nochmal = el("button", { type: "button", class: "btn", hidden: true }, "Nochmal versuchen");
+  // Lädt die KI nicht (z. B. kein WLAN), bricht der Vergleich ab und „Nochmal versuchen“ nimmt dasselbe Foto (seit 0.33.2,
+  // Durchsicht 19.11.2026: vorher wartete die Ansicht weiter, und ein neues Foto ergab nur „Einen Moment …“)
+  let warteFoto = null;
   async function pruefen(datei) {
     if (laeuft) return toast("Einen Moment, die App vergleicht noch.");
-    laeuft = true; nochmal.hidden = true;
+    laeuft = true; nochmal.hidden = true; warteFoto = datei;
+    let fehlgeschlagen;
+    const fehler = new Promise((_, nein) => { fehlgeschlagen = nein; });
     const ki = kiAnfordern(s => {
       if (s.fertig) return;
       status.textContent = s.fehler ? s.text : s.text || "KI wird geladen …";
       balken.hidden = s.fehler; balken.firstChild.style.width = Math.round(100 * (s.anteil || 0)) + "%";
-      if (s.fehler) nochmal.hidden = false;
+      if (s.fehler) fehlgeschlagen(new Error(s.text || "Die KI konnte nicht geladen werden."));
     });
     try {
-      await ki.bereit;
+      try { await Promise.race([ki.bereit, fehler]); }
+      catch (e) { nochmal.hidden = false; return; } // Fehlertext steht schon in der Zeile darüber
+      warteFoto = null;
       balken.hidden = true; status.textContent = "Foto wird verglichen …";
       const img = await loadImage(datei);
       let r, foto;
@@ -61,7 +68,7 @@ export function renderSchonDa(box, kopf, items, bild, oeffnen, neuZeichnen) {
     } catch (e) { status.textContent = ""; fehlerToast("Vergleichen hat nicht geklappt", e); console.error(e); }
     finally { ki.aus(); laeuft = false; }
   }
-  nochmal.onclick = () => { nochmal.hidden = true; status.textContent = "KI wird geladen …"; kiAnfordern(); };
+  nochmal.onclick = () => { if (warteFoto) pruefen(warteFoto); else { nochmal.hidden = true; kiAnfordern(); } };
   // Ein Knopf (seit 0.33.1, iPhone-Test 19.11.2026): Das iPhone bietet dabei selbst „Fotomediathek“ und „Foto aufnehmen“ an,
   // ein eigener Kamera-Knopf war doppelt
   const input = el("input", { type: "file", accept: "image/*", hidden: true });
