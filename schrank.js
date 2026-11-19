@@ -5,14 +5,14 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=20";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, nummernZuruecksetzen, nrText } from "./speicher.js?v=11";
 import { renderStil, stilKurz } from "./stil.js?v=21";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=29";
-import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=26";
-import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=23";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=30";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=27";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=24";
 import { renderFertigListe, renderFertig, fertigKachel, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=10";
-import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=20";
-import { renderVinted } from "./vinted.js?v=11";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=21";
+import { renderVinted } from "./vinted.js?v=12";
 import { GROUPS } from "./ki.js?v=9";
-import { renderKoffer } from "./koffer.js?v=2";
+import { renderKoffer } from "./koffer.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE } from "./verkauf.js?v=3";
 

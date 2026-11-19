@@ -754,6 +754,14 @@ export function kofferExtras(e) {
     lage.strand || sits.some(s => s.w.sonne || s.temp?.ideal <= 2) ? "Sonnencreme" : null,
     sits.some(s => s.w.nass) ? "Regenschirm" : null, lage.anl.includes("Sport") ? "Sportsachen, die nicht im Kleiderschrank sind" : null].filter(Boolean);
 }
+// Vorschlag für die Anzahl (seit 0.30, Wunsch iPhone-Test 18.11.2026): Unterwäsche und Socken eine pro Tag plus eine Reserve,
+// mit Waschen für höchstens 4 Tage. Sonst keine Zahl (sie kann selbst eine einstellen).
+const PRO_TAG = new Set(["Unterwäsche", "Socken"]);
+export function kofferMenge(text, e) {
+  if (!PRO_TAG.has(text)) return null;
+  const tage = Math.max(1, Math.min(30, e?.tage || 3));
+  return (e?.waschen ? Math.min(tage, 4) : tage) + 1;
+}
 
 /* ---------- Kaufideen: schlicht nach Lücken ---------- */
 export function kaufideen(anker, alle, stil = null) {

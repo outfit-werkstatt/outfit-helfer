@@ -6,14 +6,15 @@
 // Texte nur per textContent/DOM, nie per innerHTML (Name und eigene Einträge sind eingetippter Text).
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, beschreibung } from "./ui.js?v=20";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=11";
-import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=19";
-import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=20";
-import { miniKachel } from "./passt.js?v=26";
+import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=20";
+import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=21";
+import { miniKachel } from "./passt.js?v=27";
 import { stilAktuell } from "./stil.js?v=21";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";
 const REIHE = ["oben", "unten", "ganz", "lage", "schuh", "tasche", "zubehoer", "bade", "schmuck", "guertel"];
-const MAX_EXTRAS = 40, MAX_EXTRA_TEXT = 60, MAX_TEILE = 80, MAX_REISEN = 30, MAX_NAME = 40;
+const MAX_EXTRAS = 40, MAX_EXTRA_TEXT = 60, MAX_TEILE = 80, MAX_REISEN = 30, MAX_NAME = 40, MAX_MENGE = 99;
+const neueExtras = e => kofferExtras(e).map(text => ({ text, gepackt: false, menge: kofferMenge(text, e) }));
 const leer = () => ({ eingaben: { tage: null, temperatur: null, wetter: [], anlaesse: [], waschen: false, handgepaeck: false },
   nrs: null, gepackt: [], tage: null, luecken: [], tipps: [], extras: null, quelle: null, gepacktFuer: null });
 let reisen = null;           // [{ id, name, erstellt, geaendert, ...wie leer() }] aus meta „reisen“, beim ersten Öffnen geladen
@@ -36,11 +37,14 @@ function pruefen(o) {
     wetter: texte(e.wetter, WETTER), anlaesse: texte(e.anlaesse, KOFFER_ANLAESSE), waschen: e.waschen === true, handgepaeck: e.handgepaeck === true };
   if (Array.isArray(o.nrs)) k.nrs = zahlen(o.nrs, MAX_TEILE);
   k.gepackt = zahlen(o.gepackt, MAX_TEILE);
-  if (Array.isArray(o.tage)) k.tage = o.tage.slice(0, 30).map(t => ({ titel: typeof t?.titel === "string" ? clean(t.titel).slice(0, 30) : null, nrs: zahlen(t?.nrs, 12) })).filter(t => t.titel && t.nrs.length);
+  // Titel bis 60 Zeichen (seit 0.30, vorher 30: „Tag 3 (Sightseeing & Abend im“ war abgeschnitten)
+  if (Array.isArray(o.tage)) k.tage = o.tage.slice(0, 30).map(t => ({ titel: typeof t?.titel === "string" ? clean(t.titel).slice(0, 60) : null, nrs: zahlen(t?.nrs, 12) })).filter(t => t.titel && t.nrs.length);
   k.luecken = Array.isArray(o.luecken) ? o.luecken.filter(x => typeof x === "string").slice(0, 10).map(x => x.slice(0, 200)) : [];
   k.tipps = Array.isArray(o.tipps) ? o.tipps.filter(x => typeof x === "string").slice(0, 6).map(x => x.slice(0, 200)) : [];
+  // menge seit 0.30: Zahl 1–99 oder null (keine Anzahl). Ältere Reisen kennen das Feld nicht: Dort bekommen Unterwäsche und Socken den Vorschlag.
   if (Array.isArray(o.extras)) k.extras = o.extras.filter(x => typeof x?.text === "string" && clean(x.text)).slice(0, MAX_EXTRAS)
-    .map(x => ({ text: clean(x.text).slice(0, MAX_EXTRA_TEXT), gepackt: x.gepackt === true }));
+    .map(x => { const text = clean(x.text).slice(0, MAX_EXTRA_TEXT);
+      return { text, gepackt: x.gepackt === true, menge: Number.isInteger(x.menge) && x.menge >= 1 && x.menge <= MAX_MENGE ? x.menge : x.menge === undefined ? kofferMenge(text, k.eingaben) : null }; });
   k.quelle = o.quelle === "chat" ? "chat" : o.quelle === "app" ? "app" : null;
   k.gepacktFuer = typeof o.gepacktFuer === "string" ? o.gepacktFuer.slice(0, 1000) : null;
   return k;
@@ -111,7 +115,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     const r = kofferPacken(e, pool, mitStil);
     if (!r.nrs.length) return toast("Dafür passt noch nichts aus deinem Kleiderschrank.");
     Object.assign(koffer, { nrs: r.nrs, gepackt: koffer.gepackt.filter(n => r.nrs.includes(n)), tage: null, luecken: r.luecken, tipps: r.tipps,
-      extras: koffer.extras || kofferExtras(e).map(text => ({ text, gepackt: false })), quelle: "app", gepacktFuer: eingabenSchluessel(e) });
+      extras: koffer.extras || neueExtras(e), quelle: "app", gepacktFuer: eingabenSchluessel(e) });
     reiseOffen = false; aendern = false; speichern(koffer);
     toast(`${r.nrs.length} Teile eingepackt – jetzt abhaken, was im Koffer ist`);
     neuZeichnen();
@@ -136,7 +140,9 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
   const fuer = fuerText(e);
   let reise;
   if (gepackt) {
-    reise = el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "Deine Reise"), el("span", { class: "klappe-zahl" }, fuer || "ändern")), el("div", { class: "panel" }, ...reiseInhalt));
+    // Rechts nur „ändern“: Die Angaben stehen schon oben unter dem Namen. Vorher stand hier der ganze Text („5 Tage · unter 5° · …“),
+    // der nicht umbrach und die Seite breiter machte (iPhone-Test 18.11.2026: Seite ließ sich nach links wischen).
+    reise = el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "Deine Reise"), el("span", { class: "klappe-zahl" }, "ändern")), el("div", { class: "panel" }, ...reiseInhalt));
     reise.open = reiseOffen; reise.ontoggle = () => { reiseOffen = reise.open; };
   } else reise = el("div", { class: "panel" }, el("strong", {}, "Deine Reise"), ...reiseInhalt);
 
@@ -145,7 +151,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
   const frage = { koffer: { ...e, id: koffer.id, name: koffer.name }, uebernehmen: (nrs, tage) => {
     const neu = nrs.filter(n => nachNr.has(n)).slice(0, MAX_TEILE);
     Object.assign(koffer, { nrs: neu, gepackt: koffer.gepackt.filter(n => neu.includes(n)), tage: tage.length ? tage : null, luecken: [], tipps: [],
-      extras: koffer.extras || kofferExtras(e).map(text => ({ text, gepackt: false })), quelle: "chat", gepacktFuer: eingabenSchluessel(e) });
+      extras: koffer.extras || neueExtras(e), quelle: "chat", gepacktFuer: eingabenSchluessel(e) });
     aendern = false; chatOffen = false; speichern(koffer);
     toast(`${neu.length} Teile aus der Antwort eingepackt`);
     Promise.resolve(neuZeichnen()).then(() => document.getElementById("rahmen")?.scrollTo(0, 0)); // oben steht jetzt die Packliste
@@ -163,7 +169,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     const neu = neueReise();
     if (!neu) return;
     const kopie = JSON.parse(JSON.stringify({ eingaben: e, nrs: koffer.nrs, tage: koffer.tage, luecken: koffer.luecken, tipps: koffer.tipps, quelle: koffer.quelle, gepacktFuer: koffer.gepacktFuer }));
-    Object.assign(neu, kopie, { name: koffer.name ? `${koffer.name} (Kopie)`.slice(0, MAX_NAME) : null, gepackt: [], extras: koffer.extras ? koffer.extras.map(x => ({ text: x.text, gepackt: false })) : null });
+    Object.assign(neu, kopie, { name: koffer.name ? `${koffer.name} (Kopie)`.slice(0, MAX_NAME) : null, gepackt: [], extras: koffer.extras ? koffer.extras.map(x => ({ text: x.text, gepackt: false, menge: x.menge ?? null })) : null });
     speichern(neu); toast("Kopie angelegt, alle Haken sind wieder offen. Den Namen änderst du unter „Deine Reise“.");
     reiseOffen = true; nav.ersetze({ v: "koffer", id: neu.id });
   };
@@ -240,7 +246,15 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     box2.onchange = () => { x.gepackt = box2.checked; speichern(koffer); neuZeichnen(); };
     const weg = el("button", { type: "button", class: "link", "aria-label": `„${x.text}“ entfernen` }, "✕");
     weg.onclick = () => { koffer.extras = extras.filter((_, j) => j !== i); speichern(koffer); neuZeichnen(); };
-    return el("div", { class: "extra-zeile" + (x.gepackt ? " erledigt" : "") }, el("label", {}, box2, el("span", {}, x.text)), weg);
+    // Anzahl (seit 0.30): − / ＋, bei 1 nimmt „−“ die Zahl ganz weg. Ohne Zahl ein kleines „＋ Anzahl“.
+    const setze = n => { x.menge = n; speichern(koffer); neuZeichnen(); };
+    const knopf = (zeichen, label, f) => { const b = el("button", { type: "button", class: "menge-knopf", "aria-label": `${label}: ${x.text}` }, zeichen); b.onclick = f; return b; };
+    const menge = x.menge
+      ? el("span", { class: "menge" }, knopf("−", x.menge === 1 ? "Anzahl entfernen" : "Weniger", () => setze(x.menge > 1 ? x.menge - 1 : null)),
+          el("span", { class: "menge-zahl", "aria-label": `Anzahl ${x.menge}` }, `${x.menge}×`), knopf("＋", "Mehr", () => setze(Math.min(MAX_MENGE, x.menge + 1))))
+      : knopf("＋ Anzahl", "Anzahl angeben", () => setze(1));
+    if (!x.menge) menge.classList.add("ohne");
+    return el("div", { class: "extra-zeile" + (x.gepackt ? " erledigt" : "") }, el("label", {}, box2, el("span", {}, x.text)), menge, weg);
   }));
   const neuText = el("input", { type: "text", class: "feld-eingabe", maxLength: MAX_EXTRA_TEXT, placeholder: "z. B. Reiseadapter", autocomplete: "off", enterKeyHint: "done", "aria-label": "Eigener Eintrag" });
   const neuKnopf = el("button", { type: "button", class: "btn" }, "Hinzufügen");
@@ -248,7 +262,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     const text = clean(neuText.value).slice(0, MAX_EXTRA_TEXT);
     if (!text) return toast("Bitte etwas eintippen.");
     if (extras.length >= MAX_EXTRAS) return toast(`Höchstens ${MAX_EXTRAS} Einträge.`);
-    koffer.extras = [...extras, { text, gepackt: false }]; speichern(koffer); neuZeichnen();
+    koffer.extras = [...extras, { text, gepackt: false, menge: null }]; speichern(koffer); neuZeichnen();
   };
   neuText.onkeydown = ev => { if (ev.key === "Enter") neuKnopf.click(); };
   const sonstiges = el("div", { class: "panel" }, el("strong", {}, "Außerdem einpacken"),

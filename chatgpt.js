@@ -15,7 +15,7 @@
 import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=20";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=11";
 import { stilAktuell, stilZeilen } from "./stil.js?v=21";
-import { kandidaten } from "./regeln.js?v=19";
+import { kandidaten } from "./regeln.js?v=20";
 import { GROUPS, GROUP_OF } from "./ki.js?v=9";
 import { speichernKnopf } from "./fertig.js?v=10";
 
@@ -120,10 +120,11 @@ function kofferText(k, freitext, stil) {
     zeilen.length ? "\nMein Stil (Vorlieben, keine Verbote):" : null, ...zeilen.map(z => "- " + z), "",
     "Bitte:",
     "1. Stell mir eine Packliste nur aus meinen Teilen zusammen, die sich gut untereinander kombinieren lässt, so wenig wie möglich und so viel wie nötig. Schreib sie unter „Packliste:“ und nenne jedes Teil mit Nummer und kurzer Beschreibung (z. B. „Nr. 012 – T-Shirt, braun“).",
-    `2. Schreib danach für jeden Tag ein Outfit nur aus dieser Packliste, jedes als eigene Zeile „Tag 1: …“, „Tag 2: …“${k.tage ? ` bis „Tag ${k.tage}“` : ""}, mit den Nummern.`,
-    "3. Gib ein paar kurze Tipps zum Kombinieren und Packen.",
-    "4. Fehlt etwas Wichtiges, schreib ganz unten eine Zeile „Kaufidee: …“ (höchstens 3, ohne Nummer, ohne Shops und ohne Links). Schreib Kaufideen nie in die Packliste.", "",
-    "Antworte bitte nur mit Text und erstelle kein Bild."
+    // Seit 0.30 (iPhone-Test 18.11.2026): Tipps und Kaufideen VOR den Tagen. Standen sie am Ende, las die App sie als Teil des letzten Tages.
+    "2. Gleich unter der Packliste (noch vor den Tagen): ein paar kurze Tipps zum Packen. Fehlt etwas Wichtiges für die ganze Reise, schreib dort auch eine Zeile „Kaufidee: …“ (höchstens 3, ohne Nummer, ohne Shops und ohne Links). Schreib Kaufideen nie in die Packliste.",
+    `3. Dann für jeden Tag ein Outfit nur aus dieser Packliste. Fang jeden Tag mit einer eigenen Zeile an, z. B. „Tag 1 (Ankunft): Nr. 012 + Nr. 031 + Nr. 007“${k.tage ? `, bis „Tag ${k.tage}“` : ""}. Schreib direkt darunter, also noch vor dem nächsten Tag, 1–2 konkrete Styling-Tipps für genau dieses Outfit (z. B. reinstecken, Ärmel krempeln, was darüber, welcher Schmuck) und kurz, warum es passt. Gehört eine Kaufidee nur zu einem Tag, schreib sie dort als Zeile „Kaufidee: …“.`,
+    "4. Schreib nach dem letzten Tag nichts mehr.", "",
+    "Antworte bitte nur mit Text und erstelle noch kein Bild. Um ein Bild bitte ich dich danach extra."
   ].filter(z => z !== null).join("\n");
 }
 function anfrageText(frage, freitext, stil) {
@@ -420,6 +421,18 @@ export function antwortLesen(text, items) {
 // anker = bei „Was passt dazu?“ das Teil, um das es geht: Es gehört in jedes Outfit, auch wenn der Chat es nicht noch einmal nennt
 // (sonst fehlte es im Bild-Paket und im gespeicherten Outfit, Durchsicht 04.11.2026).
 const OUTFITS = ["Outfit 1", "Outfit 2", "Outfit 3"];
+// Überschrift ohne die Teil-Nummern dahinter (seit 0.30): „Tag 1 (Ankunft): Nr. 054, Nr. 026“ → „Tag 1 (Ankunft)“.
+// Die Nummern stehen in der Karte ohnehin gleich darunter. Steht vor der ersten Nummer nichts, bleibt die Zeile, wie sie ist.
+function ohneNummern(z) {
+  const i = z.search(/\bNr\.?\s*\d/i);
+  return i > 0 ? z.slice(0, i).replace(/[\s:–—|,+(-]+$/u, "") || z : z;
+}
+// Kürzen am Wortende mit „…“ statt mitten im Wort
+function amWortKuerzen(s, max) {
+  if (s.length <= max) return s;
+  const schnitt = s.slice(0, max - 1), leer = schnitt.lastIndexOf(" ");
+  return (leer > max / 2 ? schnitt.slice(0, leer) : schnitt).replace(/[\s,;:(–—-]+$/u, "") + " …";
+}
 function outfitsAus(gruppen, anker = null) {
   const namen = new Set(), kopf = g => g.text.split("\n")[0].trim();
   let liste = gruppen.filter(g => (g.teile.length || g.fremd.length) && !/^[^\p{L}]*kaufidee/iu.test(g.text));
@@ -427,14 +440,17 @@ function outfitsAus(gruppen, anker = null) {
   else liste = liste.filter(g => g.teile.length);
   const ohneZeichen = s => s.replace(/^[^\p{L}\d]+/u, "").replace(/[\s–—|-]+$/u, "");
   return liste.map(g => {
-    // Erster nicht leerer Teil vor „:“ oder „|“ (bei einer Tabellenzeile „| Outfit 3 | …“ ist der erste Teil leer)
-    let name = KOPF.test(kopf(g)) ? (kopf(g).split(/[:|]/).map(ohneZeichen).find(Boolean) || "").slice(0, 30) : "";
+    // Erster nicht leerer Teil vor „:“ oder „|“ (bei einer Tabellenzeile „| Outfit 3 | …“ ist der erste Teil leer).
+    // voll = derselbe Teil ungekürzt (seit 0.30 für die Tage im Koffer: „Tag 3 (Sightseeing & Abend im“ war nach 30 Zeichen abgeschnitten)
+    const voll = KOPF.test(kopf(g)) ? ohneNummern(kopf(g)).split(/[:|]/).map(ohneZeichen).find(Boolean) || "" : "";
+    let name = amWortKuerzen(voll, 40);
     for (let k = 1; !name || namen.has(name); k++) name = `Vorschlag ${k}`; // Namen müssen eindeutig sein (Auswahl-Knöpfe)
     namen.add(name);
-    // Name beim Speichern: was nach dem Doppelpunkt steht („Outfit 1: Modern Smart Casual“ → „Modern Smart Casual“)
+    // Name beim Speichern: was nach dem Doppelpunkt steht („Outfit 1: Modern Smart Casual“ → „Modern Smart Casual“),
+    // aber nicht, wenn dort nur die Nummern stehen („Tag 1: Nr. 054 + Nr. 026“)
     const danach = KOPF.test(kopf(g)) && kopf(g).includes(":") ? ohneZeichen(kopf(g).slice(kopf(g).indexOf(":") + 1)) : "";
     const teile = anker && g.teile.length && !g.teile.some(t => t.nr === anker.nr) ? [anker, ...g.teile] : g.teile;
-    return { name, titel: danach || name, teile, gruppe: g };
+    return { name, voll: voll || name, titel: danach && !/\bNr\.?\s*\d/i.test(danach) ? danach : name, teile, gruppe: g };
   });
 }
 
@@ -561,11 +577,14 @@ export function chatgptPanel(items, stil, frage, kachel) {
   // Schritt 4: Bild als eigene Nachricht, wenn die Antwort mit den Outfits da ist. Ist sie eingefügt, wählt sie ein Outfit
   // daraus und bekommt ein Bild-Paket mit genau diesen Teilen; sonst nur den Bild-Wunsch (Outfit 1/2/3, Sammelbilder).
   const schritt4 = el("div", {});
-  const s4 = schritt(4, "4. Bild vom Outfit (freiwillig)", schritt4);
+  // Beim Koffer seit 0.30 auch (Wunsch iPhone-Test 18.11.2026): ein Tag aus der Antwort als Bild
+  const s4 = schritt(4, k ? "4. Bild von einem Tag (freiwillig)" : "4. Bild vom Outfit (freiwillig)", schritt4);
   const stand4 = () => { s4.stand.textContent = m.bildKopiert ? "✓ kopiert" : ""; };
   const bildFertig = () => { m.bildKopiert = true; stand4(); s4.auf(false); };
   function bildSchritt(gruppen) {
     const outfits = gruppen ? outfitsAus(gruppen, frage.teil).filter(o => o.teile.length) : [];
+    // Beim Koffer gibt es kein „Outfit 1“ ohne eingefügte Antwort: Die Tage stehen erst in der Antwort
+    if (!outfits.length && k) { fill(schritt4, el("p", { class: "hint" }, "Füg zuerst die Antwort bei Schritt 3 ein. Dann wählst du hier einen Tag, und die App macht ein Bild-Paket mit genau diesen Teilen.")); return; }
     if (!outfits.length) {
       const bildBox = el("div", {});
       const wahl = choice({ options: ["Outfit 1", "Outfit 2", "Outfit 3"], selected: [m.bildOutfit], onChange: sel => { m.bildOutfit = sel[0] || "Outfit 1"; } });
@@ -587,7 +606,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
       onChange: sel => { m.bildOutfit = sel[0] || ""; const o = outfits.find(o => o.name === sel[0]); if (o) zeigen(o, true); else fill(paketBox); } });
     const gewaehlt = outfits.find(o => o.name === m.bildOutfit);
     if (gewaehlt) zeigen(gewaehlt, false);
-    fill(schritt4, field("Welches Outfit?", null, wahl.el,
+    fill(schritt4, field(k ? "Welcher Tag?" : "Welches Outfit?", null, wahl.el,
       "Die App legt die Teile des Outfits groß in ein Bild-Paket. Das hängst du im Chat zusammen mit der Anweisung an, dann bleibt das Bild näher an deinen echten Sachen."), paketBox);
   }
 
@@ -613,7 +632,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
     let uebernahme = null;
     if (k && frage.uebernehmen) {
       const nrs = [...new Set(gruppen.flatMap(g => g.teile).filter(t => !t.geloescht && t.verkauf !== "verkauft").map(t => t.nr))];
-      const tage = outfits.filter(o => /^[^\p{L}]*tag\b/iu.test(o.name) && o.teile.length).map(o => ({ titel: o.name.slice(0, 30), nrs: o.teile.map(t => t.nr) }));
+      const tage = outfits.filter(o => /^[^\p{L}]*tag\b/iu.test(o.name) && o.teile.length).map(o => ({ titel: amWortKuerzen(o.voll, 60), nrs: o.teile.map(t => t.nr) }));
       if (nrs.length) {
         const knopf = el("button", { type: "button", class: "btn primary" }, `🧳 ${nrs.length === 1 ? "1 Teil" : nrs.length + " Teile"} als Packliste übernehmen`);
         knopf.onclick = () => frage.uebernehmen(nrs, tage);
@@ -628,7 +647,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
         // Der lange Text aus dem Chat steht eingeklappt (seit 0.20, Wunsch 04.11.2026); sichtbar bleiben Titel, Fotos,
         // Kaufideen und „Outfit speichern“. Ein Sammelblock „Kaufideen“ bleibt offen sichtbar.
         const o = outfitVon.get(g), zeilen = g.ohneIdeen.split("\n"), mitKopf = !!o && KOPF.test(zeilen[0]);
-        const titel = o ? (mitKopf ? zeilen[0].replace(/^[^\p{L}\d]+/u, "").trim() : o.name) : null;
+        const titel = o ? (mitKopf ? ohneNummern(zeilen[0].replace(/^[^\p{L}\d]+/u, "").trim()) : o.name) : null;
         const rest = (mitKopf ? zeilen.slice(1).join("\n") : g.ohneIdeen).trim();
         if (!o && /^[^\p{L}]*kaufideen?/iu.test(g.ohneIdeen)) return el("div", { class: "kaufidee" }, el("p", {}, "🛍 " + g.ohneIdeen));
         // Bei einem Outfit seine Teile (bei „Was passt dazu?“ samt dem Teil, um das es geht), sonst die Teile der Gruppe
@@ -644,7 +663,8 @@ export function chatgptPanel(items, stil, frage, kachel) {
           rest ? textKlappe(i, o ? "Erklärung und Styling-Tipps" : zeilen[0].replace(/^[^\p{L}\d]+/u, "").slice(0, 50) + (zeilen[0].length > 50 ? " …" : ""), rest) : null,
           o && teile.length ? el("div", { class: "actions" }, speichernKnopf(teile, o.titel, g.text, "chat")) : null);
       }));
-    if (weiter) { s3.auf(false); if (outfits.some(o => o.teile.length)) s4.auf(true); }
+    // Beim Koffer bleibt Schritt 4 zu: Dort kommt erst „als Packliste übernehmen“, das Bild ist ein Extra
+    if (weiter) { s3.auf(false); if (!k && outfits.some(o => o.teile.length)) s4.auf(true); }
   };
   // Eingefügt → gleich anzeigen (der Knopf „Outfits anzeigen“ bleibt für selbst getippte Änderungen)
   feld.onpaste = () => setTimeout(() => { m.antwort = feld.value; anzeigen(feld.value, true); }, 0);
@@ -658,5 +678,5 @@ export function chatgptPanel(items, stil, frage, kachel) {
       "Was an den Anbieter geht: die Fotos deiner Teile, ihre Angaben (auch Notizen), „Mein Stil“ (wenn angehakt) und ein Foto von dir, falls du eins anhängst.",
       "In den Einstellungen kannst du ausschalten, dass deine Chats zum Verbessern der KI genutzt werden. ChatGPT: „Datenkontrollen“, der Chat bleibt erhalten. Gemini: „Gemini-Apps-Aktivität“ bzw. „Aktivität speichern“; ist sie aus, bleibt ein Chat dort aber nur wenige Tage, danach den Kleiderschrank neu geben."),
     el("div", { class: "hint" }, "Was du dort hochlädst, geht an OpenAI (ChatGPT) bzw. Google (Gemini)."),
-    schrank, s2.d, s3.d, ergebnis, k ? null : s4.d); // beim Koffer kein Bild-Schritt (dort geht es ums Packen)
+    schrank, s2.d, s3.d, ergebnis, s4.d);
 }
