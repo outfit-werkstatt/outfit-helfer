@@ -21,6 +21,7 @@ import { renderSchonDa } from "./schonda.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=5";
 import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, ueberfaellig } from "./verleihen.js?v=1";
+import { tourEinrichten } from "./tour.js?v=1";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -234,12 +235,13 @@ async function render() {
 // kein Teil der Sicherung); ohne Speicher (z. B. privates Fenster) beginnt sie bei der Kleidung.
 const BEREICH_SCHLUESSEL = "startBereich";
 let bereich = (() => { try { return localStorage.getItem(BEREICH_SCHLUESSEL) === "haushalt" ? "haushalt" : "kleidung"; } catch { return "kleidung"; } })();
-// Beim Umschalten nach oben, damit man den neuen Bereich von Anfang an sieht (nicht, wenn die App selbst umschaltet: oben = false)
+// Beim Umschalten nach oben, damit man den neuen Bereich von Anfang an sieht (nicht, wenn die App selbst umschaltet: oben = false).
+// Gibt ein Promise zurück, das fertig ist, wenn neu gezeichnet ist (für die Rundtour)
 export function zeigeBereich(b, oben = true) {
-  if ((b !== "kleidung" && b !== "haushalt") || b === bereich) return;
+  if ((b !== "kleidung" && b !== "haushalt") || b === bereich) return Promise.resolve();
   bereich = b;
   try { localStorage.setItem(BEREICH_SCHLUESSEL, b); } catch { /* nur nicht gemerkt */ }
-  if (current.v === "start") neuZeichnen().then(() => { if (oben) $("rahmen").scrollTop = 0; });
+  return current.v === "start" ? neuZeichnen().then(() => { if (oben) $("rahmen").scrollTop = 0; }) : Promise.resolve();
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
@@ -854,6 +856,8 @@ export async function initSchrank() {
   try { await aufraeumen(); } catch (e) { console.error(e); }
   try { await dingeAufraeumen(); } catch (e) { console.error(e); }
   schwebeEinrichten();
+  // Rundtour (seit 0.36): Knopf „?“ und beim ersten Öffnen einmal fragen
+  tourEinrichten({ bereich: () => bereich, zeigeBereich: b => zeigeBereich(b, false), aufStart: () => current.v === "start" });
   const wieder = await sitzungLaden().catch(e => { console.error(e); return null; });
   sitzungEinrichten();
   const neuGestartet = !history.state?.v;
