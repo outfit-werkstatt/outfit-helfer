@@ -6,9 +6,9 @@
 // Texte nur per textContent/DOM, nie per innerHTML (Name und eigene Einträge sind eingetippter Text).
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, info, beschreibung } from "./ui.js?v=21";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=12";
-import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=22";
-import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=23";
-import { miniKachel } from "./passt.js?v=29";
+import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=23";
+import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=24";
+import { miniKachel } from "./passt.js?v=30";
 import { stilAktuell } from "./stil.js?v=22";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";
@@ -265,6 +265,8 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
         : "Du hast die Angaben zur Reise geändert, die Packliste ist noch die alte."),
       el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => packKnopf.click() }, "🧳 Von der App neu packen lassen"))) : null,
     fehlt.length ? el("p", { class: "hint" }, `${fehlt.map(n => "Nr. " + nrText(n)).join(", ")} ${fehlt.length === 1 ? "ist" : "sind"} nicht mehr im Kleiderschrank.`) : null,
+    // Seit 0.34: Verliehenes bleibt auf der Liste (kommt ja zurück), aber mit Hinweis
+    teile.some(t => t.verliehen) ? el("p", { class: "hint" }, `🤝 ${teile.filter(t => t.verliehen).map(t => `Nr. ${nrText(t.nr)} (an ${t.verliehen.an})`).join(", ")} ${teile.filter(t => t.verliehen).length === 1 ? "ist" : "sind"} gerade verliehen.`) : null,
     ...koffer.luecken.map(x => el("p", { class: "hint" }, "⚠️ " + x)),
     ...gruppen,
     el("div", { class: "actions" }, aendernKnopf));

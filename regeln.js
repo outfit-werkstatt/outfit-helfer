@@ -208,14 +208,18 @@ function tipps(teile, extras, s, ideen = []) {
 
 /* ---------- Welche Teile kommen infrage? ---------- */
 // Hartes Nie: Papierkorb, 🚫 und (seit 0.26) alles beim Verkaufen (💰 will ich verkaufen, 📦 bei Vinted, ✅ verkauft).
-// Gilt auch für den Chat: Was hier fehlt, meldet „Nur die Änderungen“ als „nicht mehr da“.
+// Dazu (seit 0.34) alles, was gerade verliehen ist: Es ist nicht da, bis sie „Zurückbekommen“ tippt.
+// Für den Chat siehe imChat: Was dort fehlt, meldet „Nur die Änderungen“ als „nicht mehr da“, Verliehenes eigens als „gerade verliehen“.
 // Ordner-Auswahl: Ein Teil kommt infrage, wenn es in mindestens einem angehakten Ordner liegt.
 // Teile ohne eigenen Ordner zählen über den eigenen Knopf „Ohne Ordner“. auswahl = { angehakt: Set der Ordner-IDs, ohneOrdner: an/aus }
 export function kandidaten(items, auswahl = null) {
-  const moeglich = items.filter(t => !t.geloescht && !t.nichtAnziehen && !t.verkauf);
+  const moeglich = imChat(items).filter(t => !t.verliehen);
   if (!auswahl) return moeglich;
   return moeglich.filter(t => t.ordner?.length ? t.ordner.some(o => auswahl.angehakt.has(o)) : auswahl.ohneOrdner);
 }
+// Was der Chat als Kleiderschrank kennt (seit 0.34): wie kandidaten, aber MIT verliehenen Teilen. Die stehen mit dem Vermerk
+// „gerade verliehen“ in der Liste, damit „Wieder da“ später ohne neues Foto reicht.
+export const imChat = items => items.filter(t => !t.geloescht && !t.nichtAnziehen && !t.verkauf);
 // Was braucht ein Outfit noch, wenn dieses Teil gesetzt ist? Mehrere Wege möglich (Oberteil + Unterteil oder Kleid)
 const VORLAGEN = tabelle({ oben: [["unten", "schuh"]], unten: [["oben", "schuh"]], ganz: [["schuh"]], lage: [["oben", "unten", "schuh"], ["ganz", "schuh"]], schuh: [["oben", "unten"], ["ganz"]] });
 const GANZES_OUTFIT = [["oben", "unten", "schuh"], ["ganz", "schuh"]];

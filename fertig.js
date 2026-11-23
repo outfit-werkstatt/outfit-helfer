@@ -145,6 +145,8 @@ export function renderFertig(box, kopf, o, items, bild, kachel, paket, zurueck, 
       nie.length ? el("p", { class: "hint" }, `${nie.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${nie.length === 1 ? "ist" : "sind"} als „🚫 Ziehe ich nicht an“ markiert.`) : null,
       verkauft.length ? el("p", { class: "hint" }, `${verkauft.map(n => "Nr. " + nrText(n)).join(", ")} ${verkauft.length === 1 ? "ist" : "sind"} verkauft.`) : null,
       zumVerkauf.length ? el("p", { class: "hint" }, `${zumVerkauf.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${zumVerkauf.length === 1 ? "liegt" : "liegen"} bei „💰 Zum Verkaufen“.`) : null,
+      // Seit 0.34: verliehene Teile mit Hinweis, an wen
+      teile.some(t => t.verliehen) ? el("p", { class: "hint" }, `🤝 ${teile.filter(t => t.verliehen).map(t => `Nr. ${nrText(t.nr)} ist gerade an ${t.verliehen.an} verliehen`).join(", ")}.`) : null,
       el("p", { class: "hint" }, `Gespeichert am ${datum(o.erstellt)} · ${HERKUNFT[o.quelle] || HERKUNFT.chat}`)),
     o.text ? el("details", { class: "panel mehr" }, el("summary", {}, "Erklärung und Tipps"), el("div", { class: "chatgpt-text" }, o.text)) : null,
     teile.length ? el("div", { class: "panel" }, el("strong", {}, "🖼 Bild vom Outfit"), paket(teile, "diesem Outfit aus meinem Kleiderschrank").el) : null,

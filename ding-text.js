@@ -4,7 +4,7 @@
 // die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
 import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, mobil, tabelle } from "./ui.js?v=21";
 import { getDingFoto, dingNrText } from "./speicher.js?v=12";
-import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=23";
+import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=24";
 
 // Titel-Längen: eBay erlaubt 80 Zeichen; bei Vinted und Kleinanzeigen nennen Ratgeber etwa 50 bzw. 65 (nicht offiziell bestätigt)
 const TITEL_MAX = tabelle({ Vinted: 50, Kleinanzeigen: 65, eBay: 80 });
@@ -23,11 +23,16 @@ const ZUSTAND_TITEL = tabelle({ "Neu, unbenutzt": "neu", "Defekt": "defekt" });
 const KEINE_MARKE = /^(unbekannt|keine marke|ohne marke|keine angabe|no ?name|unknown|sonstige|-+|–|\?+)$/i;
 const markeVon = d => !d.marke || KEINE_MARKE.test(String(d.marke).trim()) ? null : d.marke;
 const wasVon = d => d.name || d.kategorie || "Artikel";
+// Eigene Felder je Art (seit 0.34, haushalt.js): Schlüssel → Wort. Kommen in den Text, die Notiz („Mehr Infos“) nicht.
+export const DETAILS = tabelle({ autor: "Autor", titel: "Titel", kuenstler: "Künstler", album: "Album", format: "Format", modell: "Modell" });
+const detail = (d, k) => typeof d.details?.[k] === "string" ? d.details[k] : null;
+// Steht ein Wort schon im Namen (z. B. Modell oder Format), nicht noch einmal anhängen
+const fehltIn = (was, w) => w && !was.toLowerCase().includes(w.toLowerCase()) ? w : null;
 
-// Titel: Marke + Name + Anzahl + „neu“/„defekt“; zu lang → hinten Wörter weglassen (nie mitten im Wort)
+// Titel: Marke + Name + Modell + Format + Anzahl + „neu“/„defekt“; zu lang → hinten Wörter weglassen (nie mitten im Wort)
 export function dingTitel(d, p) {
   const max = TITEL_MAX[p] || 50, marke = markeVon(d), was = wasVon(d);
-  const teile = [marke && !was.toLowerCase().includes(marke.toLowerCase()) ? marke : null, was, d.menge > 1 ? `${d.menge} Stück` : null, ZUSTAND_TITEL[d.zustand] || null].filter(Boolean);
+  const teile = [fehltIn(was, marke), was, fehltIn(was, detail(d, "modell")), fehltIn(was, detail(d, "format")), d.menge > 1 ? `${d.menge} Stück` : null, ZUSTAND_TITEL[d.zustand] || null].filter(Boolean);
   let s = teile.join(" ");
   while (s.length > max && s.includes(" ")) s = s.slice(0, s.lastIndexOf(" "));
   return s.slice(0, max);
@@ -38,7 +43,9 @@ export function dingBeschreibung(d, p, emojis, v = 0) {
   const em = s => emojis ? " " + s : ".";
   const intro = [`Ich verkaufe: ${was}${von}${em("✨")}`, `Zu verkaufen: ${was}${von}${em("🏡")}`, `Biete hier ${was}${von} an${em("💕")}`][v % 3];
   const saetze = [ZUSTAND_SATZ[d.zustand], d.menge > 1 ? `Es sind ${d.menge} Stück.` : null].filter(Boolean).join(" ");
-  const details = [["🏷", "Marke", marke], ["📦", "Art", d.kategorie && d.kategorie !== was ? d.kategorie : null], ["🔢", "Anzahl", d.menge > 1 ? `${d.menge} Stück` : null],
+  const ZEICHEN = { autor: "✍️", titel: "📖", kuenstler: "🎤", album: "💿", format: "📀", modell: "🔧" };
+  const details = [["🏷", "Marke", marke], ["📦", "Art", d.kategorie && d.kategorie !== was ? d.kategorie : null],
+    ...Object.entries(DETAILS).map(([k, label]) => [ZEICHEN[k], label, detail(d, k)]), ["🔢", "Anzahl", d.menge > 1 ? `${d.menge} Stück` : null],
     ["✨", "Zustand", d.zustand]].filter(([, , w]) => w).map(([e, k, w]) => `${emojis ? e : "•"} ${k}: ${w}`);
   const service = p === "Vinted"
     ? (emojis ? ["💬 Bei Fragen schreib mir gern!", "👀 Schau auch gern in meine anderen Artikel."] : ["Bei Fragen schreib mir gern!", "Schau auch gern in meine anderen Artikel."])

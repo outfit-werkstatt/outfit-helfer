@@ -329,6 +329,13 @@ label.btn.datei{display:inline-flex;align-items:center;margin-top:8px}
 .preis-zeile{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0;font-size:.95rem}
 .preis-feld{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .feld-eingabe.preis-eingabe{width:7.5em;text-align:right}
+/* Verleihen (seit 0.34): Datum-Felder (auf dem iPhone sonst ohne Höhe, solange leer), „überfällig“ in Rosé, Verlauf als kurze Liste */
+.feld-eingabe.datum-eingabe{width:11em;max-width:100%;-webkit-appearance:none;appearance:none;text-align:left}
+.ueberfaellig{color:var(--link);font-weight:600}
+.verkauf-zeile .unter.ueberfaellig{color:var(--link)}
+.verleih-verlauf{margin:0 0 6px;padding-left:20px;font-size:.9rem}
+/* Eigene Felder je Art im Haushalt (seit 0.34): stehen direkt unter „Was ist es?“ */
+.art-felder:empty{display:none}
 .verkauf-frage{background:var(--chip);border-radius:16px;padding:4px 12px 10px;margin-top:10px}
 .verkauf-frage .actions{margin-top:6px}
 /* „♻️ Aussortiert“: drei Knöpfe zum Umschalten zwischen 🚫, 💰 und ✅, darunter die Zeile zum Bereich */

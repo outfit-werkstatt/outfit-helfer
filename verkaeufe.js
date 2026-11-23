@@ -7,7 +7,7 @@
 import { el, fill, field, choice, mitInfo, beschreibung, datumText } from "./ui.js?v=21";
 import { nrText } from "./speicher.js?v=12";
 import { istVerkauft, imVerkauf, plattformVon, preisText, EINGESTELLT } from "./verkauf.js?v=5";
-import { dingTitel } from "./haushalt.js?v=2";
+import { dingTitel } from "./haushalt.js?v=3";
 
 const MELDE_ANZAHL = 30, MELDE_BETRAG = 2000, WARN_ANZAHL = 25, WARN_BETRAG = 1600;
 const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];

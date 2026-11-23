@@ -11,12 +11,13 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=21";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=22";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=23";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=24";
 import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=5";
-import { reisenPruefen } from "./koffer.js?v=6";
-import { dingPruefen } from "./haushalt.js?v=2";
-import { kistenPruefen } from "./umzug.js?v=2";
+import { reisenPruefen } from "./koffer.js?v=7";
+import { dingPruefen } from "./haushalt.js?v=3";
+import { kistenPruefen } from "./umzug.js?v=3";
 import { wunschPruefen } from "./wunsch.js?v=1";
+import { verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
 // Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)
@@ -136,7 +137,7 @@ async function erstellen(fortschritt) {
     teile: angaben, ordner, meinStil: stilAktuell(stil), eigeneWerte: eigene, outfits: outfitAngaben,
     // Was der Chat zuletzt vom Kleiderschrank bekommen hat (seit 0.21): Der Chat liegt in ihrem Konto, nicht auf dem Handy,
     // und kennt nach dem Wiederherstellen (auch auf einem neuen Handy) noch denselben Stand. Ältere Versionen lesen das Feld nicht.
-    chatStand: chat?.zeit && chat?.teile ? { zeit: chat.zeit, teile: chat.teile } : null,
+    chatStand: chat?.zeit && chat?.teile ? { zeit: chat.zeit, teile: chat.teile, verliehen: Array.isArray(chat.verliehen) ? chat.verliehen : [] } : null,
     // Reisen aus „Koffer packen“ (seit 0.28, mit Namen und Packliste). Ältere Versionen lesen das Feld nicht.
     reisen: reisenPruefen(reisen) };
   // Sachen im Haushalt (seit 0.32): ohne Papierkorb, mit Foto und Vorschau im Ordner „Haushalt“. Verkaufte wie bei der Kleidung
@@ -213,6 +214,8 @@ function pruefen(j) {
       eingestelltAm: zeit(t.eingestelltAm), verkauftAm: zeit(t.verkauftAm),
       // Seit 0.32: Plattform (auch selbst eingetippt) und Kaufpreis für die Verkaufs-Übersicht
       plattform: plattformPruefen(t.plattform), kaufpreis: preisPruefen(t.kaufpreis),
+      // Seit 0.34: verliehen an … (mit „Zurück bis“) und „Früher verliehen“ (verleihen.js prüft)
+      verliehen: verliehenPruefen(t.verliehen), verleihVerlauf: verlaufPruefen(t.verleihVerlauf),
       ordner: liste(t.ordner, 50, 50).filter(id => ids.has(id)), erstellt: zeit(t.erstellt) || new Date().toISOString(),
       ki: Object.fromEntries(["art", "farbe", "muster", "material", "aermel", "schnitt"].map(f => [f, text(k[f], 30)])),
       _foto: typeof t.foto === "string" ? t.foto : null, _vorschau: typeof t.vorschau === "string" ? t.vorschau : null };
@@ -257,7 +260,9 @@ function pruefen(j) {
   if (cs && zeit(cs.zeit) && cs.teile && typeof cs.teile === "object" && !Array.isArray(cs.teile)) {
     const st = {};
     for (const [k, v] of Object.entries(cs.teile).slice(0, MAX_TEILE)) if (/^\d{1,6}$/.test(k) && typeof v === "string" && /^[0-9a-z]{1,8}$/.test(v)) st[k] = v;
-    chatStand = { zeit: zeit(cs.zeit), teile: st };
+    // Seit 0.34: Nummern, die damals verliehen waren (nur Nummern aus dieser Liste)
+    const verliehen = Array.isArray(cs.verliehen) ? [...new Set(cs.verliehen.slice(0, MAX_TEILE).filter(n => Number.isInteger(n) && String(n) in st))] : [];
+    chatStand = { zeit: zeit(cs.zeit), teile: st, verliehen };
   }
   // Sachen im Haushalt (seit 0.32): eigene Nummern, Angaben prüft haushalt.js (nur bekannte Felder). Ältere Sicherungen haben keine.
   const dinge = [], dingNrs = new Set();

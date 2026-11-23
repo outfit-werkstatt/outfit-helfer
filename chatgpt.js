@@ -15,9 +15,9 @@
 import { el, fill, choice, field, mitInfo, toast, fehlerToast, beschreibung, cleanText, saisonVorschlag, wieVon, groupOf, tabelle, mobil, datumText } from "./ui.js?v=21";
 import { nrText, getMeta, setMeta, getPhoto } from "./speicher.js?v=12";
 import { stilAktuell, stilZeilen } from "./stil.js?v=22";
-import { kandidaten } from "./regeln.js?v=22";
+import { imChat } from "./regeln.js?v=23";
 import { GROUPS, GROUP_OF } from "./ki.js?v=9";
-import { speichernKnopf } from "./fertig.js?v=11";
+import { speichernKnopf } from "./fertig.js?v=12";
 
 const MAX_ANTWORT = 20000, MAX_ZUSATZ = 500; // Zusatz: beim Koffer bis 500 Zeichen (Reise beschreiben), sonst 300
 // Pro Sitzung gemerkt (Ansichten werden bei jedem Tippen neu gezeichnet). Antwort und Zusatz getrennt je Frage,
@@ -76,13 +76,20 @@ const sortiert = teile => [...teile].sort((a, b) => ((GRUPPEN_REIHE.get(a.gruppe
 const fingerabdruck = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
 const standVon = teile => Object.fromEntries(teile.map(t => [t.nr, fingerabdruck(teilZeile(t))]));
 // Was ist seit dem letzten Mal anders? (stand.teile = { Nr: Fingerabdruck }; Teile von vor 0.12 haben keinen Stand → „nie“)
+// Seit 0.34 auch, was seitdem verliehen wurde oder wieder da ist (stand.verliehen = Nummern, die damals verliehen waren;
+// ältere Stände haben das Feld nicht = nichts verliehen). Dafür braucht es kein neues Foto, nur eine Zeile Text.
+const verliehenNrs = teile => teile.filter(t => t.verliehen).map(t => t.nr);
 function vergleich(teile, stand) {
   if (!stand?.teile) return { nie: true };
-  const alt = stand.teile, jetzt = standVon(teile);
+  const alt = stand.teile, jetzt = standVon(teile), war = new Set(Array.isArray(stand.verliehen) ? stand.verliehen : []);
   const neu = teile.filter(t => alt[t.nr] !== jetzt[t.nr]); // neue und geänderte (z. B. Farbe korrigiert, oder Nummer neu vergeben)
   const weg = Object.keys(alt).map(Number).filter(n => !(n in jetzt)).sort((a, b) => a - b);
-  return { neu, weg, zeit: stand.zeit, gleich: !neu.length && !weg.length };
+  const verliehen = teile.filter(t => t.verliehen && !war.has(t.nr)).map(t => t.nr), zurueck = teile.filter(t => !t.verliehen && war.has(t.nr)).map(t => t.nr);
+  return { neu, weg, verliehen, zurueck, zeit: stand.zeit, gleich: !neu.length && !weg.length && !verliehen.length && !zurueck.length };
 }
+const VERLIEHEN_ZUSATZ = " – gerade verliehen, bitte vorerst nicht vorschlagen";
+const listenZeile = t => teilZeile(t) + (t.verliehen ? VERLIEHEN_ZUSATZ : "");
+const nummern = l => [...l].sort((a, b) => a - b).map(n => "Nr. " + nrText(n)).join(", ");
 function schrankText(teile, stil, anzahlBilder) {
   const s = stilAktuell(stil);
   return [
@@ -94,14 +101,17 @@ function schrankText(teile, stil, anzahlBilder) {
     "- Dann stellst du Outfits nur aus diesen Teilen zusammen und nennst jedes Teil mit seiner Nummer.",
     "- Erfinde keine Nummern. Wenn du ein Teil auf den Bildern nicht gut erkennst, frag nach.",
     "- Schicke ich dir eine Änderung (neue Teile oder Teile, die weg sind), gilt ab dann der neue Stand.",
+    "- Steht bei einem Teil „gerade verliehen“, ist es nicht da: Schlag es erst wieder vor, wenn ich schreibe, dass es wieder da ist.",
     MODE_TEXT[s.mode] ? `\nMode: ${MODE_TEXT[s.mode]}` : null, "",
-    `Mein Kleiderschrank (Stand ${datum(new Date())}, ${teile.length} Teile):`, ...sortiert(teile).map(teilZeile), "",
+    `Mein Kleiderschrank (Stand ${datum(new Date())}, ${teile.length} Teile):`, ...sortiert(teile).map(listenZeile), "",
     `Antworte jetzt bitte nur kurz mit „Verstanden, ${teile.length} Teile“.`
   ].filter(z => z !== null).join("\n");
 }
-function aenderungText(neu, weg) {
+function aenderungText(neu, weg, verliehen = [], zurueck = []) {
   return [`Änderung an meinem Kleiderschrank (Stand ${datum(new Date())}). Ab jetzt gilt:`,
-    neu.length ? `\nNeu oder geändert (${neu.length > PRO_BILD ? "auf den angehängten Bildern" : "auf dem angehängten Bild"}):` : null, ...sortiert(neu).map(teilZeile),
+    neu.length ? `\nNeu oder geändert (${neu.length > PRO_BILD ? "auf den angehängten Bildern" : "auf dem angehängten Bild"}):` : null, ...sortiert(neu).map(listenZeile),
+    verliehen.length ? `\nGerade verliehen, bitte vorerst nicht vorschlagen: ${nummern(verliehen)}` : null,
+    zurueck.length ? `\nWieder da, darfst du wieder vorschlagen: ${nummern(zurueck)}` : null,
     weg.length ? `\nNicht mehr da, bitte nicht mehr vorschlagen: ${weg.map(n => "Nr. " + nrText(n)).join(", ")}` : null,
     "", "Antworte bitte nur kurz mit „Verstanden“."].filter(z => z !== null).join("\n");
 }
@@ -402,6 +412,7 @@ export function antwortLesen(text, items) {
       else if (t.verkauf === "verkauft") hinweise.push(`Nr. ${nrText(n)} ist verkauft. Gib deinem Chat die Änderungen (Schritt 1).`);
       else if (t.verkauf) hinweise.push(`Nr. ${nrText(n)} liegt bei „💰 Zum Verkaufen“. Gib deinem Chat die Änderungen (Schritt 1).`);
       else if (t.nichtAnziehen) hinweise.push(`Nr. ${nrText(n)} ist als „🚫 Ziehe ich nicht an“ markiert.`);
+      else if (t.verliehen) hinweise.push(`🤝 Nr. ${nrText(n)} ist gerade an ${t.verliehen.an} verliehen. Kennt dein Chat das noch nicht, gib ihm die Änderungen (Schritt 1).`);
       if (passtNicht(t, g.beschr.get(n) || "")) hinweise.push(`⚠️ In der Antwort steht bei Nr. ${nrText(n)} „${g.beschr.get(n)}“, bei dir ist es „${beschreibung(t)}“. Vielleicht kennt der Chat einen alten Stand: Gib ihm die Änderungen (Schritt 1).`);
       teile.push(t);
     }
@@ -457,14 +468,15 @@ function outfitsAus(gruppen, anker = null) {
 /* ---------- Schritt 1: Kleiderschrank an ChatGPT geben ---------- */
 // Auch in der Ansicht „Sicherung“ (zip-ansicht.js). nachher() = nach dem Kopieren des Textes (Stand neu anzeigen)
 export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
-  const teile = kandidaten(items), status = el("div", { class: "hint" }, "…"), knoepfe = el("div", { class: "actions" }), box = el("div", {});
+  const teile = imChat(items), status = el("div", { class: "hint" }, "…"), knoepfe = el("div", { class: "actions" }), box = el("div", {});
   let v = { nie: true };
   const vorbereiten = async (art, knopf) => {
     knopf.disabled = true; const alt = knopf.textContent; knopf.textContent = "Bilder werden erstellt …";
     try {
       const nur = art === "alles" ? teile : v.neu;
       const dateien = nur.length ? await sammelbilder(nur, art === "alles" ? "Mein Kleiderschrank" : "Neu im Kleiderschrank") : [];
-      vorbereitet = { art, dateien, text: art === "alles" ? schrankText(teile, stil, dateien.length) : aenderungText(v.neu, v.weg), stand: standVon(teile) };
+      vorbereitet = { art, dateien, text: art === "alles" ? schrankText(teile, stil, dateien.length) : aenderungText(v.neu, v.weg, v.verliehen, v.zurueck),
+        stand: standVon(teile), verliehen: verliehenNrs(teile) };
       zeigen();
     } catch (e) { fehlerToast("Hat nicht geklappt", e); console.error(e); }
     finally { knopf.disabled = false; knopf.textContent = alt; }
@@ -479,7 +491,7 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
     textKnopf.onclick = async () => {
       if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
       fill(kopierBox);
-      try { await setMeta("chatgptStand", { zeit: new Date().toISOString(), teile: vorbereitet.stand }); } catch (e) { console.error(e); }
+      try { await setMeta("chatgptStand", { zeit: new Date().toISOString(), teile: vorbereitet.stand, verliehen: vorbereitet.verliehen }); } catch (e) { console.error(e); }
       toast("Text kopiert – jetzt zusammen mit den Bildern im Chat senden");
       vorbereitet = null; nachher(); pruefen();
     };
@@ -500,7 +512,8 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
     aenderung.onclick = () => vorbereiten("aenderung", aenderung);
     if (v.nie) status.textContent = `Noch nicht weitergegeben. Die App macht aus deinen ${teile.length} Teilen ${Math.max(1, Math.ceil(teile.length / PRO_BILD))} Sammelbild${teile.length > PRO_BILD ? "er" : ""} mit Nummern – so sieht ChatGPT oder Gemini deine echten Sachen.`;
     else if (v.gleich) status.textContent = `✅ Dein Chat kennt deinen aktuellen Kleiderschrank (gegeben am ${datum(new Date(v.zeit))}). Nutzt du einen anderen Chat (z. B. Gemini statt ChatGPT), gib ihn dort mit „Alles neu“.`;
-    else status.textContent = `⚠️ Seit dem ${datum(new Date(v.zeit))}: ${[v.neu.length ? `${v.neu.length} neu oder geändert` : null, v.weg.length ? `${v.weg.length} nicht mehr da` : null].filter(Boolean).join(", ")}. Gib deinem Chat die Änderungen, damit er den aktuellen Stand kennt.`;
+    else status.textContent = `⚠️ Seit dem ${datum(new Date(v.zeit))}: ${[v.neu.length ? `${v.neu.length} neu oder geändert` : null, v.weg.length ? `${v.weg.length} nicht mehr da` : null,
+      v.verliehen.length ? `${v.verliehen.length} verliehen` : null, v.zurueck.length ? `${v.zurueck.length} wieder da` : null].filter(Boolean).join(", ")}. Gib deinem Chat die Änderungen, damit er den aktuellen Stand kennt.`;
     fill(knoepfe, v.nie || v.gleich ? alles : aenderung, v.nie || v.gleich ? null : alles);
     if (!teile.length) fill(knoepfe);
   }
@@ -527,7 +540,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
   const stand1 = el("span", { class: "schritt-stand" });
   const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; stand1.textContent = "✓ aktuell"; });
   const schrank = el("details", { class: "mehr schritt" }, el("summary", {}, "1. Kleiderschrank an den Chat geben", stand1), schritt1.el);
-  getMeta("chatgptStand").then(st => { const v = vergleich(kandidaten(items), st); if (v.nie || !v.gleich) schrank.open = true; else stand1.textContent = "✓ aktuell"; })
+  getMeta("chatgptStand").then(st => { const v = vergleich(imChat(items), st); if (v.nie || !v.gleich) schrank.open = true; else stand1.textContent = "✓ aktuell"; })
     .catch(() => { schrank.open = true; });
 
   // Schritt 2: Anfrage. Was gerade gefragt würde; ändert es sich nach dem Kopieren (z. B. anderes Wetter oben), ist die
@@ -634,13 +647,14 @@ export function chatgptPanel(items, stil, frage, kachel) {
       // Seit 0.31 (Durchsicht 19.11.2026) auch ohne Teile, die sie verkaufen will oder als 🚫 markiert hat: Die kommen sonst in keinen
       // Vorschlag, also auch nicht in den Koffer. Der Chat kennt sie evtl. noch aus einem alten Stand. Die Tage verlieren sie in koffer.js.
       const alle = [...new Set(gruppen.flatMap(g => g.teile).filter(t => !t.geloescht && t.verkauf !== "verkauft"))];
-      const nrs = alle.filter(t => !t.verkauf && !t.nichtAnziehen).map(t => t.nr), draussen = alle.filter(t => t.verkauf || t.nichtAnziehen);
+      // Seit 0.34 auch ohne verliehene Teile (die sind nicht da)
+      const nrs = alle.filter(t => !t.verkauf && !t.nichtAnziehen && !t.verliehen).map(t => t.nr), draussen = alle.filter(t => t.verkauf || t.nichtAnziehen || t.verliehen);
       const tage = outfits.filter(o => /^[^\p{L}]*tag\b/iu.test(o.name) && o.teile.length).map(o => ({ titel: amWortKuerzen(o.voll, 60), nrs: o.teile.map(t => t.nr) }));
       if (nrs.length) {
         const knopf = el("button", { type: "button", class: "btn primary" }, `🧳 ${nrs.length === 1 ? "1 Teil" : nrs.length + " Teile"} als Packliste übernehmen`);
         knopf.onclick = () => frage.uebernehmen(nrs, tage);
         uebernahme = el("div", { class: "panel hinweis" }, el("p", {}, "Die Antwort als deine Packliste übernehmen? Deine bisherige Liste wird ersetzt, abgehakte Teile bleiben abgehakt."),
-          draussen.length ? el("p", { class: "hint" }, `${draussen.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${draussen.length === 1 ? "kommt" : "kommen"} nicht mit (beim Verkaufen oder als „🚫 Ziehe ich nicht an“ markiert).`) : null,
+          draussen.length ? el("p", { class: "hint" }, `${draussen.map(t => "Nr. " + nrText(t.nr)).join(", ")} ${draussen.length === 1 ? "kommt" : "kommen"} nicht mit (beim Verkaufen, verliehen oder als „🚫 Ziehe ich nicht an“ markiert).`) : null,
           el("div", { class: "actions" }, knopf));
       }
     }

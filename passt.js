@@ -4,9 +4,9 @@
 import { el, fill, field, choice, beschreibung } from "./ui.js?v=21";
 import { nrText } from "./speicher.js?v=12";
 import { stilAktuell } from "./stil.js?v=22";
-import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=22";
-import { chatgptPanel, bildPaketBereich, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=23";
-import { speichernKnopf } from "./fertig.js?v=11";
+import { kandidaten, kombinationen, kombinationenSituation, kaufideen, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=23";
+import { chatgptPanel, bildPaketBereich, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=24";
+import { speichernKnopf } from "./fertig.js?v=12";
 
 // Pro Sitzung gemerkt: abgewählte Ordner (neue Ordner sind damit automatisch angehakt) und der Schalter „Meinen Stil beachten“,
 // dazu hier in „Was passt dazu?“, ob die Vorschläge der App und „Ordner und Mein Stil“ aufgeklappt sind
@@ -129,6 +129,7 @@ export function renderPasst(box, kopf, items, folders, stil, nr, bild, oeffnen, 
   fill(box, kopf,
     anker.nichtAnziehen ? el("p", { class: "hint" }, "Dieses Teil ist als „🚫 Ziehe ich nicht an“ markiert. Es kommt sonst in keinen Vorschlag.") : null,
     anker.verkauf ? el("p", { class: "hint" }, "Dieses Teil liegt bei „💰 Zum Verkaufen“. Es kommt sonst in keinen Vorschlag, und dein Chat kennt es vielleicht nicht mehr.") : null,
+    !anker.verkauf && anker.verliehen ? el("p", { class: "hint" }, `🤝 Dieses Teil ist gerade an ${anker.verliehen.an} verliehen. Die Vorschläge zeigen, was passt, wenn es wieder da ist.`) : null,
     el("div", { class: "panel" },
       field("Wofür?", null, anlassWahl.el),
       field("Wie schick?", "freiwillig", einer(Object.keys(SCHICK_WAHL), sit.schickWahl, x => { sit.schickWahl = x; }), "Ohne Angabe richtet es sich nach dem Anlass."),

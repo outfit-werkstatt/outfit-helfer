@@ -5,32 +5,57 @@
 // „Noch ergänzen“, bis sie „✓ Fertig“ tippt. So geht nichts verloren, wenn das iPhone die App schließt; Eingetipptes wird beim
 // Tippen gespeichert.
 // Texte nur per textContent/value, nie per innerHTML (Name, Ort, Notiz sind eingetippt).
-import { el, fill, toast, fehlerToast, field, choice, clean, cleanText, zeigeGross, datumText, markenFeld, merkeMarken, mitInfo, mitWachSperre } from "./ui.js?v=21";
-import { addDing, allDinge, getDingFoto, updateDing, purgeDinge, dingNrText } from "./speicher.js?v=12";
+import { el, fill, toast, fehlerToast, field, choice, clean, cleanText, zeigeGross, datumText, markenFeld, merkeMarken, mitInfo, mitWachSperre, tabelle } from "./ui.js?v=21";
+import { addDing, allDinge, getDingFoto, updateDing, updateDinge, purgeDinge, dingNrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg } from "./ki.js?v=9";
 import { preisLesen, preisText, preisPruefen, plattformPruefen, verkaufFeld, verkaufKurz, verkaufZeichen, imVerkauf, istVerkauft, VERKAUF_STUFEN,
   EINGESTELLT } from "./verkauf.js?v=5";
-import { renderDingText } from "./ding-text.js?v=1";
+import { renderDingText, DETAILS } from "./ding-text.js?v=2";
+import { verleihFeld, verliehenKurz, verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
 
-// Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang)
-const KATEGORIEN_KNOEPFE = ["Küche", "Elektronik", "Deko", "Möbel", "Bücher & Medien", "Spiele & Spielzeug", "Werkzeug & Garten", "Sonstiges"];
-const KATEGORIEN_MEHR = ["Haushaltsgeräte", "Heimtextilien", "Sport & Freizeit", "Bad & Pflege", "Baby & Kind", "Büro & Schreibwaren"];
+// Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang).
+// Seit 0.34 (Wunsch 23.11.2026): „Bücher & Medien“ aufgeteilt in „Bücher“, „Musik“ und „Filme & Videospiele“, dazu „Instrumente“.
+const KATEGORIEN_KNOEPFE = ["Küche", "Elektronik", "Deko", "Möbel", "Bücher", "Musik", "Instrumente", "Spiele & Spielzeug", "Werkzeug & Garten", "Sonstiges"];
+const KATEGORIEN_MEHR = ["Filme & Videospiele", "Haushaltsgeräte", "Heimtextilien", "Sport & Freizeit", "Bad & Pflege", "Baby & Kind", "Büro & Schreibwaren"];
 export const KATEGORIEN = [...KATEGORIEN_KNOEPFE, ...KATEGORIEN_MEHR];
+// Ältere oder selbst eingetippte Wörter für dieselbe Art → das feste Wort (beim Start und beim Laden einer Sicherung angeglichen),
+// damit die eigenen Felder unten auch für schon eingetragene Dinge gelten. Schlüssel klein geschrieben.
+const ART_ALT = tabelle({ "bücher & medien": "Bücher", "buch": "Bücher", "bücher": "Bücher", "musik": "Musik", "schallplatten": "Musik", "schallplatte": "Musik",
+  "platten": "Musik", "cds": "Musik", "instrument": "Instrumente", "instrumente": "Instrumente", "musikinstrument": "Instrumente", "musikinstrumente": "Instrumente",
+  "filme": "Filme & Videospiele", "film": "Filme & Videospiele", "videospiele": "Filme & Videospiele", "filme & spiele": "Filme & Videospiele", "dvds": "Filme & Videospiele" });
+const artAngleichen = k => typeof k === "string" ? ART_ALT[k.toLowerCase()] || k : k;
+// Eigene Knöpfe mit diesen Wörtern (z. B. „Instrument“ neben dem festen „Instrumente“) zeigt die Auswahl nicht mehr an
+const ART_ALT_KNOEPFE = ["Instrument", "Musikinstrument", "Musikinstrumente", "Buch", "Schallplatten", "Schallplatte", "Platten", "CDs", "Filme", "Film", "Videospiele", "Filme & Spiele", "DVDs"];
+
+// Eigene Eingabefelder je Art (seit 0.34, Wunsch 23.11.2026): Bei Büchern Autor und Titel, bei Musik Künstler, Album und Format …
+// name: Der Name entsteht aus diesen Feldern („Stephen King – Holly“), solange sie ihn nicht selbst anders schreibt.
+// marke: Das Feld „Marke“ steht dann gleich hier (sonst unter den weiteren Angaben). mehr: Beispiel für „Mehr Infos“ (= die Notiz,
+// bleibt privat und kommt nicht in den Verkaufstext; dort darf auch stehen, an wen man es mal verliehen hat).
+const ART_FELDER = tabelle({
+  "Bücher": { felder: [["autor", "Autor", "z. B. Stephen King"], ["titel", "Titel", "z. B. Holly"]], name: true, mehr: "z. B. Jahr, Ausgabe, Taschenbuch" },
+  "Musik": { felder: [["kuenstler", "Künstler", "z. B. Will Smith"], ["album", "Album", "z. B. Big Willie Style"]], name: true,
+    format: ["Schallplatte", "CD", "Kassette"], formatFeld: "Format Musik", mehr: "z. B. Jahr, Erstpressung, farbige Platte" },
+  "Filme & Videospiele": { felder: [["titel", "Titel", "z. B. Der Herr der Ringe"]], name: true,
+    format: ["DVD", "Blu-ray", "PS5", "PS4", "Switch", "Xbox"], formatFeld: "Format Filme", mehr: "z. B. Jahr, Sammleredition" },
+  "Instrumente": { marke: "z. B. Harley Benton", felder: [["modell", "Modell", "z. B. Standard Series"]], mehr: "z. B. Baujahr, mit Tasche, neue Saiten" },
+  "Elektronik": { marke: "z. B. Sony", felder: [["modell", "Modell", "z. B. PS5 Digital Edition"]], mehr: "z. B. Baujahr, mit Ladekabel und Karton" }
+});
+const MAX_DETAIL = 60;
+// Name aus den Feldern (nur bei Arten mit name: true), z. B. „Stephen King – Holly“
+const nameAus = (def, details) => def?.name ? def.felder.map(([k]) => clean(details?.[k] || "")).filter(Boolean).join(" – ").slice(0, 60) : "";
 const RAEUME_KNOEPFE = ["Wohnzimmer", "Küche", "Schlafzimmer", "Bad", "Kinderzimmer", "Keller"];
 const RAEUME_MEHR = ["Flur", "Arbeitszimmer", "Dachboden", "Garage", "Balkon"];
 export const RAEUME = [...RAEUME_KNOEPFE, ...RAEUME_MEHR];
 // Zustände für Haushaltsdinge („Neu mit Etikett“ wie bei Kleidung passt hier selten); für die Plattform-Texte später umgesetzt
 export const DING_ZUSTAENDE = ["Neu, unbenutzt", "Sehr gut", "Gut", "Zufriedenstellend", "Defekt"];
-export const MAX_NAME = 60, MAX_ORT = 60, MAX_NOTIZ = 200, MAX_MENGE = 999, MAX_AN = 40;
+export const MAX_NAME = 60, MAX_ORT = 60, MAX_NOTIZ = 200, MAX_MENGE = 999;
 const KORB_TAGE = 30, TAG = 24 * 3600 * 1000;
 
 export const dingName = d => d.name || d.kategorie || "noch ohne Namen";
 export const dingTitel = d => `${dingNrText(d.nr)} – ${dingName(d)}`;
 export const woText = d => [d.raum, d.ort].filter(Boolean).join(" · ");
 const anzahl = n => `${n} ${n === 1 ? "Ding" : "Dinge"}`;
-// Verliehen an … (seit 0.32, Wunsch 19.11.2026): { an, seit } am Ding
-const seitText = iso => { const n = Math.max(0, Math.round((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / TAG)); return n === 0 ? "seit heute" : n === 1 ? "seit gestern" : `seit ${n} Tagen`; };
-export const verliehenKurz = d => d.verliehen ? `🤝 an ${d.verliehen.an}, ${seitText(d.verliehen.seit)}` : null;
+// Verliehen an … (seit 0.32; seit 0.34 mit „Zurück bis“ und Verlauf, verleihen.js)
 // Nummer → Name der Umzugskiste, in der das Ding liegt (umzug.js)
 const kistenNamen = kisten => new Map((kisten || []).flatMap(k => k.nrs.map(nr => [nr, k.name])));
 const restTage = d => Math.max(0, KORB_TAGE - Math.floor((Date.now() - Date.parse(d.geloescht)) / TAG));
@@ -40,9 +65,16 @@ const nochTage = d => { const n = restTage(d); return n <= 0 ? "noch heute" : n 
    Die Datei kann von irgendwoher stammen: nur bekannte Felder, Texte gekürzt, Zahlen in Grenzen. Nummer prüft zip-ansicht.js. */
 const textVon = (v, max) => typeof v === "string" ? clean(v).slice(0, max).trim() || null : null;
 const zeitVon = v => typeof v === "string" && v.length < 40 && !isNaN(Date.parse(v)) ? new Date(v).toISOString() : null;
+// Eigene Felder je Art (seit 0.34): nur bekannte Schlüssel, Texte gekürzt; ohne einen einzigen Wert null
+function detailsPruefen(x) {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+  const out = {};
+  for (const k of Object.keys(DETAILS)) { const v = textVon(x[k], k === "format" ? 30 : MAX_DETAIL); if (v) out[k] = v; }
+  return Object.keys(out).length ? out : null;
+}
 export function dingPruefen(d) {
   const jetzt = new Date().toISOString();
-  return { nr: d.nr, kategorie: textVon(d.kategorie, 30), name: textVon(d.name, MAX_NAME), marke: textVon(d.marke, 40),
+  return { nr: d.nr, kategorie: artAngleichen(textVon(d.kategorie, 30)), name: textVon(d.name, MAX_NAME), marke: textVon(d.marke, 40), details: detailsPruefen(d.details),
     raum: textVon(d.raum, 30), ort: textVon(d.ort, MAX_ORT),
     menge: Number.isInteger(d.menge) && d.menge >= 1 && d.menge <= MAX_MENGE ? d.menge : null,
     zustand: DING_ZUSTAENDE.includes(d.zustand) ? d.zustand : null, kaufpreis: preisPruefen(d.kaufpreis),
@@ -50,8 +82,8 @@ export function dingPruefen(d) {
     // Verkaufen wie bei der Kleidung (verkauf.js)
     verkauf: VERKAUF_STUFEN.includes(d.verkauf) ? d.verkauf : null, preis: preisPruefen(d.preis), erloes: preisPruefen(d.erloes),
     eingestelltAm: zeitVon(d.eingestelltAm), verkauftAm: zeitVon(d.verkauftAm), plattform: plattformPruefen(d.plattform),
-    // Verliehen an … (seit 0.32): Name höchstens 40 Zeichen, seit wann
-    verliehen: d.verliehen && typeof d.verliehen === "object" && textVon(d.verliehen.an, MAX_AN) ? { an: textVon(d.verliehen.an, MAX_AN), seit: zeitVon(d.verliehen.seit) || jetzt } : null,
+    // Verliehen an … (seit 0.32; seit 0.34 mit „Zurück bis“ und Verlauf, geprüft in verleihen.js)
+    verliehen: verliehenPruefen(d.verliehen), verleihVerlauf: verlaufPruefen(d.verleihVerlauf),
     // Bild-Fingerabdruck für „Vielleicht doppelt“ (seit 0.33.2)
     bildHash: typeof d.bildHash === "string" && /^[0-9a-f]{16}$/.test(d.bildHash) ? d.bildHash : null, doppeltOk: d.doppeltOk === true,
     erstellt: zeitVon(d.erstellt) || jetzt, geaendert: zeitVon(d.geaendert) || zeitVon(d.erstellt) || jetzt };
@@ -61,7 +93,9 @@ export function dingPruefen(d) {
    werte = gespeicherte Angaben, onChange() nach jeder Änderung (auch beim Tippen). kurz = nur Kategorie, Name, Raum, Ort
    (für „Noch ergänzen“). get() = die Angaben, fehler() = Text, wenn etwas nicht stimmt (sonst null), dispose() beim Neuzeichnen. */
 function dingFelder(werte, onChange = () => {}, kurz = false) {
-  const kat = choice({ field: "Haushalt-Kategorie", options: KATEGORIEN_KNOEPFE, more: KATEGORIEN_MEHR, selected: werte.kategorie ? [werte.kategorie] : [], beispiel: "z. B. Fotografie", onChange });
+  const kat = choice({ field: "Haushalt-Kategorie", options: KATEGORIEN_KNOEPFE, more: KATEGORIEN_MEHR, selected: werte.kategorie ? [werte.kategorie] : [], beispiel: "z. B. Fotografie",
+    onChange: () => { artZeichnen(); onChange(); } });
+  ART_ALT_KNOEPFE.forEach(v => kat.removeOption(v)); // nur eigene, nicht ausgewählte Knöpfe (ui.js)
   const raum = choice({ field: "Raum", options: RAEUME_KNOEPFE, more: RAEUME_MEHR, selected: werte.raum ? [werte.raum] : [], beispiel: "z. B. Abstellraum", onChange });
   const eingabe = (wert, max, placeholder, label, extra = {}) => {
     const i = el("input", { type: "text", class: "feld-eingabe", maxLength: max, value: wert ?? "", placeholder, autocomplete: "off", enterKeyHint: "done", "aria-label": label, ...extra });
@@ -70,33 +104,83 @@ function dingFelder(werte, onChange = () => {}, kurz = false) {
   };
   const name = eingabe(werte.name, MAX_NAME, "z. B. Wasserkocher", "Name");
   const ort = eingabe(werte.ort, MAX_ORT, "z. B. Regal oben, Kiste 3", "Wo genau");
-  const felder = [field("Was ist es?", null, kat.el), field("Name", "kurz, z. B. „Wasserkocher“ oder „Lego Feuerwehr“", name),
-    field("Wo liegt es?", "freiwillig", raum.el), field("Wo genau?", "freiwillig", ort)];
+  // Marke und Notiz gibt es immer (auch in der kurzen Karte, dort nur bei Arten, die sie brauchen). Sie wandern je nach Art
+  // nach oben zu den eigenen Feldern („Marke“, „Mehr Infos“) oder stehen unten bei den weiteren Angaben.
+  const marke = markenFeld(werte.marke || ""); marke.input.oninput = onChange;
+  const markeBeispiel = marke.input.placeholder;
+  const notiz = el("textarea", { class: "notiz", maxLength: MAX_NOTIZ, rows: 2, value: werte.notiz || "", "aria-label": "Notiz" });
+  notiz.oninput = onChange;
+  const markeUnten = el("div", {}), notizUnten = el("div", {});
+
+  // Eigene Felder je Art: werden neu gezeichnet, wenn sie die Art wechselt. Eingetipptes bleibt gemerkt (details), auch beim Hin und Her.
+  const details = { ...(werte.details || {}) }, artBox = el("div", { class: "art-felder" });
+  let def = null, formatWahl = null, autoName = nameAus(ART_FELDER[artAngleichen(werte.kategorie)], details);
+  let nameFeld = null; // Feld „Name“ (Hinweis ändert sich je nach Art)
+  const nameNachziehen = () => {
+    const neu = nameAus(def, details), jetzt = clean(name.value);
+    if (def?.name && (!jetzt || jetzt === autoName)) name.value = neu;
+    autoName = neu;
+  };
+  function artZeichnen() {
+    formatWahl?.dispose(); formatWahl = null;
+    def = ART_FELDER[kat.get()[0]] || null;
+    const felder = [];
+    if (def) {
+      if (def.marke) { marke.input.placeholder = def.marke; felder.push(field("Marke", "freiwillig", marke.el)); }
+      for (const [k, label, beispiel] of def.felder) {
+        const i = eingabe(details[k] || "", MAX_DETAIL, beispiel, label);
+        i.oninput = () => { details[k] = i.value; nameNachziehen(); onChange(); };
+        felder.push(field(label, null, i));
+      }
+      if (def.format) {
+        formatWahl = choice({ field: def.formatFeld, options: def.format, selected: details.format ? [details.format] : [], beispiel: "z. B. Single",
+          onChange: sel => { details.format = sel[0] || null; onChange(); } });
+        felder.push(field("Format", null, formatWahl.el));
+      }
+      notiz.placeholder = def.mehr;
+      felder.push(field("Mehr Infos", "freiwillig, bleibt auf deinem Handy (kommt nicht in den Verkaufstext)", notiz));
+    }
+    if (!def?.marke) { marke.input.placeholder = markeBeispiel; markeUnten.append(marke.el); }
+    if (!def) { notiz.placeholder = "z. B. Deckel fehlt, nur 2× benutzt"; notizUnten.append(notiz); }
+    fill(artBox, ...felder);
+    if (mehr) { mehr.markeFeld.hidden = !!def?.marke; mehr.notizFeld.hidden = !!def; }
+    if (nameFeld) nameFeld.querySelector(".note").textContent = def?.name ? `entsteht aus ${def.felder.map(([, l]) => l).join(" und ")}, du kannst ihn ändern` : "kurz, z. B. „Wasserkocher“ oder „Lego Feuerwehr“";
+    nameNachziehen();
+  }
+  nameFeld = field("Name", "kurz", name);
+  const felder = [field("Was ist es?", null, kat.el), artBox, nameFeld, field("Wo liegt es?", "freiwillig", raum.el), field("Wo genau?", "freiwillig", ort)];
   let mehr = null;
   if (!kurz) {
-    const marke = markenFeld(werte.marke || ""); marke.input.oninput = onChange;
     const menge = eingabe(werte.menge ?? "", 3, "z. B. 6", "Anzahl", { inputMode: "numeric" });
     menge.classList.add("preis-eingabe");
     const zustand = choice({ options: DING_ZUSTAENDE, selected: werte.zustand ? [werte.zustand] : [], onChange });
     const preisAlsText = n => n == null ? "" : Number.isInteger(n) ? String(n) : n.toFixed(2).replace(".", ",");
     const kauf = eingabe(preisAlsText(werte.kaufpreis), 10, "z. B. 25", "Gekauft für", { inputMode: "decimal" });
     kauf.classList.add("preis-eingabe");
-    const notiz = el("textarea", { class: "notiz", maxLength: MAX_NOTIZ, rows: 2, value: werte.notiz || "", placeholder: "z. B. Deckel fehlt, nur 2× benutzt", "aria-label": "Notiz" });
-    notiz.oninput = onChange;
-    felder.push(field("Marke", "freiwillig", marke.el),
+    const markeFeld = field("Marke", "freiwillig", markeUnten), notizFeld = field("Notiz", "freiwillig, bleibt auf deinem Handy", notizUnten);
+    felder.push(markeFeld,
       field("Anzahl", "freiwillig, z. B. bei 6 Gläsern", el("span", { class: "preis-feld" }, menge, el("span", {}, "Stück"))),
       field("Zustand", "freiwillig", zustand.el),
       field("Gekauft für", "freiwillig, für deine Verkaufs-Übersicht", el("span", { class: "preis-feld" }, kauf, el("span", {}, "€"))),
-      field("Notiz", "freiwillig, bleibt auf deinem Handy", notiz));
-    mehr = { marke, menge, zustand, kauf, notiz };
+      notizFeld);
+    mehr = { menge, zustand, kauf, markeFeld, notizFeld };
   }
+  artZeichnen();
   const mengeVon = v => { const s = clean(v); return !s ? null : /^\d{1,3}$/.test(s) && Number(s) >= 1 ? Number(s) : undefined; };
+  // Nur die Felder der gewählten Art; ohne einen einzigen Wert null
+  const detailsJetzt = () => {
+    if (!def) return null;
+    const out = {};
+    for (const [k] of def.felder) { const v = clean(details[k] || "").slice(0, MAX_DETAIL); if (v) out[k] = v; }
+    if (def.format && details.format) out.format = details.format;
+    return Object.keys(out).length ? out : null;
+  };
   return {
     elements: felder,
     get: () => ({
       kategorie: kat.get()[0] || null, name: clean(name.value).slice(0, MAX_NAME) || null, raum: raum.get()[0] || null, ort: clean(ort.value).slice(0, MAX_ORT) || null,
-      ...(mehr ? { marke: mehr.marke.get(), menge: mengeVon(mehr.menge.value) ?? null, zustand: mehr.zustand.get()[0] || null,
-        kaufpreis: preisLesen(mehr.kauf.value) ?? null, notiz: cleanText(mehr.notiz.value).slice(0, MAX_NOTIZ) || null } : {})
+      details: detailsJetzt(), marke: marke.get(), notiz: cleanText(notiz.value).slice(0, MAX_NOTIZ) || null,
+      ...(mehr ? { menge: mengeVon(mehr.menge.value) ?? null, zustand: mehr.zustand.get()[0] || null, kaufpreis: preisLesen(mehr.kauf.value) ?? null } : {})
     }),
     fehler: () => {
       if (!mehr) return null;
@@ -104,7 +188,7 @@ function dingFelder(werte, onChange = () => {}, kurz = false) {
       if (preisLesen(mehr.kauf.value) === undefined) return "Bei „Gekauft für“ bitte nur einen Betrag eintippen, z. B. 25 oder 24,99.";
       return null;
     },
-    dispose: () => { kat.dispose(); raum.dispose(); }
+    dispose: () => { kat.dispose(); raum.dispose(); formatWahl?.dispose(); }
   };
 }
 
@@ -219,7 +303,7 @@ function passtSuche(d, q, kiste = null) {
   if (!q) return true;
   const m = /^h?\s*0*(\d+)$/.exec(q);
   if (m) return d.nr === Number(m[1]);
-  const text = [d.kategorie, d.name, d.marke, d.raum, d.ort, d.notiz, d.zustand, d.verliehen?.an, kiste].filter(Boolean).join(" ").toLowerCase();
+  const text = [d.kategorie, d.name, d.marke, ...Object.values(d.details || {}), d.raum, d.ort, d.notiz, d.zustand, d.verliehen?.an, kiste].filter(Boolean).join(" ").toLowerCase();
   return q.split(/\s+/).every(w => text.includes(w));
 }
 function filterReihe(label, liste, key, wert) {
@@ -342,9 +426,10 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra
   gross.onclick = () => zeigeGross(gross.src, dingName(d));
   const zeile = (k, v) => v ? [el("dt", {}, k), el("dd", {}, v)] : [];
   const angaben = el("dl", { class: "angaben" },
-    ...zeile("Was", d.kategorie || "noch nicht gewählt"), ...zeile("Name", d.name), ...zeile("Marke", d.marke),
+    ...zeile("Was", d.kategorie || "noch nicht gewählt"), ...zeile("Name", d.name),
+    ...Object.entries(DETAILS).flatMap(([k, label]) => zeile(label, d.details?.[k])), ...zeile("Marke", d.marke),
     ...zeile("Wo", woText(d) || "noch nicht eingetragen"), ...zeile("Umzug", kiste ? `📦 in „${kiste.name}“` : null), ...zeile("Anzahl", d.menge ? `${d.menge} Stück` : null), ...zeile("Zustand", d.zustand),
-    ...zeile("Gekauft für", d.kaufpreis != null ? preisText(d.kaufpreis) : null), ...zeile("Notiz", d.notiz), ...zeile("Hinzugefügt", datumText(d.erstellt)));
+    ...zeile("Gekauft für", d.kaufpreis != null ? preisText(d.kaufpreis) : null), ...zeile(ART_FELDER[d.kategorie] ? "Mehr Infos" : "Notiz", d.notiz), ...zeile("Hinzugefügt", datumText(d.erstellt)));
   const inhalt = el("div", { class: "panel" }, angaben);
   const aendern = el("button", { type: "button", class: "btn" }, "Angaben ändern");
   aendern.onclick = () => {
@@ -381,39 +466,9 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra
     el("button", { type: "button", class: imVerkauf(d) ? "btn primary" : "btn", onclick: () => nav.go({ v: "dingText", nr: d.nr }) }, "🏷 Verkaufstext"));
   const beimVerkauf = imVerkauf(d) || istVerkauft(d);
   const kisteKnopf = kiste ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "kiste", id: kiste.id }) }, `📦 Zu „${kiste.name}“`)) : null;
-  // Verliehen an … (seit 0.32): Name eintippen, „Zurückbekommen“ nimmt es wieder weg
-  let verliehen = null;
-  if (!d.geloescht && !istVerkauft(d)) {
-    const kasten = el("div", {});
-    if (d.verliehen) {
-      const zurueck = el("button", { type: "button", class: "btn primary" }, "✓ Zurückbekommen");
-      zurueck.onclick = async () => {
-        zurueck.disabled = true;
-        try { await updateDing(d.nr, { verliehen: null }); toast(`${dingNrText(d.nr)} ist wieder da`); neuZeichnen(); }
-        catch (e) { zurueck.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
-      };
-      fill(kasten, field("Verliehen", `🤝 An ${d.verliehen.an} verliehen, ${seitText(d.verliehen.seit)} (${datumText(d.verliehen.seit)}).`, el("div", { class: "actions" }, zurueck)));
-    } else {
-      const auf = el("button", { type: "button", class: "btn" }, "🤝 Verliehen an …");
-      auf.onclick = () => {
-        const name = el("input", { type: "text", class: "feld-eingabe", maxLength: MAX_AN, placeholder: "z. B. Nachbarin, Lena", autocomplete: "off", enterKeyHint: "done", "aria-label": "An wen verliehen" });
-        const ok = el("button", { type: "button", class: "btn primary" }, "Speichern");
-        ok.onclick = async () => {
-          const an = clean(name.value).slice(0, MAX_AN);
-          if (!an) return toast("Bitte eintippen, an wen.");
-          ok.disabled = true;
-          try { await updateDing(d.nr, { verliehen: { an, seit: new Date().toISOString() } }); toast(`An ${an} verliehen`); neuZeichnen(); }
-          catch (e) { ok.disabled = false; fehlerToast("Speichern hat nicht geklappt", e); }
-        };
-        name.onkeydown = e => { if (e.key === "Enter") ok.click(); };
-        fill(kasten, field("Verliehen an", "Der Name bleibt nur auf deinem Handy (und in deiner Sicherung).", name),
-          el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => neuZeichnen() }, "Abbrechen"), ok));
-        name.focus();
-      };
-      fill(kasten, el("div", { class: "actions" }, auf));
-    }
-    verliehen = el("div", { class: "panel" }, kasten);
-  }
+  // Verliehen an … (seit 0.32; seit 0.34 mit „Verliehen am“, „Zurück bis“ und „Früher verliehen“, verleihen.js)
+  const verliehen = d.geloescht || istVerkauft(d) ? null
+    : verleihFeld(d, { speichern: felder => updateDing(d.nr, felder), name: dingNrText(d.nr), neuZeichnen });
   fill(box, kopf(dingTitel(d), d.geloescht ? `Liegt im Papierkorb (${nochTage(d)})` : istVerkauft(d) ? "✅ Verkauft – nicht mehr im Haushalt"
       : d.ergaenzen ? "Noch nicht fertig eingetragen" : null),
     gross, text, beimVerkauf ? verkauf : null, d.verliehen ? verliehen : null, inhalt, d.verliehen ? null : verliehen, beimVerkauf ? null : verkauf,
@@ -468,8 +523,12 @@ export async function renderHaushalt(box, kopf, s, bild, nav, neuZeichnen, extra
   if (s.v === "dingKorb") return renderKorb(box, kopf, dinge, bild, nav, neuZeichnen);
   return renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, extra);
 }
-// Dinge, die länger als 30 Tage im Papierkorb liegen, endgültig löschen (beim Start)
+// Beim Start: Dinge, die länger als 30 Tage im Papierkorb liegen, endgültig löschen. Dazu (seit 0.34) ältere Wörter für die Art
+// angleichen (z. B. „Bücher & Medien“ → „Bücher“, eigener Knopf „Instrument“ → „Instrumente“); ändert nur, was nötig ist.
 export async function dingeAufraeumen() {
-  const alt = (await allDinge()).filter(d => d.geloescht && Date.now() - Date.parse(d.geloescht) >= KORB_TAGE * TAG);
+  const dinge = await allDinge();
+  const alt = dinge.filter(d => d.geloescht && Date.now() - Date.parse(d.geloescht) >= KORB_TAGE * TAG);
   await purgeDinge(alt.map(d => d.nr));
+  const angleichen = dinge.filter(d => d.kategorie && artAngleichen(d.kategorie) !== d.kategorie && !alt.includes(d)).map(d => ({ nr: d.nr, kategorie: artAngleichen(d.kategorie) }));
+  if (angleichen.length) await updateDinge(angleichen);
 }

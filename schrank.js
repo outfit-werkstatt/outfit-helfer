@@ -5,21 +5,22 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, getLookFoto, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=34";
-import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=29";
-import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=26";
-import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=11";
-import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=23";
-import { renderVinted } from "./vinted.js?v=15";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=35";
+import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=30";
+import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=27";
+import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=12";
+import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=24";
+import { renderVinted } from "./vinted.js?v=16";
 import { GROUPS } from "./ki.js?v=9";
-import { renderKoffer } from "./koffer.js?v=6";
-import { renderHaushalt, dingeAufraeumen } from "./haushalt.js?v=2";
-import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=2";
-import { renderKisten, kistenLaden } from "./umzug.js?v=2";
+import { renderKoffer } from "./koffer.js?v=7";
+import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=3";
+import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=3";
+import { renderKisten, kistenLaden } from "./umzug.js?v=3";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
 import { renderSchonDa } from "./schonda.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=5";
+import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, verliehenSortiert } from "./verleihen.js?v=1";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -193,6 +194,9 @@ async function render() {
   // Verkäufe (seit 0.32): Kleidung und Haushalt zusammen
   if (s.v === "verkaeufe") return renderVerkaeufe(box, kopf("💶 Verkäufe", "Kleidung und Haushalt zusammen"), items, dinge, url,
     x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }), neuZeichnen);
+  // Verliehen (seit 0.34): Kleidung und Haushalt zusammen
+  if (s.v === "verliehen") return renderVerliehen(box, kopf("🤝 Verliehen", "Kleidung und Haushalt zusammen"), verliehenEintraege(items, dinge), url,
+    x => go(x.art === "ding" ? { v: "ding", nr: x.nr } : { v: "teil", nr: x.nr }));
   if (s.v === "outfit") return renderOutfit(box, kopf("Outfit finden", null, neuKnopf(outfitHatEtwas, () => chatHatAntwort({}), outfitNeu)),
     items, folders, stil, url, n => go({ v: "teil", nr: n }), neuZeichnen);
   if (s.v === "vinted") {
@@ -242,6 +246,17 @@ function outfitKachel(outfits, items, looks) {
     el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder.map(b => el("img", { src: url(b), alt: "", loading: "lazy" }))),
     el("span", { class: "name" }, "⭐ Fertige Outfits"),
     el("span", { class: "anzahl" }, outfits.length === 1 ? "1 Outfit" : `${outfits.length} Outfits`));
+}
+// Was gerade verliehen ist (seit 0.34), Kleidung und Haushalt einheitlich: { art, nr, titel, t }
+const verliehenEintraege = (items, dinge) => [
+  ...items.filter(t => t.verliehen && !t.geloescht && !istVerkauft(t)).map(t => ({ art: "teil", nr: t.nr, titel: `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`, t })),
+  ...dinge.filter(d => d.verliehen && !d.geloescht && !istVerkauft(d)).map(d => ({ art: "ding", nr: d.nr, titel: dingTitel(d), t: d }))];
+// Kachel „🤝 Verliehen“ (nur, wenn etwas verliehen ist): Überfälliges zuerst im Mosaik
+function verleihKachel(eintraege) {
+  const bilder = verliehenSortiert(eintraege).slice(0, 4).map(x => el("img", { src: url(x.t.vorschau), alt: "", loading: "lazy" }));
+  return el("button", { type: "button", class: "kachel", onclick: () => go({ v: "verliehen" }) },
+    el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
+    el("span", { class: "name" }, "🤝 Verliehen"), el("span", { class: "anzahl" }, verliehenStand(eintraege)));
 }
 // Abwechselnd aus mehreren Listen (je eins, dann das nächste …), damit das Mosaik von „Aussortiert“ von jedem Bereich etwas zeigt
 function gemischt(...listen) {
@@ -303,10 +318,12 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
   const bereiche = { [NICHT]: nichtAn(da), [L_VERKAUF]: da.filter(imVerkauf), [L_VERKAUFT]: verkaufteVon(items) };
   const aussortiert = AUSSORTIERT.flatMap(b => bereiche[b]);
   const ersterBereich = () => [aussortiertZuletzt, L_VERKAUF, NICHT, L_VERKAUFT].find(b => b && bereiche[b].length);
+  const verliehen = verliehenEintraege(items, dinge);
   fill($("kacheln"),
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
     aussortiert.length ? kachel(AUSSORTIERT_NAME, aussortiert, () => go({ v: "liste", id: ersterBereich() }), gemischt(...AUSSORTIERT.map(b => bereiche[b]))) : null,
+    verliehen.length ? verleihKachel(verliehen) : null,
     da.length || outfits.length ? outfitKachel(outfits, items, looks) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;
@@ -337,12 +354,12 @@ const filters = new Map(); // pro Ordner gemerkt, solange die App offen ist: { g
 const ZUSAMMEN = "zusammenstellen"; // eigene Filter beim „＋ Eigenes Outfit zusammenstellen“
 let auswahl = null;        // „Teile auswählen“: Set der Nummern, die im Ordner sein sollen (sonst null)
 function teilKachel(t, { markiert = null, onclick, extra = null }) {
-  // Zeichen unten rechts: 🚫 Ziehe ich nicht an, dazu seit 0.26 💰 will ich verkaufen / 📦 bei Vinted / ✅ verkauft
-  const zeichen = [t.nichtAnziehen ? "🚫" : null, verkaufZeichen(t)].filter(Boolean).join(" ");
+  // Zeichen unten rechts: 🚫 Ziehe ich nicht an, dazu seit 0.26 💰 will ich verkaufen / 📦 bei Vinted / ✅ verkauft, seit 0.34 🤝 verliehen
+  const zeichen = [t.nichtAnziehen ? "🚫" : null, verkaufZeichen(t), t.verliehen && !istVerkauft(t) ? "🤝" : null].filter(Boolean).join(" ");
   const b = el("button", { type: "button", class: "teil" + (markiert ? " markiert" : "") },
     el("span", { class: "bild" }, el("img", { src: url(t.vorschau), alt: beschreibung(t), loading: "lazy" }),
       el("span", { class: "plakette" }, nrText(t.nr)), markiert !== null ? el("span", { class: "haken" }, markiert ? "✓" : "") : null,
-      zeichen ? el("span", { class: "nicht", title: [t.nichtAnziehen ? "Ziehe ich nicht an" : null, verkaufKurz(t)].filter(Boolean).join(", ") }, zeichen) : null),
+      zeichen ? el("span", { class: "nicht", title: [t.nichtAnziehen ? "Ziehe ich nicht an" : null, verkaufKurz(t), verliehenKurz(t)].filter(Boolean).join(", ") }, zeichen) : null),
     el("span", { class: "text" }, `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`), extra);
   b.onclick = onclick;
   if (markiert !== null) b.setAttribute("aria-pressed", markiert);
@@ -410,7 +427,7 @@ function passtSuche(t, q) {
   if (!q) return true;
   if (/^\d+$/.test(q)) return t.nr === Number(q) || String(t.groesse || "").toLowerCase().split(/[\s/]+/).includes(q);
   const text = [t.art, t.gruppe, ...(t.farben || []), t.muster, t.material, t.aermel, t.schnitt, t.weite, t.laenge, t.bund,
-    ...(t.stil || []), ...(t.saison || []), t.notiz, t.marke, t.groesse, t.zustand].filter(Boolean).join(" ").toLowerCase();
+    ...(t.stil || []), ...(t.saison || []), t.notiz, t.marke, t.groesse, t.zustand, t.verliehen?.an].filter(Boolean).join(" ").toLowerCase();
   return q.split(/\s+/).every(w => text.includes(w));
 }
 // Zeile unter dem Titel der Verkaufs-Ordner (seit 0.26)
@@ -723,7 +740,7 @@ function renderTeil(items, folders, nr, foto) {
     // 🚫 steht jetzt im Formular unter „Mehr Angaben“; ein zweiter Schalter würde das Formular verwerfen.
     // „Was passt dazu?“ und „Für Vinted“ während des Änderns ausblenden, sie würden die Ansicht wechseln.
     // Ebenso „Verkaufen“ (zeichnet die Ansicht neu, das Formular wäre weg).
-    aktionen.hidden = true; nichtFeld.hidden = true; verkaufBox.hidden = true; if (passt) passt.hidden = true;
+    aktionen.hidden = true; nichtFeld.hidden = true; verkaufBox.hidden = true; if (passt) passt.hidden = true; if (verleihBox) verleihBox.hidden = true;
     if (klappe) klappe.open = true; // beim Verkaufen sind die Angaben eingeklappt
   };
   const korb = el("button", { type: "button", class: "btn" }, t.geloescht ? "Wiederherstellen" : "In den Papierkorb");
@@ -748,10 +765,13 @@ function renderTeil(items, folders, nr, foto) {
   const auswahlPanel = t.geloescht || verkauft ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld, beimVerkauf ? null : verkaufBox);
   const klappe = beimVerkauf ? el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "Angaben ansehen")), inhalt, auswahlPanel) : null;
   if (klappe) { klappe.open = angabenOffen; klappe.ontoggle = () => { angabenOffen = klappe.open; }; }
+  // Verleihen (seit 0.34, Wunsch 23.11.2026): wie im Haushalt. Ist es verliehen, steht das weit oben, sonst unten bei den Einstellungen.
+  const verleihBox = t.geloescht || verkauft ? null : verleihFeld(t, { speichern: felder => updateItem(nr, felder), name: `Nr. ${nrText(nr)}`, neuZeichnen });
   fill($("ansicht"),
-    kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : verkauft ? "✅ Verkauft – nicht mehr im Kleiderschrank" : null),
-    bild, passt, beimVerkauf ? el("div", { class: "panel" }, verkaufBox) : null,
-    klappe || inhalt, klappe ? null : auswahlPanel, aktionen);
+    kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : verkauft ? "✅ Verkauft – nicht mehr im Kleiderschrank"
+      : t.verliehen ? "🤝 Gerade verliehen – kommt in keine Vorschläge" : null),
+    bild, passt, t.verliehen ? verleihBox : null, beimVerkauf ? el("div", { class: "panel" }, verkaufBox) : null,
+    klappe || inhalt, klappe ? null : auswahlPanel, t.verliehen ? null : verleihBox, aktionen);
 }
 
 /* ---------- Papierkorb ---------- */
