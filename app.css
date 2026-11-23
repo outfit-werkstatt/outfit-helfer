@@ -49,9 +49,18 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 .kopfbereich{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 18px}
 .kopfbereich .logo{width:40px;height:40px;border-radius:11px;display:block}
 /* Seit 0.35: Umschalter „Kleidung · Haushalt“ unter dem Kopf (wie ein iOS-Umschalter), gewählter Bereich in Rosé */
-.bereich-wahl{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--chip);border-radius:20px;padding:5px;margin:0 0 16px}
-.bereich-wahl button{min-height:44px;padding:8px 6px;border:0;border-radius:16px;background:none;color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
-.bereich-wahl button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);box-shadow:var(--schatten)}
+.bereich-wahl{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--chip);border-radius:20px;padding:5px;margin:0 0 16px}
+.bereich-wahl button{position:relative;z-index:1;min-height:44px;padding:8px 6px;border:0;border-radius:16px;background:none;color:var(--muted);font:inherit;font-weight:600;cursor:pointer;transition:color .3s}
+.bereich-wahl button[aria-pressed="true"]{color:var(--accent-ink)}
+/* Seit 0.36.1 (Wunsch 23.11.2026: „springt einfach“): Der rosa Hintergrund gleitet zur gewählten Seite (Breite = eine Spalte, Weg = Spalte + Abstand) */
+.bereich-wahl::before{content:"";position:absolute;top:5px;bottom:5px;left:5px;width:calc(50% - 8px);border-radius:16px;background:var(--accent);box-shadow:var(--schatten);
+  transition:transform .38s cubic-bezier(.3,.75,.25,1)}
+.bereich-wahl[data-bereich="haushalt"]::before{transform:translateX(calc(100% + 6px))}
+.bereich-wahl.still::before{transition:none}
+/* Der neue Bereich blendet kurz sanft ein */
+@keyframes bereich-ein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.bereich-ein{animation:bereich-ein .32s ease-out}
+@media (prefers-reduced-motion:reduce){.bereich-wahl::before{transition:none}.bereich-ein{animation:none}}
 /* Rundtour (seit 0.36): „?“ oben rechts im Kopf, abgedunkelte Seite mit hellem Ausschnitt um den erklärten Knopf, Sprechblase */
 .kopfbereich{position:relative}
 .tour-knopf{position:absolute;right:0;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);

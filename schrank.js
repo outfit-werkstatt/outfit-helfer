@@ -235,11 +235,21 @@ async function render() {
 // kein Teil der Sicherung); ohne Speicher (z. B. privates Fenster) beginnt sie bei der Kleidung.
 const BEREICH_SCHLUESSEL = "startBereich";
 let bereich = (() => { try { return localStorage.getItem(BEREICH_SCHLUESSEL) === "haushalt" ? "haushalt" : "kleidung"; } catch { return "kleidung"; } })();
+let gezeichneterBereich = null; // welcher Bereich zuletzt auf der Startseite stand (für das Einblenden)
+// Umschalter auf den Bereich stellen. Der rosa Hintergrund gleitet per CSS (data-bereich); beim allerersten Mal ohne Gleiten,
+// sonst würde er beim Öffnen der App von links nach rechts fahren.
+function umschalterStellen() {
+  const w = document.querySelector(".bereich-wahl");
+  if (!w.dataset.bereich) { w.classList.add("still"); setTimeout(() => w.classList.remove("still"), 80); }
+  w.dataset.bereich = bereich;
+  $("bereichKleidung").setAttribute("aria-pressed", bereich === "kleidung"); $("bereichHaushalt").setAttribute("aria-pressed", bereich === "haushalt");
+}
 // Beim Umschalten nach oben, damit man den neuen Bereich von Anfang an sieht (nicht, wenn die App selbst umschaltet: oben = false).
 // Gibt ein Promise zurück, das fertig ist, wenn neu gezeichnet ist (für die Rundtour)
 export function zeigeBereich(b, oben = true) {
   if ((b !== "kleidung" && b !== "haushalt") || b === bereich) return Promise.resolve();
   bereich = b;
+  umschalterStellen(); // gleich beim Antippen losgleiten, nicht erst nach dem Neuzeichnen
   try { localStorage.setItem(BEREICH_SCHLUESSEL, b); } catch { /* nur nicht gemerkt */ }
   return current.v === "start" ? neuZeichnen().then(() => { if (oben) $("rahmen").scrollTop = 0; }) : Promise.resolve();
 }
@@ -327,11 +337,15 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
     verkaeufe ? nebenKachel("💶 Verkäufe", verkaeufe, () => go({ v: "verkaeufe" })) : null,
     verliehen.length ? nebenKachel("🤝 Verliehen", verliehenStand(verliehen), () => go({ v: "verliehen" }), verliehen.some(x => ueberfaellig(x.t.verliehen))) : null);
   // Umschalter Kleidung · Haushalt (seit 0.35)
-  for (const [id, b] of [["bereichKleidung", "kleidung"], ["bereichHaushalt", "haushalt"]]) {
-    $(id).setAttribute("aria-pressed", bereich === b);
-    $(id).onclick = () => zeigeBereich(b);
-  }
+  for (const [id, b] of [["bereichKleidung", "kleidung"], ["bereichHaushalt", "haushalt"]]) $(id).onclick = () => zeigeBereich(b);
+  umschalterStellen();
   $("startKleidung").hidden = bereich !== "kleidung"; $("startHaushalt").hidden = bereich !== "haushalt";
+  // Hat sich der Bereich seit dem letzten Zeichnen geändert, blendet der neue sanft ein (seit 0.36.1)
+  if (gezeichneterBereich && gezeichneterBereich !== bereich) {
+    const neu = bereich === "haushalt" ? $("startHaushalt") : $("startKleidung");
+    neu.classList.remove("bereich-ein"); void neu.offsetWidth; neu.classList.add("bereich-ein");
+  }
+  gezeichneterBereich = bereich;
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };
