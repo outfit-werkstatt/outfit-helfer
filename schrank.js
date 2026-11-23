@@ -20,7 +20,7 @@ import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
 import { renderSchonDa } from "./schonda.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=5";
-import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, verliehenSortiert } from "./verleihen.js?v=1";
+import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, ueberfaellig } from "./verleihen.js?v=1";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -146,7 +146,11 @@ function schwebeEinrichten() {
 function neuZeichnenHier() { const hier = current; return () => current === hier && !bearbeitet ? neuZeichnen() : Promise.resolve(); }
 // Von außen (z. B. nach dem Speichern neuer Teile): nur neu zeichnen, wenn dabei nichts Eingetipptes verloren geht
 // Beim Haushalt (seit 0.32) nie: Neue Kleidung ändert dort nichts, und offene Eingaben in „Noch ergänzen“ würden den Fokus verlieren
-export async function refresh() { if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingText", "dingKorb", "kisten", "kiste", "wunsch", "verkaeufe"].includes(current.v) && !bearbeitet) await neuZeichnen(); }
+// (seit 0.35 auch nicht auf der Startseite, wenn dort der Haushalt zu sehen ist)
+export async function refresh() {
+  if (current.v === "start" && bereich === "haushalt") return;
+  if (!["stil", "sicherung", "fertigEins", "vinted", "haushalt", "ding", "dingText", "dingKorb", "kisten", "kiste", "wunsch", "verkaeufe"].includes(current.v) && !bearbeitet) await neuZeichnen();
+}
 // Jede Zeichnung bekommt eine Nummer. Wird eine ältere erst nach einer neueren fertig (sehr schnelles Tippen),
 // zeichnet sie nicht mehr – sonst stünde die falsche Ansicht da.
 let zeichnung = 0;
@@ -215,8 +219,27 @@ async function render() {
   }
   // Fotos vom Look der neuesten Outfits für die Kachel „⭐ Fertige Outfits“ (seit 0.33.1)
   const looks = new Map(await Promise.all(outfits.slice(0, 4).filter(o => o.foto).map(async o => [o.id, await getLookFoto(o.id, true).catch(() => null)])));
+  // Haushalt auf der Startseite (seit 0.35): dieselbe Übersicht wie vorher unter „Sachen im Haushalt“, nur ohne „‹ Zurück“
+  const haus = $("startHaushalt");
+  haus.dispose?.(); haus.dispose = null;
+  const [kisten, wuensche] = bereich === "haushalt" ? await Promise.all([kistenLaden(), wunschLaden()]) : [null, null];
   if (nr !== zeichnung) return;
   renderStart(items, folders, stil, letzte, sonst, naechste, outfits, dinge, looks);
+  if (bereich !== "haushalt") { haus.replaceChildren(); return; }
+  await renderHaushalt(haus, () => null, { v: "haushalt" }, url, { go, back,
+    schutz: f => { bearbeitet = true; geaendert = f; }, frei: () => { bearbeitet = false; geaendert = () => false; } }, neuZeichnenHier(),
+    { kisten, wunschOffen: wuensche.filter(w => !w.erledigt).length });
+}
+// Startseite: Bereich „Kleidung“ oder „Haushalt“ (seit 0.35, Wunsch 23.11.2026). Gemerkt auf diesem Gerät (nur eine Einstellung,
+// kein Teil der Sicherung); ohne Speicher (z. B. privates Fenster) beginnt sie bei der Kleidung.
+const BEREICH_SCHLUESSEL = "startBereich";
+let bereich = (() => { try { return localStorage.getItem(BEREICH_SCHLUESSEL) === "haushalt" ? "haushalt" : "kleidung"; } catch { return "kleidung"; } })();
+// Beim Umschalten nach oben, damit man den neuen Bereich von Anfang an sieht (nicht, wenn die App selbst umschaltet: oben = false)
+export function zeigeBereich(b, oben = true) {
+  if ((b !== "kleidung" && b !== "haushalt") || b === bereich) return;
+  bereich = b;
+  try { localStorage.setItem(BEREICH_SCHLUESSEL, b); } catch { /* nur nicht gemerkt */ }
+  if (current.v === "start") neuZeichnen().then(() => { if (oben) $("rahmen").scrollTop = 0; });
 }
 // rechts: Knopf oben rechts (z. B. „Auswählen“)
 const kopf = (titel, unter, rechts = null) => el("div", { class: "kopf" },
@@ -251,13 +274,6 @@ function outfitKachel(outfits, items, looks) {
 const verliehenEintraege = (items, dinge) => [
   ...items.filter(t => t.verliehen && !t.geloescht && !istVerkauft(t)).map(t => ({ art: "teil", nr: t.nr, titel: `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`, t })),
   ...dinge.filter(d => d.verliehen && !d.geloescht && !istVerkauft(d)).map(d => ({ art: "ding", nr: d.nr, titel: dingTitel(d), t: d }))];
-// Kachel „🤝 Verliehen“ (nur, wenn etwas verliehen ist): Überfälliges zuerst im Mosaik
-function verleihKachel(eintraege) {
-  const bilder = verliehenSortiert(eintraege).slice(0, 4).map(x => el("img", { src: url(x.t.vorschau), alt: "", loading: "lazy" }));
-  return el("button", { type: "button", class: "kachel", onclick: () => go({ v: "verliehen" }) },
-    el("span", { class: bilder.length === 1 ? "mosaik eins" : "mosaik" }, ...bilder),
-    el("span", { class: "name" }, "🤝 Verliehen"), el("span", { class: "anzahl" }, verliehenStand(eintraege)));
-}
 // Abwechselnd aus mehreren Listen (je eins, dann das nächste …), damit das Mosaik von „Aussortiert“ von jedem Bereich etwas zeigt
 function gemischt(...listen) {
   const out = [];
@@ -291,22 +307,29 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
   const outfitKnopf = $("outfitKnopf");
   outfitKnopf.classList.toggle("leer", !da.length);
   outfitKnopf.onclick = () => da.length ? go({ v: "outfit" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
-  // Zweite Reihe (seit 0.28): „Koffer packen“ und „Sachen im Haushalt“ (Platzhalter für später)
+  // Zweite Reihe: „Hab ich sowas schon?“ (seit 0.33) und „Koffer packen“ (seit 0.28)
   $("kofferKnopf").classList.toggle("leer", !da.length);
   $("kofferKnopf").onclick = () => da.length ? go({ v: "koffer" }) : toast("Sobald du Kleidung gespeichert hast, geht es hier los.");
-  $("haushaltKnopf").onclick = () => go({ v: "haushalt" }); // seit 0.32 (vorher Platzhalter „kommt bald“)
-  // „🔍 Hab ich sowas schon?“ (seit 0.33, eigener Knopf unter den vier großen)
   $("schonKnopf").classList.toggle("leer", !da.length);
   $("schonKnopf").onclick = () => da.length ? go({ v: "schonDa" }) : toast("Sobald du Kleidung gespeichert hast, kann die App vergleichen.");
   const kurz = stilKurz(stil), zip = zipKurz(items, letzte, stil, sonst, dinge);
-  // „💶 Verkäufe“ (seit 0.32) nur, wenn es schon etwas zum Verkaufen gibt; dann stehen die vier kleinen Kacheln 2 × 2
-  const verkaeufe = verkaeufeKurz(items, dinge);
-  fill($("nebenKacheln"),
+  // Kleine Kacheln: bei der Kleidung „Mein Stil“ und „Papierkorb“; für beide Bereiche ganz unten „Sicherung“, dazu
+  // „💶 Verkäufe“ (seit 0.32) und „🤝 Verliehen“ (seit 0.34) nur, wenn es etwas gibt. So viele Spalten wie Kacheln.
+  const reihe = (box, ...k) => { const da = k.filter(Boolean); fill(box, ...da); box.style.gridTemplateColumns = `repeat(${Math.max(1, da.length)},minmax(0,1fr))`; };
+  reihe($("nebenKacheln"),
     nebenKachel("✨ Mein Stil", kurz.length ? `${kurz.length} ${kurz.length === 1 ? "Angabe" : "Angaben"}` : "einstellen", () => go({ v: "stil" })),
+    nebenKachel("🗑 Papierkorb", korb ? anzahl(korb) : "leer", () => go({ v: "korb" })));
+  const verkaeufe = verkaeufeKurz(items, dinge), verliehen = verliehenEintraege(items, dinge);
+  reihe($("gemeinsamKacheln"),
     nebenKachel("💾 Sicherung", zip.text, () => go({ v: "sicherung" }), zip.faellig),
     verkaeufe ? nebenKachel("💶 Verkäufe", verkaeufe, () => go({ v: "verkaeufe" })) : null,
-    nebenKachel("🗑 Papierkorb", korb ? anzahl(korb) : "leer", () => go({ v: "korb" })));
-  $("nebenKacheln").classList.toggle("vier", !!verkaeufe);
+    verliehen.length ? nebenKachel("🤝 Verliehen", verliehenStand(verliehen), () => go({ v: "verliehen" }), verliehen.some(x => ueberfaellig(x.t.verliehen))) : null);
+  // Umschalter Kleidung · Haushalt (seit 0.35)
+  for (const [id, b] of [["bereichKleidung", "kleidung"], ["bereichHaushalt", "haushalt"]]) {
+    $(id).setAttribute("aria-pressed", bereich === b);
+    $(id).onclick = () => zeigeBereich(b);
+  }
+  $("startKleidung").hidden = bereich !== "kleidung"; $("startHaushalt").hidden = bereich !== "haushalt";
   const neu = el("button", { type: "button", class: "kachel neu" }, el("span", { class: "plus" }, "+"), el("span", { class: "name" }, "Neuer Ordner"));
   neu.onclick = () => nameEditor($("ordnerEditor"), "", folders, async name => {
     const f = { id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name };
@@ -318,12 +341,10 @@ function renderStart(items, folders, stil, letzte, sonst, naechste, outfits, din
   const bereiche = { [NICHT]: nichtAn(da), [L_VERKAUF]: da.filter(imVerkauf), [L_VERKAUFT]: verkaufteVon(items) };
   const aussortiert = AUSSORTIERT.flatMap(b => bereiche[b]);
   const ersterBereich = () => [aussortiertZuletzt, L_VERKAUF, NICHT, L_VERKAUFT].find(b => b && bereiche[b].length);
-  const verliehen = verliehenEintraege(items, dinge);
   fill($("kacheln"),
     kachel(HAUPT, da, () => go({ v: "liste", id: ALLE })),
     ...folders.map(f => kachel(f.name, da.filter(t => t.ordner?.includes(f.id)), () => go({ v: "liste", id: f.id }))),
     aussortiert.length ? kachel(AUSSORTIERT_NAME, aussortiert, () => go({ v: "liste", id: ersterBereich() }), gemischt(...AUSSORTIERT.map(b => bereiche[b]))) : null,
-    verliehen.length ? verleihKachel(verliehen) : null,
     da.length || outfits.length ? outfitKachel(outfits, items, looks) : null,
     neu);
   $("ordnerEditor").replaceChildren(); $("ordnerEditor").hidden = true;

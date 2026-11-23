@@ -18,7 +18,7 @@
 <meta name="theme-color" content="#f7e4e3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1514" media="(prefers-color-scheme: dark)">
 <!-- ?v= bei jeder neuen Version mit hochzählen, sonst nimmt der Browser alte Dateien aus seinem Zwischenspeicher -->
-<link rel="stylesheet" href="app.css?v=36">
+<link rel="stylesheet" href="app.css?v=37">
 </head>
 <body>
 <!-- Eigener Scroll-Bereich: Inhalt läuft auf dem iPhone sonst beim Scrollen unter Uhrzeit und Akku (siehe app.css) -->
@@ -56,6 +56,17 @@
     <button type="button" class="btn" id="imBrowser">Trotzdem hier im Browser benutzen</button>
   </div>
 
+  <!-- Seit 0.35 (Wunsch 23.11.2026): oben umschalten zwischen Kleidung und Haushalt (die App merkt sich den letzten Bereich).
+       Darunter der gewählte Bereich, ganz unten die Kacheln für beides (Sicherung, Verkäufe, Verliehen). schrank.js -->
+  <div class="bereich-wahl" role="group" aria-label="Bereich">
+    <button type="button" id="bereichKleidung">👗 Kleidung</button>
+    <button type="button" id="bereichHaushalt">🏠 Haushalt</button>
+  </div>
+
+  <!-- Sicherung fällig oder leerer Kleiderschrank („Sicherung laden?“), sonst leer (schrank.js) -->
+  <div id="startHinweis"></div>
+
+  <div id="startKleidung">
   <!-- Erscheint seit 0.27 erst, wenn die KI gebraucht wird (Fotos ausgewählt oder Entwürfe vom letzten Mal, app.js) -->
   <div class="panel" id="kiPanel" hidden>
     <div class="status" id="status">KI wird geladen (beim ersten Mal ca. 100 MB) …</div>
@@ -65,20 +76,15 @@
     <div class="actions"><button type="button" class="btn" id="kiRetry" hidden>Nochmal versuchen</button></div>
   </div>
 
-  <!-- Sicherung fällig oder leerer Kleiderschrank („Sicherung laden?“), sonst leer (schrank.js) -->
-  <div id="startHinweis"></div>
-
   <div class="haupt-knoepfe">
     <label class="haupt upload" id="uploadLabel"><span class="sym" aria-hidden="true">＋</span>Kleidung hinzufügen
       <input type="file" id="files" accept="image/*" multiple>
     </label>
     <button type="button" class="haupt outfit" id="outfitKnopf"><span class="sym" aria-hidden="true">✦</span>Outfit finden</button>
-    <!-- Seit 0.28 (Wunsch 18.11.2026): zweite Reihe. Links „Sachen im Haushalt“ (seit 0.32 echt, vorher Platzhalter), rechts „Koffer packen“ -->
-    <button type="button" class="haupt upload" id="haushaltKnopf"><span class="sym" aria-hidden="true">⌂&#xFE0E;</span>Sachen im Haushalt</button>
+    <!-- Zweite Reihe: „Hab ich sowas schon?“ (seit 0.33, schonda.js; seit 0.35 hier statt als breiter Knopf darunter) und „Koffer packen“ (seit 0.28) -->
+    <button type="button" class="haupt upload" id="schonKnopf"><span class="sym" aria-hidden="true">🔍</span>Hab ich sowas schon?</button>
     <button type="button" class="haupt outfit" id="kofferKnopf"><span class="sym" aria-hidden="true">✈&#xFE0E;</span>Koffer packen</button>
   </div>
-  <!-- Seit 0.33 (Wunsch 19.11.2026): eigener Knopf zum Vergleichen eines Fotos mit dem Kleiderschrank (schonda.js) -->
-  <button type="button" class="haupt-breit" id="schonKnopf">🔍 Hab ich sowas schon?</button>
   <div class="mit-info foto-tipp">
     <div class="info-zeile"><p>📷 Tipps zum Fotografieren</p><button type="button" class="info-knopf" data-info="fotoTipp" aria-label="Tipps zum Fotografieren">i</button></div>
     <div class="info-box" id="fotoTipp" hidden>
@@ -114,16 +120,24 @@
   <h2>Kleiderschrank</h2>
   <div class="kacheln" id="kacheln"></div>
   <div id="ordnerEditor" hidden></div>
-  <!-- Mein Stil · Sicherung · Papierkorb als kleine Kacheln mit ihrem Stand (schrank.js) -->
+  <!-- Mein Stil · Papierkorb als kleine Kacheln mit ihrem Stand (schrank.js) -->
   <div class="neben" id="nebenKacheln"></div>
   <div id="nummernKarte"></div>
-  <div class="version" id="version">Version 0.34 (Felder je Art, Verleihen) · 23.11.2026</div>
+  </div>
+
+  <!-- Sachen im Haushalt (seit 0.35 direkt auf der Startseite, haushalt.js) -->
+  <div id="startHaushalt" hidden></div>
+
+  <!-- Für Kleidung und Haushalt: Sicherung, Verkäufe, Verliehen (die letzten zwei nur, wenn es etwas gibt) -->
+  <p class="gemeinsam-titel">Für Kleidung und Haushalt</p>
+  <div class="neben gemeinsam" id="gemeinsamKacheln"></div>
+  <div class="version" id="version">Version 0.35 (Startseite mit Kleidung und Haushalt) · 23.11.2026</div>
   </div>
 
   <section id="ansicht" hidden></section>
 </main>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=52"></script>
+<script type="module" src="app.js?v=53"></script>
 </body>
 </html>
