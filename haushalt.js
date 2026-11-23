@@ -12,6 +12,7 @@ import { preisLesen, preisText, preisPruefen, plattformPruefen, verkaufFeld, ver
   EINGESTELLT } from "./verkauf.js?v=5";
 import { renderDingText, DETAILS } from "./ding-text.js?v=3";
 import { verleihFeld, verliehenKurz, verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
+import { gleiten } from "./bewegung.js?v=1";
 
 // Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang).
 // Seit 0.34 (Wunsch 23.11.2026): „Bücher & Medien“ aufgeteilt in „Bücher“, „Musik“ und „Filme & Videospiele“, dazu „Instrumente“.
@@ -338,14 +339,15 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, e
   const stand = filter.stand || "haushalt", fertige = STAENDE[stand][2];
   // Nur Bereiche mit etwas darin (und den gerade gewählten); so viele Spalten wie Knöpfe
   const bereiche = Object.entries(STAENDE).filter(([k, [, , l]]) => k === "haushalt" || l.length || k === stand);
-  const umschalter = bereiche.length > 1 ? el("div", { class: "chips umschalter", style: `grid-template-columns:repeat(${bereiche.length},minmax(0,1fr))` },
+  // Seit 0.37: rosa Hintergrund gleitet zum gewählten Bereich (bewegung.js)
+  const umschalter = bereiche.length > 1 ? gleiten(el("div", { class: "chips umschalter", style: `grid-template-columns:repeat(${bereiche.length},minmax(0,1fr))` },
     ...bereiche.map(([k, [zeichen, wort, liste]]) => {
         const b = el("button", { type: "button", class: "chip", "aria-label": `${wort}: ${anzahl(liste.length)}`,
           onclick: () => { if (k !== stand) { filter.stand = k === "haushalt" ? null : k; filter.kategorie = filter.raum = null; neuZeichnen(); } } },
           el("span", { class: "zahl" }, `${zeichen} ${liste.length}`), el("span", { class: "wort" }, wort));
-        b.setAttribute("aria-pressed", k === stand);
+        b.setAttribute("aria-pressed", k === stand); b.dataset.k = k;
         return b;
-    })) : null;
+    })), "haushalt") : null;
   const summe = (l, f) => Math.round(l.reduce((s, d) => s + (d[f] || 0), 0) * 100) / 100;
   const standZeile = stand === "verkaufen" ? (() => {
       const bei = fertige.filter(d => d.verkauf === EINGESTELLT), wollen = fertige.length - bei.length, s = summe(bei, "preis");

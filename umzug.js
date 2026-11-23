@@ -4,7 +4,7 @@
 // Der Ort am Ding bleibt, wie er ist. Gespeichert in meta „kisten“, kommt in die Sicherung. Texte nur per textContent/value.
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo } from "./ui.js?v=21";
 import { getMeta, setMeta, dingNrText } from "./speicher.js?v=12";
-import { RAEUME, dingName, dingTitel } from "./haushalt.js?v=5";
+import { RAEUME, dingName, dingTitel } from "./haushalt.js?v=6";
 
 const MAX_KISTEN = 200, MAX_NAME = 30, MAX_DINGE = 300, MAX_EXTRAS = 60, MAX_EXTRA_TEXT = 60, ID = /^k[a-z0-9]{1,40}$/;
 let kisten = null, waehlen = null, waehlenFuer = null; // waehlen = Set der Nummern beim „Dinge hineinlegen“ (sonst null), waehlenFuer = id der Kiste

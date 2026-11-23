@@ -6,11 +6,14 @@
 import { loadAI, recognize, loadImage, alsJpg, AERMEL_FEST } from "./ki.js?v=9";
 import { addItem, allItems, askPersist, nrText, getFolders, entwurfSpeichern, entwurfAendern, entwurfLoeschen, entwurfIds, entwurfLaden } from "./speicher.js?v=12";
 import { $, el, fill, toast, fehlerToast, fehlerText, choice, field, angabenFelder, angabenVon, beschreibung, customReady, zeigeGross, infoKnoepfeVerbinden, mobil, laeuftLange, saisonVorschlag } from "./ui.js?v=21";
-import { refresh, initSchrank, zeigeBereich } from "./schrank.js?v=54";
+import { refresh, initSchrank, zeigeBereich } from "./schrank.js?v=55";
 import { kiStartRegistrieren, kiMelden } from "./ki-start.js?v=2";
+import { bewegungEinrichten } from "./bewegung.js?v=1";
 
 // Nicht in fremde Seiten einbetten lassen (frame-ancestors geht per Meta-Tag nicht)
 if (window.top !== window.self) { document.body.textContent = ""; throw new Error("eingebettet"); }
+// Drück-Effekt, weiches Aufklappen, Pop beim Antippen (seit 0.37, bewegung.js)
+bewegungEinrichten();
 
 /* ---------- Fortschritt „Fotos erkannt: 3 von 10“ und „Alle speichern“ ---------- */
 let total = 0, finished = 0;

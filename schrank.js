@@ -5,23 +5,24 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, getLookFoto, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=37";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=38";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=31";
 import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=28";
 import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=12";
 import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=25";
 import { renderVinted } from "./vinted.js?v=17";
 import { GROUPS } from "./ki.js?v=9";
-import { renderKoffer } from "./koffer.js?v=8";
-import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=5";
-import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=5";
-import { renderKisten, kistenLaden } from "./umzug.js?v=5";
+import { renderKoffer } from "./koffer.js?v=9";
+import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=6";
+import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=6";
+import { renderKisten, kistenLaden } from "./umzug.js?v=6";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
 import { renderSchonDa } from "./schonda.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
   ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=5";
 import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, ueberfaellig } from "./verleihen.js?v=1";
 import { tourEinrichten } from "./tour.js?v=1";
+import { gleiten } from "./bewegung.js?v=1";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -493,16 +494,17 @@ function renderListe(items, folders, id) {
   // „♻️ Aussortiert“: oben drei Knöpfe zum Umschalten (ersetzt die Ansicht, „Zurück“ führt weiter zur Startseite)
   const imAussortiert = AUSSORTIERT.includes(id);
   if (imAussortiert) aussortiertZuletzt = id;
-  const umschalter = imAussortiert ? el("div", { class: "chips umschalter" }, ...AUSSORTIERT.map(b => {
+  // Seit 0.37: rosa Hintergrund gleitet zum gewählten Bereich (bewegung.js)
+  const umschalter = imAussortiert ? gleiten(el("div", { class: "chips umschalter" }, ...AUSSORTIERT.map(b => {
     const n = (b === NICHT ? nichtAn(da) : b === L_VERKAUF ? da.filter(imVerkauf) : verkaufteVon(items)).length;
     // Ein Knopf je Bereich: oben Zeichen und Anzahl, darunter der Name (drei passen nebeneinander, auch bei 320 px)
     const [zeichen, wort] = BEREICH_NAME[b];
     const k = el("button", { type: "button", class: "chip", "aria-label": `${wort}: ${anzahl(n)}` },
       el("span", { class: "zahl" }, `${zeichen} ${n}`), el("span", { class: "wort" }, wort));
-    k.setAttribute("aria-pressed", b === id);
+    k.setAttribute("aria-pressed", b === id); k.dataset.k = b;
     k.onclick = () => { if (b !== id) ersetze({ v: "liste", id: b }); };
     return k;
-  })) : null;
+  })), "aussortiert") : null;
   // In den Verkaufs-Ordnern steht unter jedem Foto der Stand („📦 seit 6 Tagen bei Vinted · 15 €“)
   const standVon = t => verkaufListe ? el("span", { class: "rest" }, verkaufKurz(t)) : null;
   const filterName = current.zusammenstellen ? ZUSAMMEN : id;

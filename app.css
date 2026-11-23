@@ -60,7 +60,30 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 /* Der neue Bereich blendet kurz sanft ein */
 @keyframes bereich-ein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .bereich-ein{animation:bereich-ein .32s ease-out}
-@media (prefers-reduced-motion:reduce){.bereich-wahl::before{transition:none}.bereich-ein{animation:none}}
+/* Seit 0.37 (Wunsch 23.11.2026 „Haptik schöner“, bewegung.js):
+   1. Drück-Effekt: beim Antippen kurz etwas kleiner */
+.btn,.chip,.haupt,.kachel,.teil,.neben button,.verkauf-zeile,.tour-knopf{transition:transform .12s ease}
+.btn:active:not(:disabled),.chip:active,.haupt:active,.kachel:active,.teil:active,.neben button:active,.verkauf-zeile:active,.bereich-wahl button:active{transform:scale(.96)}
+.bereich-wahl button{transition:color .3s,transform .12s ease}
+.tour-knopf:active{transform:translateY(-50%) scale(.92)}
+/* 2. Andere Umschalter („♻️ Aussortiert“, Haushalt): eine Spur mit rosa Hintergrund, der zur gewählten Seite gleitet (--n Knöpfe, --i gewählt) */
+.chips.umschalter.gleitend{position:relative;gap:4px;background:var(--chip);border-radius:22px;padding:4px}
+.umschalter.gleitend .chip{position:relative;z-index:1;background:transparent;border-color:transparent;transition:color .3s,transform .12s ease}
+.umschalter.gleitend .chip[aria-pressed="true"]{background:transparent;border-color:transparent;color:var(--accent-ink)}
+.umschalter .gleiter{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px - (var(--n) - 1) * 4px) / var(--n));border-radius:18px;
+  background:var(--accent);box-shadow:var(--schatten);transform:translateX(calc(var(--i) * (100% + 4px)));transition:transform .38s cubic-bezier(.3,.75,.25,1)}
+/* 3. Meldungen unten gleiten herein */
+@keyframes toast-ein{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translate(-50%,0)}}
+.toast:not([hidden]){animation:toast-ein .26s ease-out}
+/* 4. Klappen: der Inhalt blendet beim Aufklappen weich ein */
+@keyframes klappe-auf{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+details.klappt-auf > :not(summary){animation:klappe-auf .28s ease-out}
+/* 5. Pop: angetippter Auswahl-Knopf und abgehaktes Teil im Koffer ploppen kurz auf */
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
+.pop{animation:pop .26s ease-out}
+@media (prefers-reduced-motion:reduce){.bereich-wahl::before{transition:none}.bereich-ein{animation:none}
+  .umschalter .gleiter{transition:none}.toast:not([hidden]),details.klappt-auf > :not(summary),.pop{animation:none}
+  .btn:active,.chip:active,.haupt:active,.kachel:active,.teil:active,.neben button:active,.verkauf-zeile:active,.bereich-wahl button:active{transform:none}}
 /* Rundtour (seit 0.36): „?“ oben rechts im Kopf, abgedunkelte Seite mit hellem Ausschnitt um den erklärten Knopf, Sprechblase */
 .kopfbereich{position:relative}
 .tour-knopf{position:absolute;right:0;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);

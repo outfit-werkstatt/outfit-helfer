@@ -12,6 +12,7 @@ import { miniKachel } from "./passt.js?v=31";
 import { stilAktuell } from "./stil.js?v=22";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";
+let popNr = null; // Nummer des gerade abgehakten Teils (ploppt beim nächsten Zeichnen kurz auf, seit 0.37)
 const REIHE = ["oben", "unten", "ganz", "lage", "schuh", "tasche", "zubehoer", "bade", "schmuck", "guertel"];
 const MAX_EXTRAS = 40, MAX_EXTRA_TEXT = 60, MAX_TEILE = 80, MAX_REISEN = 30, MAX_NAME = 40, MAX_MENGE = 99;
 // Einträge bei „Außerdem einpacken“: { text, gepackt, menge (1–99 oder null), selbst (Anzahl selbst eingestellt), eigen (selbst eingetragen) }
@@ -227,7 +228,9 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
   const hak = new Set(koffer.gepackt), extras = koffer.extras || [];
   const zahl = teile.filter(t => hak.has(t.nr)).length + extras.filter(x => x.gepackt).length, gesamt = teile.length + extras.length;
   const kachel = (t, an, zeichen, onclick, titel) => {
-    const b = el("button", { type: "button", class: "teil mini" + (an ? " markiert" : ""), title: titel },
+    // Seit 0.37: das gerade abgehakte Teil ploppt nach dem Neuzeichnen kurz auf (app.css .pop)
+    const pop = popNr === t.nr; if (pop) popNr = null;
+    const b = el("button", { type: "button", class: "teil mini" + (an ? " markiert" : "") + (pop ? " pop" : ""), title: titel },
       el("span", { class: "bild" }, el("img", { src: bild(t.vorschau), alt: beschreibung(t), loading: "lazy" }), el("span", { class: "plakette" }, nrText(t.nr)),
         el("span", { class: "haken" }, zeichen)),
       el("span", { class: "text" }, `Nr. ${nrText(t.nr)} – ${beschreibung(t)}`));
@@ -235,7 +238,7 @@ export async function renderKoffer(box, kopf, id, items, stil, bild, oeffnen, ne
     b.onclick = onclick;
     return b;
   };
-  const umschalten = t => { hak.has(t.nr) ? hak.delete(t.nr) : hak.add(t.nr); koffer.gepackt = [...hak]; speichern(koffer, false); neuZeichnen(); };
+  const umschalten = t => { hak.has(t.nr) ? hak.delete(t.nr) : hak.add(t.nr); koffer.gepackt = [...hak]; speichern(koffer, false); popNr = t.nr; neuZeichnen(); };
   const raus = t => { koffer.nrs = koffer.nrs.filter(n => n !== t.nr); koffer.gepackt = koffer.gepackt.filter(n => n !== t.nr); koffer.tage = null; speichern(koffer); toast(`Nr. ${nrText(t.nr)} aus dem Koffer genommen`); neuZeichnen(); };
   const dazu = t => { if (koffer.nrs.length >= MAX_TEILE) return toast(`Höchstens ${MAX_TEILE} Teile.`); koffer.nrs = [...koffer.nrs, t.nr]; koffer.tage = null; speichern(koffer); toast(`Nr. ${nrText(t.nr)} eingepackt`); neuZeichnen(); };
   const plaetze = [...new Set([...REIHE, ...teile.map(platzVon)])];
