@@ -10,7 +10,7 @@ import { addDing, allDinge, getDingFoto, updateDing, updateDinge, purgeDinge, di
 import { loadImage, alsJpg } from "./ki.js?v=9";
 import { preisLesen, preisText, preisPruefen, plattformPruefen, verkaufFeld, verkaufKurz, verkaufZeichen, imVerkauf, istVerkauft, VERKAUF_STUFEN,
   EINGESTELLT } from "./verkauf.js?v=5";
-import { renderDingText, DETAILS } from "./ding-text.js?v=2";
+import { renderDingText, DETAILS } from "./ding-text.js?v=3";
 import { verleihFeld, verliehenKurz, verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
 
 // Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang).

@@ -4,7 +4,7 @@
 // die Notiz kommt nicht hinein (die ist privat). Texte nur als Text (value/textContent).
 import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, mobil, tabelle } from "./ui.js?v=21";
 import { getDingFoto, dingNrText } from "./speicher.js?v=12";
-import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=24";
+import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=25";
 
 // Titel-Längen: eBay erlaubt 80 Zeichen; bei Vinted und Kleinanzeigen nennen Ratgeber etwa 50 bzw. 65 (nicht offiziell bestätigt)
 const TITEL_MAX = tabelle({ Vinted: 50, Kleinanzeigen: 65, eBay: 80 });

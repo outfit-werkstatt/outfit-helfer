@@ -7,8 +7,8 @@
 import { el, fill, toast, fehlerToast, field, choice, clean, mitInfo, info, beschreibung } from "./ui.js?v=21";
 import { getMeta, setMeta, nrText } from "./speicher.js?v=12";
 import { kandidaten, kofferPacken, kofferTage, kofferVorschlaege, kofferExtras, kofferMenge, platzVon, KOFFER_ANLAESSE, KOFFER_TAGE, KOFFER_PLATZ_NAME, TEMPERATUREN, WETTER } from "./regeln.js?v=23";
-import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=24";
-import { miniKachel } from "./passt.js?v=30";
+import { chatgptPanel, chatMerkLeeren } from "./chatgpt.js?v=25";
+import { miniKachel } from "./passt.js?v=31";
 import { stilAktuell } from "./stil.js?v=22";
 
 const WASCHEN = "Ich kann waschen", HAND = "Nur Handgepäck";

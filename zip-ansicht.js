@@ -11,11 +11,11 @@ import { allItems, getPhoto, getFolders, getStil, getCustom, getMeta, setMeta, g
 import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleichen, mitInfo, ZUSTAENDE, mobil, datumText, mitWachSperre } from "./ui.js?v=21";
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=22";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
-import { kleiderschrankSchritt } from "./chatgpt.js?v=24";
+import { kleiderschrankSchritt } from "./chatgpt.js?v=25";
 import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=5";
-import { reisenPruefen } from "./koffer.js?v=7";
-import { dingPruefen } from "./haushalt.js?v=4";
-import { kistenPruefen } from "./umzug.js?v=4";
+import { reisenPruefen } from "./koffer.js?v=8";
+import { dingPruefen } from "./haushalt.js?v=5";
+import { kistenPruefen } from "./umzug.js?v=5";
 import { wunschPruefen } from "./wunsch.js?v=1";
 import { verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
 

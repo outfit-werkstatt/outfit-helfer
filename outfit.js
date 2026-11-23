@@ -3,8 +3,8 @@
 // Texte immer per textContent/DOM, nie per innerHTML (ein eigener Anlass ist eingetippter Text).
 import { el, fill, field, choice } from "./ui.js?v=21";
 import { kandidaten, outfitsFuer, ANLAESSE, SCHICK_WAHL, TEMPERATUREN, WETTER } from "./regeln.js?v=23";
-import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=30";
-import { chatgptPanel, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=24";
+import { auswahlFelder, kombiKarte, miniKachel, appKlappe } from "./passt.js?v=31";
+import { chatgptPanel, chatMerkLeeren, chatHatAntwort } from "./chatgpt.js?v=25";
 
 // Pro Sitzung gemerkt, damit die Auswahl noch da ist, wenn man ein Teil ansieht und zurückkommt.
 // Seit 0.27 auch über einen Neustart (schrank.js: outfitStand/outfitLaden) und mit „↺ Neu anfangen“ (outfitNeu).

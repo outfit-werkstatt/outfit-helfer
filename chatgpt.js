@@ -30,14 +30,14 @@ const merk = new Map(); // Schlüssel → { zusatz, antwort, angezeigt, bildOutf
 const merkSchluessel = frage => frage.koffer ? "koffer:" + (frage.koffer.id || "neu") : frage.teil ? "teil:" + frage.teil.nr : "situation";
 const merker = frage => {
   const k = merkSchluessel(frage);
-  if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1", offen: { 2: true, 3: false, 4: false }, anfrageFuer: null, bildKopiert: false });
+  if (!merk.has(k)) merk.set(k, { zusatz: "", antwort: "", angezeigt: "", bildOutfit: "Outfit 1", offen: { 2: true, 3: false, 4: false }, anfrageFuer: null, bildKopiert: false, jetzt: null });
   return merk.get(k);
 };
 // Merken über einen Neustart (seit 0.27, Wunsch 18.11.2026): schrank.js legt das beim Verlassen der App in meta „sitzung“ ab
 // und gibt es beim nächsten Start zurück. Nur einfache Daten; beim Zurückholen geprüft (Texte gekürzt, nur bekannte Felder).
 const MAX_MERK = 30;
 export const chatMerkStand = () => Object.fromEntries([...merk].slice(-MAX_MERK).map(([k, m]) => [k,
-  { zusatz: m.zusatz, antwort: m.antwort, angezeigt: m.angezeigt, bildOutfit: m.bildOutfit, offen: m.offen, anfrageFuer: m.anfrageFuer, bildKopiert: m.bildKopiert }]));
+  { zusatz: m.zusatz, antwort: m.antwort, angezeigt: m.angezeigt, bildOutfit: m.bildOutfit, offen: m.offen, anfrageFuer: m.anfrageFuer, bildKopiert: m.bildKopiert, jetzt: m.jetzt }]));
 export function chatMerkLaden(o) {
   if (!o || typeof o !== "object") return;
   const txt = (v, max) => typeof v === "string" ? v.slice(0, max) : "";
@@ -46,7 +46,10 @@ export function chatMerkLaden(o) {
     const offen = m.offen && typeof m.offen === "object" ? m.offen : {};
     merk.set(k, { zusatz: txt(m.zusatz, MAX_ZUSATZ), antwort: txt(m.antwort, MAX_ANTWORT), angezeigt: txt(m.angezeigt, MAX_ANTWORT), bildOutfit: txt(m.bildOutfit, 40) || "Outfit 1",
       offen: { 2: offen[2] === true, 3: offen[3] === true, 4: offen[4] === true }, anfrageFuer: typeof m.anfrageFuer === "string" ? m.anfrageFuer.slice(0, 2000) : null,
-      bildKopiert: m.bildKopiert === true });
+      bildKopiert: m.bildKopiert === true,
+      // „Jetzt im Chat“ (seit 0.36): nur bekannte Arten, Anzahl der Bilder als kleine Zahl
+      jetzt: m.jetzt && typeof m.jetzt === "object" && JETZT_ARTEN.includes(m.jetzt.art)
+        ? { art: m.jetzt.art, bilder: Number.isInteger(m.jetzt.bilder) && m.jetzt.bilder >= 0 && m.jetzt.bilder <= 50 ? m.jetzt.bilder : 0, frage: m.jetzt.frage === true } : null });
   }
 }
 // „↺ Neu anfangen“: Zusatz, Antwort und Schritte dieser Frage vergessen (frage wie bei chatgptPanel)
@@ -90,7 +93,9 @@ function vergleich(teile, stand) {
 const VERLIEHEN_ZUSATZ = " – gerade verliehen, bitte vorerst nicht vorschlagen";
 const listenZeile = t => teilZeile(t) + (t.verliehen ? VERLIEHEN_ZUSATZ : "");
 const nummern = l => [...l].sort((a, b) => a - b).map(n => "Nr. " + nrText(n)).join(", ");
-function schrankText(teile, stil, anzahlBilder) {
+// frage = die Anfrage, die gleich mit in diese Nachricht soll (seit 0.36: beim ersten Mal und bei Änderungen ein Text statt zwei,
+// Wunsch 23.11.2026 „sehr verwirrend für die Erstnutzung“), sonst null → der Chat soll nur „Verstanden“ antworten
+function schrankText(teile, stil, anzahlBilder, frage = null) {
   const s = stilAktuell(stil);
   return [
     "Hallo! In diesem Chat sollst du mir helfen, Outfits aus meinem eigenen Kleiderschrank zusammenzustellen – wie eine persönliche Stylistin.", "",
@@ -104,16 +109,18 @@ function schrankText(teile, stil, anzahlBilder) {
     "- Steht bei einem Teil „gerade verliehen“, ist es nicht da: Schlag es erst wieder vor, wenn ich schreibe, dass es wieder da ist.",
     MODE_TEXT[s.mode] ? `\nMode: ${MODE_TEXT[s.mode]}` : null, "",
     `Mein Kleiderschrank (Stand ${datum(new Date())}, ${teile.length} Teile):`, ...sortiert(teile).map(listenZeile), "",
-    `Antworte jetzt bitte nur kurz mit „Verstanden, ${teile.length} Teile“.`
+    ...(frage ? ["Und gleich meine erste Frage:", "", frage.replaceAll(OBEN_IM_CHAT, "die Bilder und die Liste oben").replace(/^Hallo! /, "")]
+      : [`Antworte jetzt bitte nur kurz mit „Verstanden, ${teile.length} Teile“.`])
   ].filter(z => z !== null).join("\n");
 }
-function aenderungText(neu, weg, verliehen = [], zurueck = []) {
+const OBEN_IM_CHAT = "die Bilder und die Liste weiter oben in diesem Chat";
+function aenderungText(neu, weg, verliehen = [], zurueck = [], frage = null) {
   return [`Änderung an meinem Kleiderschrank (Stand ${datum(new Date())}). Ab jetzt gilt:`,
     neu.length ? `\nNeu oder geändert (${neu.length > PRO_BILD ? "auf den angehängten Bildern" : "auf dem angehängten Bild"}):` : null, ...sortiert(neu).map(listenZeile),
     verliehen.length ? `\nGerade verliehen, bitte vorerst nicht vorschlagen: ${nummern(verliehen)}` : null,
     zurueck.length ? `\nWieder da, darfst du wieder vorschlagen: ${nummern(zurueck)}` : null,
     weg.length ? `\nNicht mehr da, bitte nicht mehr vorschlagen: ${weg.map(n => "Nr. " + nrText(n)).join(", ")}` : null,
-    "", "Antworte bitte nur kurz mit „Verstanden“."].filter(z => z !== null).join("\n");
+    ...(frage ? ["", "Und gleich meine Frage:", "", frage.replace(/^Hallo! /, "")] : ["", "Antworte bitte nur kurz mit „Verstanden“."])].filter(z => z !== null).join("\n");
 }
 const temperaturText = t => t ? t.replace("°", " °C") : null;
 // Koffer packen (seit 0.28): Packliste nur aus ihren Teilen, dazu ein Outfit pro Tag („Tag 1: …“, die App liest das wie Outfits)
@@ -330,13 +337,35 @@ export async function bilderWeitergeben(dateien) {
 
 /* ---------- Kopieren ---------- */
 // navigator.clipboard braucht ein frisches Antippen: darum direkt im Klick aufrufen, ohne vorher auf etwas zu warten
+// letzteKopie: was die App zuletzt kopiert hat (seit 0.36). Fügt sie beim „Antwort einfügen“ genau das wieder ein, hat sie die
+// Antwort im Chat noch nicht kopiert.
+let letzteKopie = "";
 export async function kopieren(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  try { await navigator.clipboard.writeText(text); letzteKopie = text; return true; } catch {}
   const ta = el("textarea", { readOnly: true, value: text, style: "position:fixed;top:0;left:0;opacity:0" });
   document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
   let ok = false; try { ok = document.execCommand("copy"); } catch {}
-  ta.remove(); return ok;
+  ta.remove(); if (ok) letzteKopie = text; return ok;
 }
+
+/* ---------- „Jetzt im Chat“ (seit 0.36, Wunsch 23.11.2026) ----------
+   Nach dem Kopieren eine kurze nummerierte Liste, was im Chat zu tun ist, statt eines langen „So geht's“-Textes.
+   j = { art: "neu" (neuer Chat) | "aenderung" | "anfrage" (beides im Kleiderschrank-Chat), bilder: Anzahl, frage: kommt eine Antwort mit Outfits? } */
+function imChatKarte(j) {
+  const n = j.bilder || 0;
+  const zeilen = [
+    j.art === "neu" ? "ChatGPT oder Gemini öffnen und einen neuen Chat beginnen." : "ChatGPT oder Gemini öffnen, und zwar den Chat, in dem dein Kleiderschrank schon ist.",
+    n ? `Auf ＋ tippen und ${n === 1 ? "das Bild" : `die ${n} Bilder`} anhängen (${mobil() ? "sie sind gerade in deinen Fotos gelandet" : "sie sind in deinem Download-Ordner"}).` : null,
+    "Ins Textfeld tippen, „Einfügen“ wählen und senden.",
+    j.frage ? "Warten, bis die Antwort fertig ist. Dann unter der Antwort auf „Kopieren“ tippen (Symbol mit zwei Quadraten, bei Gemini evtl. hinter ⋮)." : "Der Chat antwortet kurz mit „Verstanden“. Fertig!",
+    j.frage ? "Hierher zurückkommen und auf „📋 Antwort einfügen“ tippen." : null
+  ].filter(Boolean);
+  return el("div", { class: "panel hinweis im-chat" }, el("strong", {}, "✓ Kopiert! Jetzt im Chat:"), el("ol", {}, ...zeilen.map(z => el("li", {}, z))));
+}
+const JETZT_ARTEN = ["neu", "aenderung", "anfrage"];
+// Zurück in der App (aus dem Chat): der nächste Schritt geht von selbst auf (siehe chatgptPanel). Nur ein Zuhörer für die ganze App.
+let zurueckInDerApp = null, nachStartGezeigt = false;
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") zurueckInDerApp?.(); });
 // Klappt Kopieren gar nicht: Text zum Markieren zeigen
 export const vonHand = (box, text) => fill(box, el("div", { class: "hint" }, "Kopieren hat nicht geklappt. Tippe in das Feld, markiere alles und kopiere es selbst:"),
   el("textarea", { class: "notiz", readOnly: true, rows: 6, value: text, "aria-label": "Text zum Kopieren" }));
@@ -466,42 +495,57 @@ function outfitsAus(gruppen, anker = null) {
 }
 
 /* ---------- Schritt 1: Kleiderschrank an ChatGPT geben ---------- */
-// Auch in der Ansicht „Sicherung“ (zip-ansicht.js). nachher() = nach dem Kopieren des Textes (Stand neu anzeigen)
-export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
-  const teile = imChat(items), status = el("div", { class: "hint" }, "…"), knoepfe = el("div", { class: "actions" }), box = el("div", {});
+// Auch in der Ansicht „Sicherung“ (zip-ansicht.js). nachher() = nach dem Kopieren des Textes (Stand neu anzeigen).
+// opt (seit 0.36, nur bei „Outfit finden“, „Was passt dazu?“ und „Koffer packen“): anfrage() = die Frage, die gleich mit in den Text
+// kommt; nachKopieren(info) = statt der Karte hier zeigt die Ansicht selbst, was im Chat zu tun ist; stand(v) = nach jeder Prüfung.
+// Ein Knopf nach dem anderen (seit 0.36): erst „① Bilder sichern“ hervorgehoben, danach „② Text kopieren“.
+export function kleiderschrankSchritt(items, stil, nachher = () => {}, opt = {}) {
+  const teile = imChat(items), status = el("div", { class: "hint" }, "…"), felderPlatz = el("div", {}), knoepfe = el("div", { class: "actions" }), box = el("div", {});
   let v = { nie: true };
   const vorbereiten = async (art, knopf) => {
     knopf.disabled = true; const alt = knopf.textContent; knopf.textContent = "Bilder werden erstellt …";
     try {
-      const nur = art === "alles" ? teile : v.neu;
+      const nur = art === "alles" ? teile : v.neu, w = v;
       const dateien = nur.length ? await sammelbilder(nur, art === "alles" ? "Mein Kleiderschrank" : "Neu im Kleiderschrank") : [];
-      vorbereitet = { art, dateien, text: art === "alles" ? schrankText(teile, stil, dateien.length) : aenderungText(v.neu, v.weg, v.verliehen, v.zurueck),
-        stand: standVon(teile), verliehen: verliehenNrs(teile) };
-      zeigen();
+      // Der Text entsteht erst beim Kopieren, damit die Frage (Feld „Noch etwas dazu?“) auf dem neuesten Stand ist
+      vorbereitet = { art, dateien, bilderOk: false, stand: standVon(teile), verliehen: verliehenNrs(teile),
+        text: frage => art === "alles" ? schrankText(teile, stil, dateien.length, frage) : aenderungText(w.neu, w.weg, w.verliehen, w.zurueck, frage) };
+      fill(knoepfe); zeigen();
     } catch (e) { fehlerToast("Hat nicht geklappt", e); console.error(e); }
     finally { knopf.disabled = false; knopf.textContent = alt; }
   };
+  // Alte Vorschau-Adressen erst freigeben, wenn ihre Bilder nicht mehr auf der Seite stehen (sonst Ladefehler in der Konsole)
+  const freigeben = () => { const alte = vorschauUrls; vorschauUrls = []; requestAnimationFrame(() => alte.forEach(u => URL.revokeObjectURL(u))); };
   function zeigen() {
-    vorschauUrls.forEach(u => URL.revokeObjectURL(u)); vorschauUrls = [];
-    if (!vorbereitet) { fill(box); return; }
-    const { art, dateien, text } = vorbereitet, n = dateien.length, kopierBox = el("div", {});
-    const bilderKnopf = el("button", { type: "button", class: "btn" }, mobil() ? `🖼 ${n === 1 ? "Bild" : n + " Bilder"} sichern / teilen` : `🖼 ${n === 1 ? "Bild" : n + " Bilder"} herunterladen`);
-    bilderKnopf.onclick = async () => { if (await bilderWeitergeben(dateien)) toast(mobil() ? "Danach den Text kopieren" : "Heruntergeladen – jetzt den Text kopieren"); };
-    const textKnopf = el("button", { type: "button", class: "btn primary" }, "📋 Text kopieren");
+    if (!vorbereitet) return;
+    freigeben();
+    const { art, dateien } = vorbereitet, n = dateien.length, kopierBox = el("div", {});
+    const bilderKnopf = el("button", { type: "button", class: vorbereitet.bilderOk ? "btn" : "btn primary" }, mobil() ? `🖼 ${n === 1 ? "Bild" : n + " Bilder"} sichern` : `🖼 ${n === 1 ? "Bild" : n + " Bilder"} herunterladen`);
+    bilderKnopf.onclick = async () => {
+      if (!await bilderWeitergeben(dateien) || !vorbereitet) return;
+      vorbereitet.bilderOk = true; zeigen(); toast(mobil() ? "Jetzt „② Text kopieren“" : "Heruntergeladen – jetzt „② Text kopieren“");
+    };
+    const textKnopf = el("button", { type: "button", class: !n || vorbereitet.bilderOk ? "btn primary" : "btn" }, "📋 Text kopieren");
     textKnopf.onclick = async () => {
+      const frage = opt.anfrage?.() || null, text = vorbereitet.text(frage);
       if (!await kopieren(text)) { vonHand(kopierBox, text); return; }
-      fill(kopierBox);
       try { await setMeta("chatgptStand", { zeit: new Date().toISOString(), teile: vorbereitet.stand, verliehen: vorbereitet.verliehen }); } catch (e) { console.error(e); }
-      toast("Text kopiert – jetzt zusammen mit den Bildern im Chat senden");
-      vorbereitet = null; nachher(); pruefen();
+      const info = { art: art === "alles" ? "neu" : "aenderung", bilder: n, frage: !!frage };
+      vorbereitet = null;
+      if (opt.nachKopieren) { fill(box); opt.nachKopieren(info); } else fill(box, imChatKarte(info));
+      freigeben();
+      toast("Kopiert – jetzt im Chat einfügen");
+      nachher(); pruefen();
     };
     const bilder = dateien.map(f => { const u = URL.createObjectURL(f); vorschauUrls.push(u); return el("img", { src: u, alt: f.name, class: "sammelbild" }); });
+    const zeile = (nr, knopf, fertig) => el("div", { class: "ablauf-zeile" }, el("span", { class: fertig ? "ablauf-nr fertig" : "ablauf-nr" }, fertig ? "✓" : nr), knopf);
     fill(box, el("div", { class: "sammelbilder" }, ...bilder),
-      el("p", { class: "hint" }, art === "alles"
-        ? `So geht's: ① ${n ? (mobil() ? `„${n === 1 ? "Bild" : n + " Bilder"} sichern“ tippen und im Menü „Bilder sichern“ wählen – sie landen in deinen Fotos.` : "Bilder herunterladen.") : ""} ② „Text kopieren“ tippen. ③ In ChatGPT oder Gemini einen neuen Chat anlegen, mit ＋ die Bilder anhängen, den Text einfügen und senden. Alle weiteren Fragen dann in diesen Chat.`
-        : `So geht's: ${n ? `① Bild${n === 1 ? "" : "er"} sichern. ② ` : "① "}„Text kopieren“. ${n ? "③" : "②"} In deinem Kleiderschrank-Chat ${n ? "das Bild anhängen und " : ""}den Text einfügen und senden.`),
+      n ? zeile("1", bilderKnopf, vorbereitet.bilderOk) : null,
+      zeile(n ? "2" : "1", textKnopf, false),
+      n && mobil() ? el("p", { class: "hint" }, "Bei ① im Menü „Bilder sichern“ wählen – sie landen in deinen Fotos. Danach zeigt dir die App, was im Chat zu tun ist.")
+        : el("p", { class: "hint" }, "Danach zeigt dir die App, was im Chat zu tun ist."),
       n > 3 ? el("p", { class: "hint" }, `Die kostenlosen Versionen erlauben nur wenige Uploads pro Tag (ChatGPT etwa 3). Schick heute 3 Bilder und die übrigen ${n - 3} morgen nach (einfach mit „Hier sind die weiteren Bilder“).`) : null,
-      el("div", { class: "actions" }, n ? bilderKnopf : null, textKnopf), kopierBox);
+      kopierBox);
   }
   async function pruefen() {
     const stand = await getMeta("chatgptStand").catch(() => null);
@@ -516,9 +560,12 @@ export function kleiderschrankSchritt(items, stil, nachher = () => {}) {
       v.verliehen.length ? `${v.verliehen.length} verliehen` : null, v.zurueck.length ? `${v.zurueck.length} wieder da` : null].filter(Boolean).join(", ")}. Gib deinem Chat die Änderungen, damit er den aktuellen Stand kennt.`;
     fill(knoepfe, v.nie || v.gleich ? alles : aenderung, v.nie || v.gleich ? null : alles);
     if (!teile.length) fill(knoepfe);
+    if (vorbereitet) fill(knoepfe); // Bilder sind schon erstellt: dann zählen nur ① und ② (ein Knopf nach dem anderen)
+    opt.stand?.(v);
   }
   pruefen(); zeigen();
-  return { el: el("div", {}, status, knoepfe, box), zustand: () => v };
+  // felderPlatz: dort zeigt „Outfit finden“ das Feld „Noch etwas dazu?“, wenn die Frage gleich mit in diesen Text kommt
+  return { el: el("div", {}, status, felderPlatz, knoepfe, box), zustand: () => v, felderPlatz };
 }
 
 /* ---------- Anzeige unter „Outfit finden“ und „Was passt dazu?“ ---------- */
@@ -537,11 +584,20 @@ export function chatgptPanel(items, stil, frage, kachel) {
   };
 
   // Schritt 1: Kleiderschrank (auch in „Sicherung“). Aufklappen, solange der Chat den aktuellen Stand nicht kennt.
-  const stand1 = el("span", { class: "schritt-stand" });
-  const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; stand1.textContent = "✓ aktuell"; });
-  const schrank = el("details", { class: "mehr schritt" }, el("summary", {}, "1. Kleiderschrank an den Chat geben", stand1), schritt1.el);
-  getMeta("chatgptStand").then(st => { const v = vergleich(imChat(items), st); if (v.nie || !v.gleich) schrank.open = true; else stand1.textContent = "✓ aktuell"; })
-    .catch(() => { schrank.open = true; });
+  // Seit 0.36 (Wunsch 23.11.2026): Kennt der Chat den Kleiderschrank noch nicht (oder nicht den neuesten Stand), kommt die Frage gleich
+  // mit in diesen Text: „1. Kleiderschrank und Frage an den Chat geben“, Schritt 2 entfällt dann. Ein Wechsel in den Chat weniger.
+  const stand1 = el("span", { class: "schritt-stand" }), titel1 = el("span", {}, "1. Kleiderschrank an den Chat geben");
+  let zusammenVorher = null;
+  const schritt1 = kleiderschrankSchritt(items, stil, () => { schrank.open = false; stand1.textContent = "✓ aktuell"; }, {
+    anfrage: () => anfrageText(frage, cleanText(freitext.value), stil),
+    nachKopieren: info => { m.anfrageFuer = schluessel(); stand2(); m.jetzt = info; jetztZeichnen(); s2.auf(false); s3.auf(true); s3.d.scrollIntoView({ block: "start" }); },
+    stand: v => {
+      const zusammen = v.nie || !v.gleich;
+      if (zusammen) { schritt1.felderPlatz.append(felder); titel1.textContent = "1. Kleiderschrank und Frage an den Chat geben"; stand1.textContent = ""; if (zusammenVorher !== true) schrank.open = true; }
+      else { felderHeim.append(felder); titel1.textContent = "1. Kleiderschrank an den Chat geben"; stand1.textContent = "✓ aktuell"; }
+      s2.d.hidden = zusammen; zusammenVorher = zusammen;
+    } });
+  const schrank = el("details", { class: "mehr schritt" }, el("summary", {}, titel1, stand1), schritt1.el);
 
   // Schritt 2: Anfrage. Was gerade gefragt würde; ändert es sich nach dem Kopieren (z. B. anderes Wetter oben), ist die
   // kopierte Anfrage veraltet und Schritt 2 geht wieder auf.
@@ -556,13 +612,16 @@ export function chatgptPanel(items, stil, frage, kachel) {
   const STIL = "Meinen Stil mitschicken";
   const optionen = choice({ options: [STIL], selected: stilMit ? [STIL] : [], max: 0, onChange: sel => { stilMit = sel.includes(STIL); stand2(); } });
   const knopfAnfrage = el("button", { type: "button", class: "btn primary" }, "📋 Anfrage kopieren");
-  const s2 = schritt(2, k ? "2. Nach einer Packliste fragen" : frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen",
+  // Die Felder stehen in Schritt 2, oder in Schritt 1, wenn die Frage dort gleich mit in den Kleiderschrank-Text kommt (felderHeim = ihr Platz in Schritt 2)
+  const felder = el("div", {},
     k ? field("Was soll die KI noch wissen?", "freiwillig, in deinen Worten", freitext, "Alles, was oben nicht steht: Wohin es geht, was du vorhast, was du auf keinen Fall vergessen willst. Das kommt mit in die Anfrage.")
       : field("Noch etwas dazu?", "freiwillig", freitext),
     nichtsAngetippt ? el("p", { class: "hint" }, k ? "Tipp: Oben ist noch nichts angetippt. Tipp Tage, Temperatur und was du vorhast an, dann packt der Chat passender."
       : "Tipp: Oben ist noch nichts angetippt. Tipp Anlass, Temperatur und Wetter an, dann weiß der Chat, wofür das Outfit ist.") : null,
-    optionen.el,
-    el("div", { class: "actions" }, knopfAnfrage), kopierBox);
+    optionen.el);
+  const felderHeim = el("div", {}, felder);
+  const s2 = schritt(2, k ? "2. Nach einer Packliste fragen" : frage.teil ? "2. Fragen: Was passt dazu?" : "2. Nach Outfits fragen",
+    felderHeim, el("div", { class: "actions" }, knopfAnfrage), kopierBox);
   const stand2 = () => { s2.stand.textContent = m.anfrageFuer === schluessel() ? "✓ kopiert" : m.anfrageFuer ? "neu kopieren" : ""; };
   freitext.oninput = () => { m.zusatz = freitext.value; stand2(); };
   knopfAnfrage.onclick = async () => {
@@ -574,6 +633,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
     if (v.nie) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Chat kennt deinen Kleiderschrank aber noch nicht: Gib ihn zuerst (Schritt 1), dann die Anfrage in denselben Chat.")); schrank.open = true; return; }
     if (!v.gleich) { fill(kopierBox, el("p", { class: "hint" }, "⚠️ Anfrage kopiert. Dein Kleiderschrank hat sich aber geändert: Am besten erst die Änderungen geben (Schritt 1).")); schrank.open = true; return; }
     toast("Anfrage kopiert – jetzt in deinem Kleiderschrank-Chat einfügen");
+    m.jetzt = { art: "anfrage", bilder: 0, frage: true }; jetztZeichnen();
     s2.auf(false); s3.auf(true);
   };
   // Kein Knopf „ChatGPT öffnen“: Aus der Home-Bildschirm-App öffnete er nur die Web-Seite, nicht die ChatGPT-App (iPhone-Test 03.11.2026)
@@ -583,9 +643,22 @@ export function chatgptPanel(items, stil, frage, kachel) {
   feld.oninput = () => { m.antwort = feld.value; };
   const knopfZeigen = el("button", { type: "button", class: "btn" }, "Outfits anzeigen");
   const leeren = el("button", { type: "button", class: "btn" }, "Leeren");
-  const s3 = schritt(3, "3. Antwort einfügen",
-    field("Ganze Antwort einfügen", null, feld, "Kopiere die ganze Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits dann mit deinen Fotos. Übernommen werden nur die Nummern, der Text bleibt nur hier zum Lesen."),
+  // Seit 0.36: „Jetzt im Chat“-Liste nach dem Kopieren und ein Knopf, der die Antwort direkt aus der Zwischenablage holt
+  // (das iPhone fragt dabei kurz „Einfügen“). Klappt das nicht, bleibt das Feld zum Selbst-Einfügen.
+  const jetztBox = el("div", {});
+  const einfuegen = el("button", { type: "button", class: "btn primary" }, "📋 Antwort einfügen");
+  einfuegen.onclick = async () => {
+    let text = "";
+    try { text = (await navigator.clipboard.readText()) || ""; } catch (e) { console.warn("Zwischenablage nicht lesbar", e); }
+    if (!text.trim()) { feld.focus(); toast("Tippe ins Feld darunter und wähle „Einfügen“."); return; }
+    if (letzteKopie && text.trim() === letzteKopie.trim()) { toast("Das ist noch deine Anfrage. Kopiere zuerst im Chat die Antwort.", 5000); return; }
+    feld.value = text.slice(0, MAX_ANTWORT); m.antwort = feld.value; anzeigen(feld.value, true); ergebnis.scrollIntoView({ block: "start" });
+  };
+  const s3 = schritt(3, "3. Antwort einfügen", jetztBox, el("div", { class: "actions" }, einfuegen),
+    field("Oder selbst einfügen", null, feld, "Kopiere die ganze Antwort aus dem Chat und füge sie hier ein. Die App zeigt die Outfits dann mit deinen Fotos. Übernommen werden nur die Nummern, der Text bleibt nur hier zum Lesen."),
     el("div", { class: "actions" }, leeren, knopfZeigen));
+  // Liste „Jetzt im Chat“, solange auf die Antwort gewartet wird; Schritt 3 dann hervorgehoben
+  const jetztZeichnen = () => { const offen = !!m.jetzt && !m.angezeigt.trim(); fill(jetztBox, offen ? imChatKarte(m.jetzt) : null); s3.d.classList.toggle("dran", offen); };
 
   // Schritt 4: Bild als eigene Nachricht, wenn die Antwort mit den Outfits da ist. Ist sie eingefügt, wählt sie ein Outfit
   // daraus und bekommt ein Bild-Paket mit genau diesen Teilen; sonst nur den Bild-Wunsch (Outfit 1/2/3, Sammelbilder).
@@ -636,6 +709,7 @@ export function chatgptPanel(items, stil, frage, kachel) {
     if (neu !== m.angezeigt) { m.bildKopiert = false; m.textAuf = {}; stand4(); } // andere Antwort → Bild noch nicht gemacht, Texte zu
     m.angezeigt = neu;
     if (!m.angezeigt.trim()) { fill(ergebnis); bildSchritt(null); s3.stand.textContent = ""; return; }
+    if (m.jetzt) { m.jetzt = null; jetztZeichnen(); } // Antwort ist da: die Liste „Jetzt im Chat“ ist erledigt
     const { gruppen, unbekannt } = antwortLesen(m.angezeigt, items);
     bildSchritt(gruppen);
     const outfits = outfitsAus(gruppen, frage.teil), outfitVon = new Map(outfits.map(o => [o.gruppe, o]));
@@ -688,7 +762,14 @@ export function chatgptPanel(items, stil, frage, kachel) {
   feld.onpaste = () => setTimeout(() => { m.antwort = feld.value; anzeigen(feld.value, true); }, 0);
   knopfZeigen.onclick = () => { anzeigen(feld.value, true); ergebnis.scrollIntoView({ behavior: "smooth" }); };
   leeren.onclick = () => { feld.value = m.antwort = ""; anzeigen(""); s4.auf(false); s3.auf(true); };
-  anzeigen(m.angezeigt); stand2(); stand4(); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
+  anzeigen(m.angezeigt); stand2(); stand4(); jetztZeichnen(); // nach dem Neuzeichnen (z. B. Zurück von einem Teil) wieder da
+  // Zurück aus dem Chat (seit 0.36): Wartet die App auf die Antwort, geht Schritt 3 auf und kommt ins Bild. Auch nach einem Neustart
+  // der App (das iPhone schließt sie oft im Hintergrund) einmal, wenn die Ansicht wieder aufgeht.
+  zurueckInDerApp = () => {
+    if (!s3.d.isConnected || !m.jetzt || m.angezeigt.trim()) return;
+    s3.auf(true); s3.d.scrollIntoView({ block: "start" }); toast("Willkommen zurück – jetzt „📋 Antwort einfügen“ tippen");
+  };
+  if (!nachStartGezeigt) { nachStartGezeigt = true; if (m.jetzt && !m.angezeigt.trim()) setTimeout(() => zurueckInDerApp?.(), 400); }
 
   return el("div", { class: "panel chatgpt" },
     mitInfo(el("strong", {}, "💬 Mit ChatGPT oder Gemini"),
