@@ -5,7 +5,7 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, getLookFoto, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=35";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=36";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=30";
 import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=27";
 import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=12";
@@ -13,9 +13,9 @@ import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "
 import { renderVinted } from "./vinted.js?v=16";
 import { GROUPS } from "./ki.js?v=9";
 import { renderKoffer } from "./koffer.js?v=7";
-import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=3";
-import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=3";
-import { renderKisten, kistenLaden } from "./umzug.js?v=3";
+import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=4";
+import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=4";
+import { renderKisten, kistenLaden } from "./umzug.js?v=4";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
 import { renderSchonDa } from "./schonda.js?v=3";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,

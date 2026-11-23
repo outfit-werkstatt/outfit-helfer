@@ -363,25 +363,29 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, e
     if (n) toast(n === 1 ? "1 Foto gespeichert – jetzt ergänzen, was es ist" : `${n} Fotos gespeichert – jetzt ergänzen, was sie sind`);
     neuZeichnen();
   };
-  const hinzu = el("div", { class: "panel" },
-    mitInfo(el("strong", {}, "Sachen hinzufügen"),
-      "Fotografiere ein Ding nach dem anderen, am besten einzeln vor ruhigem Hintergrund. Du kannst auch mehrere Fotos auf einmal auswählen.",
-      "Jedes Foto wird gleich gespeichert und bekommt eine feste Nummer (H001, H002 …). Danach tippst du unter „Noch ergänzen“ an, was es ist, und gibst ihm einen kurzen Namen.",
-      "Hier erkennt die App nichts von selbst: Was es ist und wo es liegt, tippst du an oder schreibst es dazu. Die Fotos bleiben auf deinem Handy."),
-    el("div", { class: "actions" }, el("label", { class: "btn primary datei" }, "＋ Fotos auswählen", eingabe)),
-    filter.raum && filter.raum !== OHNE_RAUM ? el("p", { class: "hint" }, `Neue Fotos bekommen gleich den Raum „${filter.raum}“ (der Filter unten ist an).`) : null,
-    status);
-
-  // Wunschliste und Umzugskisten (seit 0.32) als zwei kleine Kacheln
-  const klein = (name, stand, onclick) => el("button", { type: "button", onclick }, el("span", { class: "name" }, name), el("span", { class: "stand" }, stand));
-  const kistenZu = (extra.kisten || []).filter(k => k.zu).length, kistenAlle = (extra.kisten || []).length;
-  const mehr = el("div", { class: "neben vier haushalt-neben" },
-    klein("📝 Wunschliste", extra.wunschOffen ? `${extra.wunschOffen} offen` : "leer", () => nav.go({ v: "wunsch" })),
-    klein("📦 Umzugskisten", kistenAlle ? `${kistenZu} von ${kistenAlle} zu` : "keine", () => nav.go({ v: "kisten" })));
+  // Seit 0.35.1 (iPhone-Test 23.11.2026: „riesiger Design-Unterschied“ zur Kleidung): oben vier große Knöpfe wie bei der Kleidung
+  // (gleiche Form, Farben abwechselnd), darunter „📷 Tipps zum Fotografieren ⓘ“, Überschriften wie „Kleiderschrank“.
+  // „Zum Verkaufen“ zeigt unten in der Liste den Bereich „💰 Zum Verkaufen“.
+  const sym = s => el("span", { class: "sym", "aria-hidden": "true" }, s);
+  const zumVerkaufen = () => {
+    filter.stand = "verkaufen"; filter.kategorie = filter.raum = null; filter.suche = "";
+    Promise.resolve(neuZeichnen()).then(() => document.getElementById("dingListe")?.scrollIntoView({ block: "start" }));
+  };
+  const knoepfe = el("div", { class: "haupt-knoepfe" },
+    el("label", { class: "haupt upload" }, sym("＋"), "Sachen hinzufügen", eingabe),
+    el("button", { type: "button", class: "haupt outfit", onclick: () => nav.go({ v: "wunsch" }) }, sym("✎︎"), "Wunschliste"),
+    el("button", { type: "button", class: "haupt upload", onclick: () => nav.go({ v: "kisten" }) }, sym("📦"), "Umzugskisten"),
+    el("button", { type: "button", class: "haupt outfit", onclick: zumVerkaufen }, sym("€"), "Zum Verkaufen"));
+  const tipp = mitInfo(el("p", {}, "📷 Tipps zum Fotografieren"),
+    "Fotografiere ein Ding nach dem anderen, am besten einzeln vor ruhigem Hintergrund. Du kannst auch mehrere Fotos auf einmal auswählen.",
+    "Jedes Foto wird gleich gespeichert und bekommt eine feste Nummer (H001, H002 …). Danach tippst du unter „Noch ergänzen“ an, was es ist, und gibst ihm einen kurzen Namen.",
+    "Hier erkennt die App nichts von selbst: Was es ist und wo es liegt, tippst du an oder schreibst es dazu. Die Fotos bleiben auf deinem Handy.");
+  tipp.classList.add("foto-tipp");
+  const raumHinweis = filter.raum && filter.raum !== OHNE_RAUM ? el("p", { class: "hint" }, `Neue Fotos bekommen gleich den Raum „${filter.raum}“ (der Filter unten ist an).`) : null;
 
   // Noch ergänzen
   const ergaenzen = offen.length ? el("div", {},
-    el("h3", { class: "ding-abschnitt" }, `Noch ergänzen (${offen.length})`),
+    el("h2", {}, `Noch ergänzen (${offen.length})`),
     ...offen.map(d => ergaenzenKarte(d, bild, neuZeichnen, entsorgen, dinge))) : null;
 
   // Suche und Filter (nur über die fertigen)
@@ -420,17 +424,19 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, e
   };
   suche.oninput = suchen; suche.onkeydown = e => { if (e.key === "Enter") suche.blur(); };
   suchen();
-  const leer = !da.length ? "Noch nichts hier. Tippe oben auf „＋ Fotos auswählen“."
+  const leer = !da.length ? "Noch nichts hier. Tippe oben auf „＋ Sachen hinzufügen“."
     : !fertige.length ? (stand === "verkaufen" ? "Hier ist nichts. Ein Ding kommt hierher, wenn du bei ihm „💰 Will ich verkaufen“ antippst."
       : stand === "verkauft" ? "Noch nichts verkauft." : stand === "verliehen" ? "Gerade ist nichts verliehen." : null)
     : !gefiltert.length ? "Mit diesem Filter gibt es hier nichts." : null;
-  const korbKnopf = imKorb ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "dingKorb" }) }, `🗑 Papierkorb (${imKorb})`)) : null;
+  // Papierkorb als kleine Kachel wie bei der Kleidung (immer da, auch leer)
+  const korbKachel = el("div", { class: "neben", style: "grid-template-columns:minmax(0,1fr)" },
+    el("button", { type: "button", onclick: () => nav.go({ v: "dingKorb" }) }, el("span", { class: "name" }, "🗑 Papierkorb"), el("span", { class: "stand" }, imKorb ? anzahl(imKorb) : "leer")));
   const imHaushalt = da.filter(d => !istVerkauft(d)).length;
-  fill(box, kopf("🏠 Sachen im Haushalt", imHaushalt ? anzahl(imHaushalt) : null), hinzu, mehr, ergaenzen,
-    alleFertig.length ? el("h3", { class: "ding-abschnitt" }, offen.length ? "Fertig eingetragen" : "Alles") : null,
+  fill(box, kopf("🏠 Sachen im Haushalt", imHaushalt ? anzahl(imHaushalt) : null), knoepfe, tipp, raumHinweis, status, ergaenzen,
+    alleFertig.length ? el("h2", { id: "dingListe" }, STAENDE.haushalt[2].length ? `Deine Sachen (${STAENDE.haushalt[2].length})` : "Deine Sachen") : null,
     umschalter, standZeile ? el("p", { class: "hint aussortiert-unter" }, standZeile) : null,
     stand === "verkauft" && fertige.length ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "verkaeufe" }) }, "💶 Zur Verkaufs-Übersicht")) : null,
-    fertige.length ? suche : null, filterEl, grid, fertige.length ? keinTreffer : null, leer ? el("p", { class: "hint" }, leer) : null, korbKnopf);
+    fertige.length ? suche : null, filterEl, grid, fertige.length ? keinTreffer : null, leer ? el("p", { class: "hint" }, leer) : null, korbKachel);
 }
 
 /* ---------- Ein Ding ---------- */

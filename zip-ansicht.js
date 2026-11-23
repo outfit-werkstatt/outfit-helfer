@@ -14,8 +14,8 @@ import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=24";
 import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=5";
 import { reisenPruefen } from "./koffer.js?v=7";
-import { dingPruefen } from "./haushalt.js?v=3";
-import { kistenPruefen } from "./umzug.js?v=3";
+import { dingPruefen } from "./haushalt.js?v=4";
+import { kistenPruefen } from "./umzug.js?v=4";
 import { wunschPruefen } from "./wunsch.js?v=1";
 import { verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
 

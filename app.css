@@ -52,7 +52,6 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 .bereich-wahl{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--chip);border-radius:20px;padding:5px;margin:0 0 16px}
 .bereich-wahl button{min-height:44px;padding:8px 6px;border:0;border-radius:16px;background:none;color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
 .bereich-wahl button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);box-shadow:var(--schatten)}
-#startHaushalt > .panel:first-child{margin-top:0}
 .gemeinsam-titel{margin:26px 0 0;font-size:.82rem;color:var(--muted);text-align:center}
 .neben.gemeinsam{margin-top:8px}
 /* Seit 0.28 zwei Reihen, alle vier Knöpfe gleich hoch (der Platzhalter hat eine Zeile mehr) */
@@ -64,8 +63,6 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 .haupt.outfit{background:var(--accent);color:var(--accent-ink)}
 .haupt.leer{opacity:.55}
 /* Platzhalter für eine spätere Idee (seit 0.28): gestrichelt wie „Neuer Ordner“, damit er nicht wie ein fertiger Knopf aussieht */
-/* Sachen im Haushalt (seit 0.32): Überschriften „Noch ergänzen“ / „Fertig eingetragen“ */
-.ding-abschnitt{font-size:1.05rem;font-weight:700;color:var(--haupt);margin:18px 0 8px}
 /* „💶 Verkäufe“ (seit 0.32): zwei große Zahlen, Tabellen nach Plattform und Monat, Liste der verkauften Sachen */
 .zahlen-reihe{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
 .zahl-kachel{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--chip);border-radius:16px;padding:12px 6px;font-size:.88rem;color:var(--muted);text-align:center}
@@ -89,7 +86,6 @@ h2{font-family:var(--titel);font-size:1.25rem;color:var(--haupt);margin:24px 0 1
 .wunsch-treffer .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px}
 .wunsch-treffer .chip img{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0}
 .wunsch-zeile.erledigt .extra-zeile label span{color:var(--muted);text-decoration:line-through}
-.haushalt-neben{margin:0 0 var(--gap)}
 /* Eingabe + „Hinzufügen“ in einer Zeile: der Knopf nur so breit wie sein Text, das Feld bekommt den Rest */
 .extra-neu > .btn{flex:0 0 auto;width:auto;padding-left:16px;padding-right:16px}
 /* Vier kleine Kacheln auf der Startseite (mit „💶 Verkäufe“): 2 × 2 statt 3 + 1 */
