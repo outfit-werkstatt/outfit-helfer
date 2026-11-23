@@ -12,12 +12,12 @@ import { el, fill, toast, fehlerToast, fehlerText, clean, cleanText, teilAngleic
 import { stilAktuell, STIL_ABSCHNITTE, MODI } from "./stil.js?v=22";
 import { GROUPS, GROUP_OF, loadImage, alsJpg } from "./ki.js?v=9";
 import { kleiderschrankSchritt } from "./chatgpt.js?v=25";
-import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=5";
+import { VERKAUF_STUFEN, preisPruefen, plattformPruefen, tageSeit } from "./verkauf.js?v=6";
 import { reisenPruefen } from "./koffer.js?v=9";
-import { dingPruefen } from "./haushalt.js?v=6";
-import { kistenPruefen } from "./umzug.js?v=6";
+import { dingPruefen } from "./haushalt.js?v=7";
+import { kistenPruefen } from "./umzug.js?v=7";
 import { wunschPruefen } from "./wunsch.js?v=1";
-import { verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
+import { verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=2";
 
 const APP = "Outfit-Helfer", FORMAT = 1, TAG = 24 * 3600 * 1000, ERINNERN_TAGE = 14, ERINNERN_NEU = 6;
 // Verkaufte Teile kommen erst nach so vielen Tagen nur noch mit kleinem Foto in die Sicherung (vorher kann noch etwas zurückkommen)

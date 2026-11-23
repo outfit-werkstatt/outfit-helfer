@@ -11,6 +11,7 @@
 // Texte nur als Text (textContent/value), nie per innerHTML.
 import { el, fill, toast, fehlerToast, field, choice, datumText, clean } from "./ui.js?v=21";
 import { updateItem, nrText } from "./speicher.js?v=12";
+import { weichAendern } from "./bewegung.js?v=2";
 
 export const ZUM_VERKAUF = "zumVerkauf", EINGESTELLT = "eingestellt", VERKAUFT = "verkauft";
 export const VERKAUF_STUFEN = [ZUM_VERKAUF, EINGESTELLT, VERKAUFT];
@@ -153,10 +154,13 @@ export function verkaufFeld(t, nachher = null, opt = {}) {
           if (n === undefined) return toast("Bitte nur einen Betrag eintippen, z. B. 12 oder 12,50");
           setzen({ verkauf: VERKAUFT, verkauftAm: new Date().toISOString(), erloes: n, plattform: bei }, `${nr()} ist verkauft 🎉 Du findest es unter „${VERKAUFT_NAME}“.`);
         }, true);
-        fill(verkaufBox, el("div", { class: "verkauf-frage" }, feld,
-          el("p", { class: "note" }, `Danach ist es ${W.weg}.`),
-          el("div", { class: "actions" }, knopf("Abbrechen", () => { fill(verkaufBox); verkauftKnopf.hidden = false; }), ok)));
-        verkauftKnopf.hidden = true;
+        // Frage weich auf- und zuklappen (seit 0.38)
+        weichAendern(box, () => {
+          fill(verkaufBox, el("div", { class: "verkauf-frage" }, feld,
+            el("p", { class: "note" }, `Danach ist es ${W.weg}.`),
+            el("div", { class: "actions" }, knopf("Abbrechen", () => weichAendern(box, () => { fill(verkaufBox); verkauftKnopf.hidden = false; })), ok)));
+          verkauftKnopf.hidden = true;
+        });
       }, true);
       const am = teil.eingestelltAm ? ` (eingestellt am ${datumText(teil.eingestelltAm)})` : "";
       // Plattform nachträglich ändern (z. B. falsch angetippt), eingeklappt, damit es ruhig bleibt

@@ -5,24 +5,24 @@
 import { $, el, fill, toast, fehlerToast, fehlerText, swatch, clean, beschreibung, choice, field, angabenFelder, angabenVon, customReady, zeigeGross, teilAngleichen, merkeMarken, datumText } from "./ui.js?v=21";
 import { allItems, getItem, getPhoto, updateItem, updateItems, updateAll, trashItem, restoreItem, purgeItems, getFolders, setFolders, deleteFolder, setFolderItems, getStil, getMeta, setMeta, getOutfits, getLookFoto, nummernZuruecksetzen, nrText, allDinge } from "./speicher.js?v=12";
 import { renderStil, stilKurz } from "./stil.js?v=22";
-import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=38";
+import { renderZip, zipHinweis, zipKurz } from "./zip-ansicht.js?v=39";
 import { renderPasst, miniKachel, passtStand, passtLaden, passtNeu, passtHatEtwas } from "./passt.js?v=31";
 import { renderOutfit, outfitStand, outfitLaden, outfitNeu, outfitHatEtwas } from "./outfit.js?v=28";
 import { renderFertigListe, renderFertig, outfitSpeichern, MAX_TEILE, MAX_NAME } from "./fertig.js?v=12";
 import { bildPaketBereich, chatMerkStand, chatMerkLaden, chatHatAntwort } from "./chatgpt.js?v=25";
-import { renderVinted } from "./vinted.js?v=17";
+import { renderVinted } from "./vinted.js?v=18";
 import { GROUPS } from "./ki.js?v=9";
 import { renderKoffer } from "./koffer.js?v=9";
-import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=6";
-import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=6";
-import { renderKisten, kistenLaden } from "./umzug.js?v=6";
+import { renderHaushalt, dingeAufraeumen, dingTitel } from "./haushalt.js?v=7";
+import { renderVerkaeufe, verkaeufeKurz } from "./verkaeufe.js?v=7";
+import { renderKisten, kistenLaden } from "./umzug.js?v=7";
 import { renderWunsch, wunschLaden } from "./wunsch.js?v=1";
-import { renderSchonDa } from "./schonda.js?v=3";
+import { renderSchonDa } from "./schonda.js?v=4";
 import { imSchrank, imVerkauf, istVerkauft, verkaufFeld, verkaufKurz, verkaufZeichen, langeOnline, preisText, KEIN_VERKAUF,
-  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=5";
-import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, ueberfaellig } from "./verleihen.js?v=1";
+  ZUM_VERKAUF, EINGESTELLT, VERKAUFT, VERKAUF_NAME, VERKAUFT_NAME, LANGE_TAGE, PLATTFORMEN, MAX_PLATTFORM, plattformVon } from "./verkauf.js?v=6";
+import { verleihFeld, verliehenKurz, verliehenStand, renderVerliehen, ueberfaellig } from "./verleihen.js?v=2";
 import { tourEinrichten } from "./tour.js?v=1";
-import { gleiten } from "./bewegung.js?v=1";
+import { gleiten, festeAnordnung, ankerMerken, ankerHalten, mindestHoeheFrei } from "./bewegung.js?v=2";
 
 // Feste Ordner: „Mein Kleiderschrank“ (alle) und „Ziehe ich nicht an“ (füllt sich von selbst, erscheint nur, wenn es solche Teile gibt).
 // Seit 0.26 ebenso „💰 Zum Verkaufen“ (will ich verkaufen + bei Vinted eingestellt) und „✅ Verkauft“ (nicht mehr im Kleiderschrank).
@@ -92,13 +92,17 @@ async function show(y) {
 }
 // Dieselbe Ansicht neu zeichnen, ohne zu springen. Seit 0.26 bleibt die Höhe stehen, bis das große Foto wieder geladen ist:
 // Vorher war die Teil-Ansicht kurz ohne Foto zu kurz für die alte Stelle und sprang nach dem Antippen (z. B. „✅ Verkauft“) nach oben.
+// Seit 0.38 hat auch das neue Foto bis zum Laden seine alte Höhe, und der angetippte Bereich (data-anker, z. B. Verkaufen) bleibt an
+// seiner Stelle auf dem Bildschirm (bewegung.js ankerHalten).
 async function neuZeichnen() {
   const y = scrollStelle(), box = $("ansicht");
+  const anker = ankerMerken(box), fotoHoehe = box.querySelector("img.gross")?.offsetHeight || 0;
   box.style.minHeight = box.offsetHeight ? box.offsetHeight + "px" : "";
   try { await render(); } finally {
-    scrollen(y); schwebe.letztes = scrollStelle();
-    const frei = () => { box.style.minHeight = ""; };
     const offen = [...box.querySelectorAll("img.gross")].filter(i => !i.complete);
+    if (fotoHoehe) for (const i of offen) i.style.height = fotoHoehe + "px";
+    scrollen(y); ankerHalten(box, anker, $("rahmen")); schwebe.letztes = scrollStelle();
+    const frei = () => { for (const i of offen) i.style.height = ""; mindestHoeheFrei(box); };
     let rest = offen.length;
     if (!rest) frei();
     for (const i of offen) for (const art of ["load", "error"]) i.addEventListener(art, () => { if (--rest <= 0) frei(); }, { once: true });
@@ -170,7 +174,7 @@ async function render() {
   // Auswahl-Felder der vorigen Ansicht abmelden (sie hören sonst weiter auf neue eigene Einträge)
   const box = $("ansicht"); box.dispose?.(); box.dispose = null;
   if (s.v === "liste") return renderListe(items, folders, s.id);
-  if (s.v === "teil") return renderTeil(items, folders, s.nr, foto);
+  if (s.v === "teil") return renderTeil(items, folders, s, foto);
   if (s.v === "korb") return renderKorb(items, naechste);
   if (s.v === "stil") return renderStil(box, kopf("Mein Stil"), stil);
   if (s.v === "passt") {
@@ -721,8 +725,8 @@ function renderListe(items, folders, id) {
 /* ---------- Teil-Ansicht ---------- */
 const datum = datumText;
 let angabenOffen = false; // „Angaben ansehen“ beim Verkaufen: bleibt pro Sitzung offen, wenn sie es aufgeklappt hat
-function renderTeil(items, folders, nr, foto) {
-  const t = items.find(x => x.nr === nr);
+function renderTeil(items, folders, s, foto) {
+  const nr = s.nr, t = items.find(x => x.nr === nr);
   if (!t) return back();
   const bild = el("img", { class: "gross", src: url(foto || t.vorschau), alt: beschreibung(t) });  bild.onclick = () => zeigeGross(bild.src, beschreibung(t));
   const zeile = (k, v) => v ? [el("dt", {}, k), el("dd", {}, v)] : [];
@@ -795,22 +799,31 @@ function renderTeil(items, folders, nr, foto) {
   // „Für Vinted“ (seit 0.22): Titel und Beschreibung zum Kopieren, Foto zum Sichern. Bei verkauften Teilen nicht mehr nötig.
   // Beim Verkaufen (seit 0.26, iPhone-Test 18.11.2026): „Für Vinted“ und „Verkaufen“ stehen oben, Angaben, Ordner und 🚫 sind
   // eingeklappt (die braucht es dann kaum noch), „Was passt dazu?“ fällt weg.
-  const verkauft = istVerkauft(t), beimVerkauf = !t.geloescht && (verkauft || imVerkauf(t));
+  // Seit 0.38 (iPhone-Test 23.11.2026: der Sprung beim Antippen wirkte wie ein Fehler) gilt diese Anordnung erst beim nächsten
+  // Öffnen: Solange sie auf der Seite ist, bleibt alles an seinem Platz (bewegung.js festeAnordnung), nur Verkaufen bzw. Verleihen
+  // ändert sich und klappt weich auf. Was gar nicht mehr passt (Verleihen bei Verkauftem), fällt trotzdem gleich weg.
+  const verkauft = istVerkauft(t);
+  const anordnung = festeAnordnung(s, { verkauf: !t.geloescht && (verkauft || imVerkauf(t)), verliehen: !!t.verliehen });
+  const beimVerkauf = anordnung.verkauf;
   const passt = t.geloescht || verkauft ? null : el("div", { class: "actions wrap" },
     beimVerkauf ? null : el("button", { type: "button", class: "btn primary", onclick: () => go({ v: "passt", nr }) }, "✨ Was passt dazu?"),
     el("button", { type: "button", class: beimVerkauf ? "btn primary" : "btn", onclick: () => go({ v: "vinted", nr }) }, "🏷 Verkaufstext"));
   // Verkaufen (seit 0.26): 💰 will ich verkaufen → 📦 bei Vinted eingestellt → ✅ verkauft. Speichert sofort.
   const verkaufBox = t.geloescht ? el("div", {}) : verkaufFeld(t, () => neuZeichnen());
-  const auswahlPanel = t.geloescht || verkauft ? null : el("div", { class: "panel" }, ordnerFeld, nichtFeld, beimVerkauf ? null : verkaufBox);
+  if (!beimVerkauf) verkaufBox.dataset.anker = "verkauf"; // oben ist es der ganze Kasten (unten)
+  // Verkauft: Ordner und 🚫 fallen weg; steht Verkaufen noch hier unten (feste Anordnung), bleibt es allein im Kasten
+  const auswahlTeile = t.geloescht ? [] : [verkauft ? null : ordnerFeld, verkauft ? null : nichtFeld, beimVerkauf ? null : verkaufBox].filter(Boolean);
+  const auswahlPanel = auswahlTeile.length ? el("div", { class: "panel" }, ...auswahlTeile) : null;
   const klappe = beimVerkauf ? el("details", { class: "klappe" }, el("summary", {}, el("span", {}, "Angaben ansehen")), inhalt, auswahlPanel) : null;
   if (klappe) { klappe.open = angabenOffen; klappe.ontoggle = () => { angabenOffen = klappe.open; }; }
   // Verleihen (seit 0.34, Wunsch 23.11.2026): wie im Haushalt. Ist es verliehen, steht das weit oben, sonst unten bei den Einstellungen.
   const verleihBox = t.geloescht || verkauft ? null : verleihFeld(t, { speichern: felder => updateItem(nr, felder), name: `Nr. ${nrText(nr)}`, neuZeichnen });
+  const verleihOben = anordnung.verliehen;
   fill($("ansicht"),
     kopf(`Nr. ${nrText(nr)} – ${beschreibung(t)}`, t.geloescht ? `Liegt im Papierkorb (${nochTage(t)})` : verkauft ? "✅ Verkauft – nicht mehr im Kleiderschrank"
       : t.verliehen ? "🤝 Gerade verliehen – kommt in keine Vorschläge" : null),
-    bild, passt, t.verliehen ? verleihBox : null, beimVerkauf ? el("div", { class: "panel" }, verkaufBox) : null,
-    klappe || inhalt, klappe ? null : auswahlPanel, t.verliehen ? null : verleihBox, aktionen);
+    bild, passt, verleihOben ? verleihBox : null, beimVerkauf ? el("div", { class: "panel", "data-anker": "verkauf" }, verkaufBox) : null,
+    klappe || inhalt, klappe ? null : auswahlPanel, verleihOben ? null : verleihBox, aktionen);
 }
 
 /* ---------- Papierkorb ---------- */

@@ -8,7 +8,7 @@
 import { el, fill, toast, fehlerToast, field, choice, mitInfo, markenFeld, merkeMarken, VINTED_MERKMALE, ZUSTAENDE, groupOf, tabelle, mobil } from "./ui.js?v=21";
 import { updateItem, getPhoto, nrText } from "./speicher.js?v=12";
 import { kopieren, vonHand, bilderWeitergeben } from "./chatgpt.js?v=25";
-import { verkaufFeld } from "./verkauf.js?v=5";
+import { verkaufFeld } from "./verkauf.js?v=6";
 
 // Seit 0.33.2 (Durchsicht 19.11.2026) auch für Kleinanzeigen und eBay, wie die Texte für den Haushalt (ding-text.js).
 // Länge des Titels: eBay erlaubt 80 Zeichen; Vinted und Kleinanzeigen laut Ratgebern etwa 50 bzw. 65 (nicht offiziell bestätigt)

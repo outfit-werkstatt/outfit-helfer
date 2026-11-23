@@ -81,8 +81,15 @@ details.klappt-auf > :not(summary){animation:klappe-auf .28s ease-out}
 /* 5. Pop: angetippter Auswahl-Knopf und abgehaktes Teil im Koffer ploppen kurz auf */
 @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
 .pop{animation:pop .26s ease-out}
+/* 6. Ruhig neu zeichnen (seit 0.38): der angetippte Bereich (Verkaufen, Verleihen) leuchtet danach kurz rosé auf (bewegung.js) */
+.verkauf-box{border-radius:12px}
+.leuchtet{position:relative}
+.leuchtet::after{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--accent);box-shadow:0 0 0 2px var(--accent);
+  pointer-events:none;opacity:0;animation:leuchten 1.2s ease-out}
+.verkauf-box.leuchtet::after{inset:0 -8px}
+@keyframes leuchten{0%{opacity:.3}35%{opacity:.22}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.bereich-wahl::before{transition:none}.bereich-ein{animation:none}
-  .umschalter .gleiter{transition:none}.toast:not([hidden]),details.klappt-auf > :not(summary),.pop{animation:none}
+  .umschalter .gleiter{transition:none}.toast:not([hidden]),details.klappt-auf > :not(summary),.pop,.leuchtet::after{animation:none}
   .btn:active,.chip:active,.haupt:active,.kachel:active,.teil:active,.neben button:active,.verkauf-zeile:active,.bereich-wahl button:active{transform:none}}
 /* Rundtour (seit 0.36): „?“ oben rechts im Kopf, abgedunkelte Seite mit hellem Ausschnitt um den erklärten Knopf, Sprechblase */
 .kopfbereich{position:relative}

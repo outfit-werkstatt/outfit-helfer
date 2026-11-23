@@ -9,10 +9,10 @@ import { el, fill, toast, fehlerToast, field, choice, clean, cleanText, zeigeGro
 import { addDing, allDinge, getDingFoto, updateDing, updateDinge, purgeDinge, dingNrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg } from "./ki.js?v=9";
 import { preisLesen, preisText, preisPruefen, plattformPruefen, verkaufFeld, verkaufKurz, verkaufZeichen, imVerkauf, istVerkauft, VERKAUF_STUFEN,
-  EINGESTELLT } from "./verkauf.js?v=5";
+  EINGESTELLT } from "./verkauf.js?v=6";
 import { renderDingText, DETAILS } from "./ding-text.js?v=3";
-import { verleihFeld, verliehenKurz, verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=1";
-import { gleiten } from "./bewegung.js?v=1";
+import { verleihFeld, verliehenKurz, verliehenPruefen, verlaufPruefen } from "./verleihen.js?v=2";
+import { gleiten, festeAnordnung } from "./bewegung.js?v=2";
 
 // Als Knöpfe nur die häufigsten, der Rest unter „Andere …“ (sonst ist jede Karte bei „Noch ergänzen“ sehr lang).
 // Seit 0.34 (Wunsch 23.11.2026): „Bücher & Medien“ aufgeteilt in „Bücher“, „Musik“ und „Filme & Videospiele“, dazu „Instrumente“.
@@ -442,7 +442,7 @@ function renderUebersicht(box, kopf, dinge, bild, nav, neuZeichnen, entsorgen, e
 }
 
 /* ---------- Ein Ding ---------- */
-function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra) {
+function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra, s) {
   const kiste = (extra.kisten || []).find(k => k.nrs.includes(d.nr));
   const gross = el("img", { class: "gross", src: bild(foto || d.vorschau), alt: dingName(d) });
   gross.onclick = () => zeigeGross(gross.src, dingName(d));
@@ -483,17 +483,19 @@ function renderDing(box, kopf, d, foto, bild, nav, neuZeichnen, entsorgen, extra
   };
   const aktionen = el("div", { class: "actions wrap" }, d.geloescht ? null : aendern, korb);
   // Verkaufen (seit 0.32, wie bei der Kleidung) und der Text für Vinted, Kleinanzeigen oder eBay
-  const verkauf = d.geloescht ? null : el("div", { class: "panel" }, verkaufFeld(d, () => neuZeichnen(), { speichern: updateDing, name: dingNrText, ding: true }));
+  const verkauf = d.geloescht ? null : el("div", { class: "panel", "data-anker": "verkauf" }, verkaufFeld(d, () => neuZeichnen(), { speichern: updateDing, name: dingNrText, ding: true }));
+  // Anordnung (Verkaufen bzw. Verliehen oben) gilt seit 0.38 erst beim nächsten Öffnen, wie bei der Kleidung (bewegung.js festeAnordnung)
+  const anordnung = festeAnordnung(s, { verkauf: imVerkauf(d) || istVerkauft(d), verliehen: !!d.verliehen });
+  const beimVerkauf = anordnung.verkauf;
   const text = d.geloescht || istVerkauft(d) ? null : el("div", { class: "actions wrap" },
-    el("button", { type: "button", class: imVerkauf(d) ? "btn primary" : "btn", onclick: () => nav.go({ v: "dingText", nr: d.nr }) }, "🏷 Verkaufstext"));
-  const beimVerkauf = imVerkauf(d) || istVerkauft(d);
+    el("button", { type: "button", class: beimVerkauf ? "btn primary" : "btn", onclick: () => nav.go({ v: "dingText", nr: d.nr }) }, "🏷 Verkaufstext"));
   const kisteKnopf = kiste ? el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => nav.go({ v: "kiste", id: kiste.id }) }, `📦 Zu „${kiste.name}“`)) : null;
   // Verliehen an … (seit 0.32; seit 0.34 mit „Verliehen am“, „Zurück bis“ und „Früher verliehen“, verleihen.js)
   const verliehen = d.geloescht || istVerkauft(d) ? null
     : verleihFeld(d, { speichern: felder => updateDing(d.nr, felder), name: dingNrText(d.nr), neuZeichnen });
   fill(box, kopf(dingTitel(d), d.geloescht ? `Liegt im Papierkorb (${nochTage(d)})` : istVerkauft(d) ? "✅ Verkauft – nicht mehr im Haushalt"
       : d.ergaenzen ? "Noch nicht fertig eingetragen" : null),
-    gross, text, beimVerkauf ? verkauf : null, d.verliehen ? verliehen : null, inhalt, d.verliehen ? null : verliehen, beimVerkauf ? null : verkauf,
+    gross, text, beimVerkauf ? verkauf : null, anordnung.verliehen ? verliehen : null, inhalt, anordnung.verliehen ? null : verliehen, beimVerkauf ? null : verkauf,
     kisteKnopf, aktionen);
 }
 
@@ -534,7 +536,7 @@ export async function renderHaushalt(box, kopf, s, bild, nav, neuZeichnen, extra
   if (s.v === "ding") {
     const d = dinge.find(x => x.nr === s.nr);
     if (!d) return nav.back();
-    return renderDing(box, kopf, d, await getDingFoto(d.nr), bild, nav, neuZeichnen, entsorgen, extra);
+    return renderDing(box, kopf, d, await getDingFoto(d.nr), bild, nav, neuZeichnen, entsorgen, extra, s);
   }
   if (s.v === "dingText") {
     const d = dinge.find(x => x.nr === s.nr);

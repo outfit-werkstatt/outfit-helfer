@@ -6,6 +6,7 @@
 // „Nur die Änderungen“ als „gerade verliehen“ bzw. „wieder da“ (chatgpt.js), ohne dass Fotos neu hochgeladen werden müssen.
 // Namen sind eingetippt: nur per textContent/value, nie per innerHTML.
 import { el, fill, toast, fehlerToast, field, clean, datumText } from "./ui.js?v=21";
+import { weichAendern } from "./bewegung.js?v=2";
 
 export const MAX_AN = 40, MAX_VERLAUF = 20;
 const TAG = 24 * 3600 * 1000;
@@ -55,9 +56,12 @@ export function verlaufPruefen(liste) {
 
 /* ---------- Feld beim Teil bzw. Ding ----------
    x = Teil oder Ding; speichern(felder) speichert sofort am Teil/Ding; name = „Nr. 012“ bzw. „H005“ für die Meldungen;
-   neuZeichnen() nach dem Speichern. Gibt ein Panel zurück. */
+   neuZeichnen() nach dem Speichern. Gibt ein Panel zurück.
+   Seit 0.38: Das Panel ist ein „Anker“ (bleibt nach dem Speichern an seiner Stelle, bewegung.js), und Formular auf/zu geht weich. */
 export function verleihFeld(x, { speichern, name, neuZeichnen }) {
   const kasten = el("div", {}), verlauf = verlaufPruefen(x.verleihVerlauf);
+  const panel = el("div", { class: "panel", "data-anker": "verleih" }, kasten);
+  const fuellen = (...teile) => weichAendern(panel, () => fill(kasten, ...teile));
   const datumFeld = (wert, label) => el("input", { type: "date", class: "feld-eingabe datum-eingabe", value: wert || "", "aria-label": label });
   const abbrechen = () => el("button", { type: "button", class: "btn", onclick: zeigen }, "Abbrechen");
   const speichereMit = async (knopf, felder, text) => {
@@ -80,7 +84,7 @@ export function verleihFeld(x, { speichern, name, neuZeichnen }) {
       if (zurueck && tag0(zurueck) < tag0(seit)) { msg.textContent = "„Zurück bis“ liegt vor dem Tag, an dem du es verliehen hast."; return; }
       speichereMit(ok, { verliehen: { an: wer, seit, bis: zurueck } }, v ? "Gespeichert" : `An ${wer} verliehen`);
     };
-    fill(kasten, el("strong", {}, v ? "🤝 Verleihen ändern" : "🤝 Verleihen"),
+    fuellen(el("strong", {}, v ? "🤝 Verleihen ändern" : "🤝 Verleihen"),
       field("An wen?", "Der Name bleibt nur auf deinem Handy (und in deiner Sicherung).", an),
       field("Verliehen am", null, am),
       field("Zurück bis", "freiwillig – ist der Tag vorbei, zeigt die App ⏰", bis),
@@ -96,18 +100,18 @@ export function verleihFeld(x, { speichern, name, neuZeichnen }) {
       if (tag0(zurueck) < tag0(v.seit)) { msg.textContent = "Das liegt vor dem Tag, an dem du es verliehen hast."; return; }
       speichereMit(ok, { verliehen: null, verleihVerlauf: [{ an: v.an, seit: v.seit, zurueck }, ...verlauf].slice(0, MAX_VERLAUF) }, `${name} ist wieder da`);
     };
-    fill(kasten, el("strong", {}, "✓ Zurückbekommen"), field("Zurückbekommen am", `Von ${v.an}`, am), msg, el("div", { class: "actions" }, abbrechen(), ok));
+    fuellen(el("strong", {}, "✓ Zurückbekommen"), field("Zurückbekommen am", `Von ${v.an}`, am), msg, el("div", { class: "actions" }, abbrechen(), ok));
   }
   function zeigen() {
     const v = x.verliehen;
     const frueher = verlauf.length ? el("details", { class: "mehr" }, el("summary", {}, `Früher verliehen (${verlauf.length})`),
       el("ul", { class: "verleih-verlauf" }, ...verlauf.map(h => el("li", {}, `An ${h.an}: ${datumText(h.seit)} – ${datumText(h.zurueck)}`)))) : null;
     if (!v) {
-      fill(kasten, el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => formular() }, "🤝 Verleihen …")), frueher);
+      fuellen(el("div", { class: "actions" }, el("button", { type: "button", class: "btn", onclick: () => formular() }, "🤝 Verleihen …")), frueher);
       return;
     }
     const n = ueberfaellig(v);
-    fill(kasten, el("strong", {}, "🤝 Verliehen"),
+    fuellen(el("strong", {}, "🤝 Verliehen"),
       el("p", {}, `An ${v.an} am ${datumText(v.seit)} (${seitText(v.seit)}).`),
       v.bis ? el("p", { class: n ? "ueberfaellig" : "hint" }, n ? `⏰ Sollte am ${datumText(v.bis)} zurück sein – seit ${tage(n)} überfällig.` : `Zurück bis ${datumText(v.bis)}.`) : null,
       el("div", { class: "actions wrap" }, el("button", { type: "button", class: "btn", onclick: () => formular(v) }, "Ändern"),
@@ -115,7 +119,7 @@ export function verleihFeld(x, { speichern, name, neuZeichnen }) {
       frueher);
   }
   zeigen();
-  return el("div", { class: "panel" }, kasten);
+  return panel;
 }
 
 /* ---------- Übersicht „🤝 Verliehen“ (Kleidung und Haushalt zusammen) ----------

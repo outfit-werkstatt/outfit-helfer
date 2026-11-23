@@ -7,7 +7,7 @@ import { el, fill, toast, fehlerToast, mitInfo, beschreibung, zeigeGross } from 
 import { nrText } from "./speicher.js?v=12";
 import { loadImage, alsJpg, recognize } from "./ki.js?v=9";
 import { kiAnfordern } from "./ki-start.js?v=2";
-import { istVerkauft } from "./verkauf.js?v=5";
+import { istVerkauft } from "./verkauf.js?v=6";
 
 // Grenzen für die Ähnlichkeit der Bild-Abdrücke (1 = gleiches Foto). Gemessen 19.11.2026 an 43 Herren-Fotos (903 Paare verschiedener
 // Teile): gleiche Art und ähnlich aussehend 0,92–0,965 (helle Jeans untereinander, zwei Air-Force-Sneaker; 20 von 120 Paaren gleicher Art
