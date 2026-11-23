@@ -24,15 +24,16 @@ const KEINE_MARKE = /^(unbekannt|keine marke|ohne marke|keine angabe|no ?name|un
 const markeVon = d => !d.marke || KEINE_MARKE.test(String(d.marke).trim()) ? null : d.marke;
 const wasVon = d => d.name || d.kategorie || "Artikel";
 // Eigene Felder je Art (seit 0.34, haushalt.js): Schlüssel → Wort. Kommen in den Text, die Notiz („Mehr Infos“) nicht.
-export const DETAILS = tabelle({ autor: "Autor", titel: "Titel", kuenstler: "Künstler", album: "Album", format: "Format", modell: "Modell" });
+export const DETAILS = tabelle({ autor: "Autor", titel: "Titel", kuenstler: "Künstler", album: "Album", motiv: "Motiv / Künstler", format: "Format", modell: "Modell",
+  groesse: "Größe", masse: "Maße", material: "Material", alter: "Alter ab", vollstaendig: "Vollständig" });
 const detail = (d, k) => typeof d.details?.[k] === "string" ? d.details[k] : null;
 // Steht ein Wort schon im Namen (z. B. Modell oder Format), nicht noch einmal anhängen
 const fehltIn = (was, w) => w && !was.toLowerCase().includes(w.toLowerCase()) ? w : null;
 
-// Titel: Marke + Name + Modell + Format + Anzahl + „neu“/„defekt“; zu lang → hinten Wörter weglassen (nie mitten im Wort)
+// Titel: Marke + Name + Modell + Format + Größe + Anzahl + „neu“/„defekt“; zu lang → hinten Wörter weglassen (nie mitten im Wort)
 export function dingTitel(d, p) {
   const max = TITEL_MAX[p] || 50, marke = markeVon(d), was = wasVon(d);
-  const teile = [fehltIn(was, marke), was, fehltIn(was, detail(d, "modell")), fehltIn(was, detail(d, "format")), d.menge > 1 ? `${d.menge} Stück` : null, ZUSTAND_TITEL[d.zustand] || null].filter(Boolean);
+  const teile = [fehltIn(was, marke), was, fehltIn(was, detail(d, "modell")), fehltIn(was, detail(d, "format")), fehltIn(was, detail(d, "groesse")), d.menge > 1 ? `${d.menge} Stück` : null, ZUSTAND_TITEL[d.zustand] || null].filter(Boolean);
   let s = teile.join(" ");
   while (s.length > max && s.includes(" ")) s = s.slice(0, s.lastIndexOf(" "));
   return s.slice(0, max);
@@ -43,10 +44,10 @@ export function dingBeschreibung(d, p, emojis, v = 0) {
   const em = s => emojis ? " " + s : ".";
   const intro = [`Ich verkaufe: ${was}${von}${em("✨")}`, `Zu verkaufen: ${was}${von}${em("🏡")}`, `Biete hier ${was}${von} an${em("💕")}`][v % 3];
   const saetze = [ZUSTAND_SATZ[d.zustand], d.menge > 1 ? `Es sind ${d.menge} Stück.` : null].filter(Boolean).join(" ");
-  const ZEICHEN = { autor: "✍️", titel: "📖", kuenstler: "🎤", album: "💿", format: "📀", modell: "🔧" };
+  const ZEICHEN = { autor: "✍️", titel: "📖", kuenstler: "🎤", album: "💿", motiv: "🖼", format: "📀", modell: "🔧", groesse: "📏", masse: "📐", material: "🪵", alter: "👶", vollstaendig: "🧩" };
   const details = [["🏷", "Marke", marke], ["📦", "Art", d.kategorie && d.kategorie !== was ? d.kategorie : null],
     ...Object.entries(DETAILS).map(([k, label]) => [ZEICHEN[k], label, detail(d, k)]), ["🔢", "Anzahl", d.menge > 1 ? `${d.menge} Stück` : null],
-    ["✨", "Zustand", d.zustand]].filter(([, , w]) => w).map(([e, k, w]) => `${emojis ? e : "•"} ${k}: ${w}`);
+    ["✨", "Zustand", d.zustand]].filter(([, , w]) => w && w !== was).map(([e, k, w]) => `${emojis ? e : "•"} ${k}: ${w}`); // nicht doppelt: „Titel: Catan“, wenn es ohnehin so heißt
   const service = p === "Vinted"
     ? (emojis ? ["💬 Bei Fragen schreib mir gern!", "👀 Schau auch gern in meine anderen Artikel."] : ["Bei Fragen schreib mir gern!", "Schau auch gern in meine anderen Artikel."])
     : [p === "eBay" ? "Versand gegen Aufpreis oder Abholung möglich." : "Abholung oder Versand möglich (Versand gegen Aufpreis).",

@@ -28,21 +28,34 @@ const artAngleichen = k => typeof k === "string" ? ART_ALT[k.toLowerCase()] || k
 const ART_ALT_KNOEPFE = ["Instrument", "Musikinstrument", "Musikinstrumente", "Buch", "Schallplatten", "Schallplatte", "Platten", "CDs", "Filme", "Film", "Videospiele", "Filme & Spiele", "DVDs"];
 
 // Eigene Eingabefelder je Art (seit 0.34, Wunsch 23.11.2026): Bei Büchern Autor und Titel, bei Musik Künstler, Album und Format …
-// name: Der Name entsteht aus diesen Feldern („Stephen King – Holly“), solange sie ihn nicht selbst anders schreibt.
+// felder: Textfelder [Schlüssel, Wort, Beispiel]. wahl: Auswahl-Knöpfe [Schlüssel, Wort, Knöpfe, Name für eigene Einträge oder null].
+// name: Der Name entsteht aus den Textfeldern („Stephen King – Holly“), solange sie ihn nicht selbst anders schreibt.
 // marke: Das Feld „Marke“ steht dann gleich hier (sonst unter den weiteren Angaben). mehr: Beispiel für „Mehr Infos“ (= die Notiz,
 // bleibt privat und kommt nicht in den Verkaufstext; dort darf auch stehen, an wen man es mal verliehen hat).
+const MODELL = ["modell", "Modell", "z. B. Typenschild oder Karton"];
 const ART_FELDER = tabelle({
-  "Bücher": { felder: [["autor", "Autor", "z. B. Stephen King"], ["titel", "Titel", "z. B. Holly"]], name: true, mehr: "z. B. Jahr, Ausgabe, Taschenbuch" },
-  "Musik": { felder: [["kuenstler", "Künstler", "z. B. Will Smith"], ["album", "Album", "z. B. Big Willie Style"]], name: true,
-    format: ["Schallplatte", "CD", "Kassette"], formatFeld: "Format Musik", mehr: "z. B. Jahr, Erstpressung, farbige Platte" },
-  "Filme & Videospiele": { felder: [["titel", "Titel", "z. B. Der Herr der Ringe"]], name: true,
-    format: ["DVD", "Blu-ray", "PS5", "PS4", "Switch", "Xbox"], formatFeld: "Format Filme", mehr: "z. B. Jahr, Sammleredition" },
+  "Bücher": { felder: [["autor", "Autor", "z. B. Stephen King"], ["titel", "Titel", "z. B. Holly"]], name: ["autor", "titel"], mehr: "z. B. Jahr, Ausgabe, Taschenbuch" },
+  "Musik": { felder: [["kuenstler", "Künstler", "z. B. Will Smith"], ["album", "Album", "z. B. Big Willie Style"]], name: ["kuenstler", "album"],
+    wahl: ["format", "Format", ["Schallplatte", "CD", "Kassette"], "Format Musik"], mehr: "z. B. Jahr, Erstpressung, farbige Platte" },
+  "Filme & Videospiele": { felder: [["titel", "Titel", "z. B. Der Herr der Ringe"]], name: ["titel"],
+    wahl: ["format", "Format", ["DVD", "Blu-ray", "PS5", "PS4", "Switch", "Xbox"], "Format Filme"], mehr: "z. B. Jahr, Sammleredition" },
   "Instrumente": { marke: "z. B. Harley Benton", felder: [["modell", "Modell", "z. B. Standard Series"]], mehr: "z. B. Baujahr, mit Tasche, neue Saiten" },
-  "Elektronik": { marke: "z. B. Sony", felder: [["modell", "Modell", "z. B. PS5 Digital Edition"]], mehr: "z. B. Baujahr, mit Ladekabel und Karton" }
+  "Elektronik": { marke: "z. B. Sony", felder: [["modell", "Modell", "z. B. PS5 Digital Edition"]], mehr: "z. B. Baujahr, mit Ladekabel und Karton" },
+  // Seit 0.34 dazu (Wunsch 23.11.2026)
+  "Möbel": { felder: [["masse", "Maße", "z. B. 80 × 40 × 120 cm (B × T × H)"]], wahl: ["material", "Material", ["Holz", "Metall", "Glas", "Kunststoff", "Stoff / Polster"], "Material Möbel"],
+    mehr: "z. B. zerlegbar, kleiner Kratzer links" },
+  "Haushaltsgeräte": { marke: "z. B. Bosch", felder: [MODELL], mehr: "z. B. Baujahr, mit Zubehör" },
+  "Werkzeug & Garten": { marke: "z. B. Makita", felder: [MODELL], mehr: "z. B. mit Akku und Ladegerät" },
+  "Spiele & Spielzeug": { felder: [["titel", "Titel", "z. B. Catan, Lego 60215"], ["alter", "Alter ab", "z. B. 10 Jahre"]], name: ["titel"],
+    wahl: ["vollstaendig", "Vollständig?", ["ja", "nein, es fehlt etwas", "nicht geprüft"], null], mehr: "z. B. was fehlt, Anleitung dabei" },
+  "Deko": { felder: [["motiv", "Motiv / Künstler", "z. B. Katze mit Zitrone"], ["groesse", "Größe", "z. B. 50 × 70 cm"]], mehr: "z. B. mit Rahmen, Glas" },
+  "Heimtextilien": { felder: [["groesse", "Größe", "z. B. 135 × 200 cm"]], mehr: "z. B. 100 % Baumwolle, 2 Kissenbezüge" },
+  "Baby & Kind": { felder: [["groesse", "Größe", "z. B. 86 oder 2 Jahre"]], mehr: "z. B. kaum getragen" },
+  "Sport & Freizeit": { marke: "z. B. Decathlon", felder: [MODELL, ["groesse", "Größe", "z. B. M, 28 Zoll"]], mehr: "z. B. Rahmengröße, mit Luftpumpe" }
 });
 const MAX_DETAIL = 60;
-// Name aus den Feldern (nur bei Arten mit name: true), z. B. „Stephen King – Holly“
-const nameAus = (def, details) => def?.name ? def.felder.map(([k]) => clean(details?.[k] || "")).filter(Boolean).join(" – ").slice(0, 60) : "";
+// Name aus den Feldern in def.name (nur bei Arten mit name), z. B. „Stephen King – Holly“
+const nameAus = (def, details) => def?.name ? def.name.map(k => clean(details?.[k] || "")).filter(Boolean).join(" – ").slice(0, 60) : "";
 const RAEUME_KNOEPFE = ["Wohnzimmer", "Küche", "Schlafzimmer", "Bad", "Kinderzimmer", "Keller"];
 const RAEUME_MEHR = ["Flur", "Arbeitszimmer", "Dachboden", "Garage", "Balkon"];
 export const RAEUME = [...RAEUME_KNOEPFE, ...RAEUME_MEHR];
@@ -69,7 +82,7 @@ const zeitVon = v => typeof v === "string" && v.length < 40 && !isNaN(Date.parse
 function detailsPruefen(x) {
   if (!x || typeof x !== "object" || Array.isArray(x)) return null;
   const out = {};
-  for (const k of Object.keys(DETAILS)) { const v = textVon(x[k], k === "format" ? 30 : MAX_DETAIL); if (v) out[k] = v; }
+  for (const k of Object.keys(DETAILS)) { const v = textVon(x[k], ["format", "material", "vollstaendig"].includes(k) ? 30 : MAX_DETAIL); if (v) out[k] = v; }
   return Object.keys(out).length ? out : null;
 }
 export function dingPruefen(d) {
@@ -132,10 +145,11 @@ function dingFelder(werte, onChange = () => {}, kurz = false) {
         i.oninput = () => { details[k] = i.value; nameNachziehen(); onChange(); };
         felder.push(field(label, null, i));
       }
-      if (def.format) {
-        formatWahl = choice({ field: def.formatFeld, options: def.format, selected: details.format ? [details.format] : [], beispiel: "z. B. Single",
-          onChange: sel => { details.format = sel[0] || null; onChange(); } });
-        felder.push(field("Format", null, formatWahl.el));
+      if (def.wahl) {
+        const [k, label, knoepfe, feldName] = def.wahl;
+        formatWahl = choice({ field: feldName, options: knoepfe, selected: details[k] ? [details[k]] : [], beispiel: k === "format" ? "z. B. Single" : "z. B. Rattan",
+          onChange: sel => { details[k] = sel[0] || null; onChange(); } });
+        felder.push(field(label, "freiwillig", formatWahl.el));
       }
       notiz.placeholder = def.mehr;
       felder.push(field("Mehr Infos", "freiwillig, bleibt auf deinem Handy (kommt nicht in den Verkaufstext)", notiz));
@@ -144,7 +158,7 @@ function dingFelder(werte, onChange = () => {}, kurz = false) {
     if (!def) { notiz.placeholder = "z. B. Deckel fehlt, nur 2× benutzt"; notizUnten.append(notiz); }
     fill(artBox, ...felder);
     if (mehr) { mehr.markeFeld.hidden = !!def?.marke; mehr.notizFeld.hidden = !!def; }
-    if (nameFeld) nameFeld.querySelector(".note").textContent = def?.name ? `entsteht aus ${def.felder.map(([, l]) => l).join(" und ")}, du kannst ihn ändern` : "kurz, z. B. „Wasserkocher“ oder „Lego Feuerwehr“";
+    if (nameFeld) nameFeld.querySelector(".note").textContent = def?.name ? `entsteht aus ${def.felder.filter(([k]) => def.name.includes(k)).map(([, l]) => l).join(" und ")}, du kannst ihn ändern` : "kurz, z. B. „Wasserkocher“ oder „Lego Feuerwehr“";
     nameNachziehen();
   }
   nameFeld = field("Name", "kurz", name);
@@ -172,7 +186,7 @@ function dingFelder(werte, onChange = () => {}, kurz = false) {
     if (!def) return null;
     const out = {};
     for (const [k] of def.felder) { const v = clean(details[k] || "").slice(0, MAX_DETAIL); if (v) out[k] = v; }
-    if (def.format && details.format) out.format = details.format;
+    if (def.wahl && details[def.wahl[0]]) out[def.wahl[0]] = details[def.wahl[0]];
     return Object.keys(out).length ? out : null;
   };
   return {
